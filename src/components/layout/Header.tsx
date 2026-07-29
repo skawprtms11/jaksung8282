@@ -82,12 +82,7 @@ function HeaderScopeFilter({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
-  const [loadedOptions, setLoadedOptions] = useState<HeaderFilterOptions>(() => {
-    if (hasFilterOptions(options)) {
-      return options;
-    }
-    return emptyFilterOptions;
-  });
+  const [loadedOptions, setLoadedOptions] = useState<HeaderFilterOptions>(() => (hasFilterOptions(options) ? options : emptyFilterOptions));
   const [isLoadingOptions, setIsLoadingOptions] = useState(() => !hasFilterOptions(options));
   const hasLoadedOptions = hasFilterOptions(loadedOptions);
   const activeOptions = hasLoadedOptions ? loadedOptions : emptyFilterOptions;
@@ -184,7 +179,7 @@ function HeaderScopeFilter({
         <select
           value={effectiveDepartmentId}
           onChange={(event) => handleDepartmentChange(event.target.value)}
-          disabled={isLoadingOptions || isPending}
+          disabled={isPending || isLoadingOptions}
           className="h-8 w-36 bg-transparent text-sm font-black text-[#10223d] outline-none"
           aria-label="부서 필터"
         >
@@ -205,7 +200,7 @@ function HeaderScopeFilter({
         <select
           value={effectiveClientId}
           onChange={(event) => updateFilter(effectiveDepartmentId, event.target.value)}
-          disabled={isLoadingOptions || isPending}
+          disabled={isPending || isLoadingOptions}
           className="h-8 w-36 bg-transparent text-sm font-black text-[#10223d] outline-none"
           aria-label="화주 필터"
         >

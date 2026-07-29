@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -44,6 +43,5 @@ export async function saveMiniGameScoreAction(payload: unknown): Promise<ActionR
     return { ok: false, message: safeErrorMessage(error.message) };
   }
 
-  revalidatePath("/mini-game");
   return { ok: true, message: "점수를 랭킹에 등록했습니다." };
 }

@@ -166,7 +166,15 @@ export default async function DepartmentReportsPage({
     const selectedDepartmentFilter = departmentFilter ?? params.department_id;
     const selectedClientFilter = params.client_id;
     initialLookupDepartmentId = selectedDepartmentFilter ?? null;
-    const [{ data: departmentData }, { data: categoryData }, { data: reportData, error: reportError }, { count }, { data: submissionData }] = await Promise.all([
+    const [
+      { data: departmentData },
+      { data: categoryData },
+      { data: reportData, error: reportError },
+      { count },
+      { data: submissionData },
+      { data: holidayClientData },
+      { data: holidayWorkerData }
+    ] = await Promise.all([
       (() => {
         let query = supabase.from("departments").select("id,department_name").eq("is_active", true).order("sort_order");
         if (departmentFilter) {
@@ -223,34 +231,34 @@ export default async function DepartmentReportsPage({
             .eq("week_start_date", currentWeek.weekStartDate)
             .is("deleted_at", null)
             .maybeSingle()
-        : Promise.resolve({ data: null })
+        : Promise.resolve({ data: null }),
+      selectedDepartmentFilter
+        ? supabase
+            .from("department_client_links")
+            .select("clients(id,client_name)")
+            .eq("department_id", selectedDepartmentFilter)
+            .eq("is_active", true)
+            .order("client_id", { ascending: true })
+        : Promise.resolve({ data: [] }),
+      selectedDepartmentFilter
+        ? supabase
+            .from("profiles")
+            .select("id,full_name")
+            .eq("department_id", selectedDepartmentFilter)
+            .eq("is_active", true)
+            .order("full_name", { ascending: true })
+        : Promise.resolve({ data: [] })
     ]);
     departments = (departmentData ?? []) as DepartmentOption[];
     categories = (categoryData ?? []) as CategoryOption[];
-    if (initialLookupDepartmentId) {
-      const [{ data: holidayClientData }, { data: holidayWorkerData }] = await Promise.all([
-        supabase
-          .from("department_client_links")
-          .select("clients(id,client_name)")
-          .eq("department_id", initialLookupDepartmentId)
-          .eq("is_active", true)
-          .order("client_id", { ascending: true }),
-        supabase
-          .from("profiles")
-          .select("id,full_name")
-          .eq("department_id", initialLookupDepartmentId)
-          .eq("is_active", true)
-          .order("full_name", { ascending: true })
-      ]);
-      holidayClientOptions = ((holidayClientData ?? []) as unknown as HolidayClientLinkRow[])
-        .filter((link) => link.clients)
-        .map((link) => ({
-          id: link.clients?.id ?? "",
-          client_name: link.clients?.client_name ?? ""
-        }))
-        .sort((left, right) => left.client_name.localeCompare(right.client_name, "ko"));
-      holidayWorkerOptions = (holidayWorkerData ?? []) as HolidayWorkerOption[];
-    }
+    holidayClientOptions = ((holidayClientData ?? []) as unknown as HolidayClientLinkRow[])
+      .filter((link) => link.clients)
+      .map((link) => ({
+        id: link.clients?.id ?? "",
+        client_name: link.clients?.client_name ?? ""
+      }))
+      .sort((left, right) => left.client_name.localeCompare(right.client_name, "ko"));
+    holidayWorkerOptions = (holidayWorkerData ?? []) as HolidayWorkerOption[];
     const reportRows = reportError ? [] : ((reportData ?? []) as unknown as ClientReviewRow[]);
     if (reportRows.length > 0) {
       const creatorIds = Array.from(new Set(reportRows.map((report) => report.created_by)));

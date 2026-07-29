@@ -38,20 +38,26 @@ export async function updateSession(request: NextRequest) {
     await supabase.auth.exchangeCodeForSession(recoveryCode);
   }
 
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
   const isProtected = startsWithAny(pathname, protectedRoutes);
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
+  const hasSession = Boolean(session);
+  const expiresAtMs = session?.expires_at ? session.expires_at * 1000 : 0;
+  const shouldRefreshSoon = hasSession && expiresAtMs > 0 && expiresAtMs - Date.now() < 60_000;
 
-  if (!user && isProtected) {
+  if (shouldRefreshSoon) {
+    await supabase.auth.getUser();
+  }
+
+  if (!hasSession && isProtected) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(redirectUrl);
   }
 
-  if (user && pathname === "/login") {
+  if (hasSession && pathname === "/login") {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/notices";
     return NextResponse.redirect(redirectUrl);

@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { ArrowDown, ArrowUp, Bone, Cookie, Medal, Play, RotateCcw, Sparkles } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { saveMiniGameScoreAction } from "@/actions/game";
 import { ActionMessage } from "@/components/common/ActionMessage";
 import type { ActionResult } from "@/lib/utils/form";
@@ -50,15 +49,14 @@ const lanes = [185, 285, 385];
 const dog = { x: 108, width: 82, height: 78 };
 
 export function HuindungiWalkGame({
-  rankings,
+  rankings: initialRankings,
   currentUserName,
-  setupMessage
+  setupMessage: initialSetupMessage
 }: {
   rankings: MiniGameRanking[];
   currentUserName: string;
   setupMessage?: string;
 }) {
-  const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationRef = useRef<number | null>(null);
   const statusRef = useRef<GameStatus>("idle");
@@ -83,10 +81,40 @@ export function HuindungiWalkGame({
   });
   const [result, setResult] = useState<GameResult | null>(null);
   const [saveState, setSaveState] = useState<ActionResult | null>(null);
+  const [rankings, setRankings] = useState<MiniGameRanking[]>(initialRankings);
+  const [setupMessage, setSetupMessage] = useState(initialSetupMessage ?? "");
+  const [isRankingLoading, setIsRankingLoading] = useState(initialRankings.length === 0);
   const [isPending, startTransition] = useTransition();
   const savedResultKeyRef = useRef("");
   const startGameRef = useRef<() => void>(() => undefined);
   startGameRef.current = startGame;
+
+  const loadRankings = useCallback(async () => {
+    setIsRankingLoading(true);
+    try {
+      const response = await fetch("/api/mini-game-rankings");
+      if (!response.ok) {
+        throw new Error("failed");
+      }
+      const payload = (await response.json()) as {
+        rankings?: MiniGameRanking[];
+        setupMessage?: string;
+      };
+      setRankings(payload.rankings ?? []);
+      setSetupMessage(payload.setupMessage ?? "");
+    } catch {
+      setSetupMessage("랭킹을 불러오지 못했습니다.");
+    } finally {
+      setIsRankingLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadRankings();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadRankings]);
 
   useEffect(() => {
     drawScene(canvasRef.current, hud, laneRef.current, entitiesRef.current);
@@ -131,10 +159,10 @@ export function HuindungiWalkGame({
       const actionResult = await saveMiniGameScoreAction(result);
       setSaveState(actionResult);
       if (actionResult.ok) {
-        router.refresh();
+        await loadRankings();
       }
     });
-  }, [result, router]);
+  }, [loadRankings, result]);
 
   function startGame() {
     if (animationRef.current) {
@@ -341,7 +369,11 @@ export function HuindungiWalkGame({
             <p className="text-sm text-slate-500">{currentUserName}님의 최고 기록에 도전하세요.</p>
           </div>
         </div>
-        {rankings.length === 0 ? (
+        {isRankingLoading ? (
+          <div className="rounded-[1.25rem] border border-dashed border-[#b9cce4] bg-white/70 p-6 text-center text-sm font-semibold text-slate-500">
+            랭킹을 불러오는 중입니다.
+          </div>
+        ) : rankings.length === 0 ? (
           <div className="rounded-[1.25rem] border border-dashed border-[#b9cce4] bg-white/70 p-6 text-center text-sm font-semibold text-slate-500">
             아직 등록된 점수가 없습니다.
           </div>

@@ -1,7 +1,6 @@
 import { NoticeBoard } from "@/components/notices/NoticeBoard";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { isAdmin } from "@/lib/auth/permissions";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { NoticeType } from "@/types/enums";
 
@@ -49,10 +48,7 @@ export default async function NoticesPage({
     if (params.type) {
       query = query.eq("notice_type", params.type);
     }
-    const { data } = await query;
-    notices = (data ?? []) as unknown as NoticeRow[];
-
-    const { data: importantNoticeData } = await supabase
+    const importantNoticeQuery = supabase
       .from("notices")
       .select("id,notice_type,title,content,is_pinned,created_at")
       .is("deleted_at", null)
@@ -60,25 +56,20 @@ export default async function NoticesPage({
       .eq("is_pinned", true)
       .order("created_at", { ascending: false })
       .limit(5);
+    const departmentQuery = supabase
+      .from("departments")
+      .select("id,department_name")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true })
+      .order("department_name", { ascending: true });
+    const [{ data }, { data: importantNoticeData }, { data: departmentData }] = await Promise.all([
+      query,
+      importantNoticeQuery,
+      departmentQuery
+    ]);
+    notices = (data ?? []) as unknown as NoticeRow[];
     importantNotices = (importantNoticeData ?? []) as unknown as NoticeRow[];
-
-    try {
-      const { data: departmentData } = await createSupabaseAdminClient()
-        .from("departments")
-        .select("id,department_name")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true })
-        .order("department_name", { ascending: true });
-      departments = (departmentData ?? []) as DepartmentRow[];
-    } catch {
-      const { data: departmentData } = await supabase
-        .from("departments")
-        .select("id,department_name")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true })
-        .order("department_name", { ascending: true });
-      departments = (departmentData ?? []) as DepartmentRow[];
-    }
+    departments = (departmentData ?? []) as DepartmentRow[];
   }
 
   return (

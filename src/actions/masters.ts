@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { canRegisterDepartmentClients, isAdmin } from "@/lib/auth/permissions";
@@ -9,6 +9,13 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { clientSchema, departmentClientSchema, departmentSchema, idSchema, userSchema } from "@/lib/validations/common";
 import { formDataToObject, safeErrorMessage, type ActionResult } from "@/lib/utils/form";
 import type { Json } from "@/types/database";
+
+const HEADER_FILTER_CACHE_TAG = "header-filter-options";
+
+function revalidateMasterPath(path: string) {
+  revalidatePath(path);
+  revalidateTag(HEADER_FILTER_CACHE_TAG, { expire: 0 });
+}
 
 async function requireAdmin() {
   const { profile } = await getCurrentUserProfile();
@@ -110,7 +117,7 @@ export async function saveDepartmentAction(_: ActionResult | null, formData: For
     if (leaderError) {
       return { ok: false, message: leaderError };
     }
-    revalidatePath("/admin/departments");
+    revalidateMasterPath("/admin/departments");
     return { ok: true, message: "부서 정보를 저장했습니다. 비고 저장은 Supabase notes 컬럼 추가 후 적용됩니다." };
   }
   if (error) {
@@ -120,7 +127,7 @@ export async function saveDepartmentAction(_: ActionResult | null, formData: For
   if (leaderError) {
     return { ok: false, message: leaderError };
   }
-  revalidatePath("/admin/departments");
+  revalidateMasterPath("/admin/departments");
   return { ok: true, message: "부서 정보를 저장했습니다." };
 }
 
@@ -204,7 +211,7 @@ export async function saveClientAction(_: ActionResult | null, formData: FormDat
       }
       return { ok: false, message: safeErrorMessage(retry.error.message) };
     }
-    revalidatePath("/admin/clients");
+    revalidateMasterPath("/admin/clients");
     return { ok: true, message: "화주 정보를 저장했습니다. 비고 저장은 Supabase notes 컬럼 추가 후 적용됩니다." };
   }
   if (error?.message.includes("department_id") || error?.message.includes("null value")) {
@@ -213,7 +220,7 @@ export async function saveClientAction(_: ActionResult | null, formData: FormDat
   if (error) {
     return { ok: false, message: safeErrorMessage(error.message) };
   }
-  revalidatePath("/admin/clients");
+  revalidateMasterPath("/admin/clients");
   return { ok: true, message: "화주 정보를 저장했습니다." };
 }
 
@@ -312,7 +319,7 @@ export async function saveDepartmentClientAction(_: ActionResult | null, formDat
     if (retryAssignmentError) {
       return { ok: false, message: retryAssignmentError };
     }
-    revalidatePath("/admin/departments");
+    revalidateMasterPath("/admin/departments");
     return { ok: true, message: "화주를 등록했습니다. 비고 저장은 Supabase notes 컬럼 추가 후 적용됩니다." };
   }
 
@@ -330,7 +337,7 @@ export async function saveDepartmentClientAction(_: ActionResult | null, formDat
     return { ok: false, message: assignmentError };
   }
 
-  revalidatePath("/admin/departments");
+  revalidateMasterPath("/admin/departments");
   return { ok: true, message: "화주와 담당자를 등록했습니다." };
 }
 
@@ -408,7 +415,7 @@ export async function saveDepartmentClientLinksAction(_: ActionResult | null, fo
     return { ok: false, message: safeErrorMessage(error.message) };
   }
 
-  revalidatePath("/admin/departments");
+  revalidateMasterPath("/admin/departments");
   return { ok: true, message: "선택한 화주를 부서에 등록했습니다." };
 }
 
@@ -474,7 +481,7 @@ export async function removeDepartmentClientLinksAction(_: ActionResult | null, 
     return { ok: false, message: safeErrorMessage(assignmentError.message) };
   }
 
-  revalidatePath("/admin/departments");
+  revalidateMasterPath("/admin/departments");
   return { ok: true, message: "선택한 화주를 부서 등록 목록에서 삭제했습니다." };
 }
 
@@ -571,7 +578,7 @@ export async function saveDepartmentClientSelectionAction(_: ActionResult | null
     }
   }
 
-  revalidatePath("/admin/departments");
+  revalidateMasterPath("/admin/departments");
   return { ok: true, message: "화주 등록 목록을 저장했습니다." };
 }
 
@@ -670,7 +677,7 @@ export async function saveDepartmentClientAssignmentsAction(_: ActionResult | nu
     }
   }
 
-  revalidatePath("/admin/departments");
+  revalidateMasterPath("/admin/departments");
   return { ok: true, message: "화주 담당자를 저장했습니다." };
 }
 
@@ -777,7 +784,7 @@ export async function saveClientsBulkImportAction(_: ActionResult | null, formDa
   const updatedCount = result?.updated_count ?? 0;
   const duplicateCount = result?.duplicate_count ?? 0;
 
-  revalidatePath("/admin/clients");
+  revalidateMasterPath("/admin/clients");
   return { ok: true, message: `화주 ${totalCount}건을 일괄등록했습니다. 신규 ${insertedCount}건, 업데이트 ${updatedCount}건${duplicateCount > 0 ? `, 중복 입력 ${duplicateCount}건은 마지막 값으로 반영` : ""}.` };
 }
 
@@ -811,7 +818,7 @@ export async function deleteClientsAction(_: ActionResult | null, formData: Form
     return { ok: false, message: safeErrorMessage(error.message) };
   }
 
-  revalidatePath("/admin/clients");
+  revalidateMasterPath("/admin/clients");
   return { ok: true, message: "선택한 화주를 삭제했습니다." };
 }
 
@@ -871,7 +878,7 @@ export async function saveUserAction(_: ActionResult | null, formData: FormData)
   if (error) {
     return { ok: false, message: safeErrorMessage(error.message) };
   }
-  revalidatePath("/admin/users");
+  revalidateMasterPath("/admin/users");
   return { ok: true, message: "사용자 정보를 저장했습니다." };
 }
 
@@ -907,7 +914,7 @@ export async function deleteUsersAction(_: ActionResult | null, formData: FormDa
     return { ok: false, message: safeErrorMessage(error.message) };
   }
 
-  revalidatePath("/admin/users");
+  revalidateMasterPath("/admin/users");
   return { ok: true, message: "선택한 사용자를 미사용 처리했습니다." };
 }
 
@@ -980,7 +987,7 @@ export async function approveUserRegistrationRequestAction(_: ActionResult | nul
     return { ok: false, message: safeErrorMessage(updateError.message) };
   }
 
-  revalidatePath("/admin/users");
+  revalidateMasterPath("/admin/users");
   return { ok: true, message: "사용자 가입 요청을 승인했습니다." };
 }
 
@@ -1032,6 +1039,6 @@ export async function rejectUserRegistrationRequestAction(_: ActionResult | null
     return { ok: false, message: safeErrorMessage(updateError.message) };
   }
 
-  revalidatePath("/admin/users");
+  revalidateMasterPath("/admin/users");
   return { ok: true, message: "사용자 가입 요청을 반려했습니다." };
 }

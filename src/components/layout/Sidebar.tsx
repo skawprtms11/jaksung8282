@@ -80,6 +80,7 @@ export function Sidebar({
             <Link
               key={menu.href}
               href={menu.href}
+              prefetch
               className="focus-ring group flex min-w-0 items-center gap-3 rounded-2xl border border-transparent px-3 py-2.5 text-sm font-bold text-[#203653] transition hover:-translate-y-0.5 hover:border-[#dbe8fb] hover:bg-[#eaf3ff] hover:text-[#075be8] hover:shadow-[0_16px_30px_rgba(7,91,232,0.12)]"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#f2f7ff] text-[#0b2d5f] transition group-hover:bg-[#075be8] group-hover:text-white">

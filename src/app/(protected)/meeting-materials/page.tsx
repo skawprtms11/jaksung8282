@@ -20,7 +20,7 @@ import {
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils/cn";
 import { formatDateTime, volumeTypeLabels, volumeUnitLabels } from "@/lib/utils/labels";
-import type { ClientReportStatus, DepartmentSubmissionStatus, Importance, ItemPeriod, VolumeType, VolumeUnit } from "@/types/enums";
+import type { DepartmentSubmissionStatus, Importance, ItemPeriod, VolumeType, VolumeUnit } from "@/types/enums";
 
 type MeetingTab = "collection" | "materials" | "volumes" | "holiday" | "facility";
 
@@ -38,19 +38,10 @@ type ClientLinkSummaryRow = { department_id: string; client_id: string };
 
 type MeetingReportRow = {
   id: string;
-  created_by: string;
   department_id: string;
   client_id: string;
-  report_year: number;
-  report_month: number;
-  week_of_month: number;
-  week_start_date: string;
-  week_end_date: string;
-  status: ClientReportStatus;
-  updated_at: string;
-  departments: { department_name: string } | null;
-  clients: { client_name: string } | null;
-  profiles: { full_name: string } | null;
+  departments?: { department_name: string } | null;
+  clients?: { client_name: string } | null;
   weekly_client_report_items: {
     id: string;
     item_period: ItemPeriod;
@@ -150,10 +141,40 @@ function buildTabHref(tab: MeetingTab, params: MeetingSearchParams, selectedWeek
   return `/meeting-materials?${nextParams.toString()}`;
 }
 
+function getMeetingReportSelect(tab: MeetingTab) {
+  if (tab === "volumes") {
+    return "id,department_id,client_id,clients(client_name),weekly_volumes(volume_type,quantity,unit)";
+  }
+
+  return "id,department_id,client_id,departments(department_name),clients(client_name),weekly_client_report_items(id,item_period,importance,title,content,work_categories(category_name))";
+}
+
+function getSubmissionSelect(tab: MeetingTab) {
+  if (tab === "collection") {
+    return "id,status,department_id,week_start_date,finalized_at";
+  }
+
+  if (tab === "holiday" || tab === "facility") {
+    return "id,status,department_id,week_start_date,finalized_at,department_weekly_contents!inner(section_type,current_week_content,next_week_content)";
+  }
+
+  return "id,status,department_id,week_start_date,finalized_at,department_weekly_contents(section_type,current_week_content,next_week_content)";
+}
+
+function getDepartmentContentSection(tab: MeetingTab): DepartmentContentRow["section_type"] | null {
+  if (tab === "facility") {
+    return "facility";
+  }
+  if (tab === "holiday") {
+    return "holiday_work";
+  }
+  return null;
+}
+
 function makeChartRows(reports: MeetingReportRow[]): VolumeChartRow[] {
   const grouped = new Map<string, { current: number; previous: number }>();
   reports.forEach((report) => {
-    report.weekly_volumes.forEach((volume) => {
+    (report.weekly_volumes ?? []).forEach((volume) => {
       const key = `${report.clients?.client_name ?? "화주"} ${volumeTypeLabels[volume.volume_type]}/${volumeUnitLabels[volume.unit]}`;
       const current = grouped.get(key) ?? { current: 0, previous: 0 };
       current.current += Number(volume.quantity);
@@ -174,7 +195,7 @@ function makeChartRows(reports: MeetingReportRow[]): VolumeChartRow[] {
 function makePriorityItems(reports: MeetingReportRow[]): MeetingPriorityItem[] {
   return reports
     .flatMap((report) =>
-      report.weekly_client_report_items
+      (report.weekly_client_report_items ?? [])
         .filter((item) => item.importance === "very_high" || item.importance === "high")
         .map((item) => ({
           id: item.id,
@@ -272,81 +293,93 @@ export default async function MeetingMaterialsPage({
       materialsDepartmentLimit = firstDepartment?.id;
     }
     const departmentFilter = isAdmin(profile) ? params.department_id ?? materialsDepartmentLimit : profile.department_id;
-    const [{ data: departmentData }, { data: clientData }, { data: reportData, error: reportError }, { data: submissionData }] =
-      await Promise.all([
-        (() => {
-          let query = supabase
-            .from("departments")
-            .select("id,department_name")
-            .eq("is_active", true)
-            .order("sort_order", { ascending: true })
-            .order("department_name", { ascending: true });
-          if (departmentFilter) {
-            query = query.eq("id", departmentFilter);
-          }
-          return query;
-        })(),
-        (() => {
-          let query = supabase
-            .from("department_client_links")
-            .select("department_id,client_id")
-            .eq("is_active", true);
-          if (departmentFilter) {
-            query = query.eq("department_id", departmentFilter);
-          }
-          if (params.client_id) {
-            query = query.eq("client_id", params.client_id);
-          }
-          return query;
-        })(),
-        (() => {
-          let query = supabase
-            .from("weekly_client_reports")
-            .select(
-              "id,created_by,department_id,client_id,report_year,report_month,week_of_month,week_start_date,week_end_date,status,updated_at,departments(department_name),clients(client_name),weekly_client_report_items(id,item_period,importance,title,content,work_categories(category_name)),weekly_volumes(volume_type,quantity,unit)"
-            )
-            .eq("week_start_date", selectedWeek.weekStartDate)
-            .is("deleted_at", null)
-            .order("updated_at", { ascending: false })
-            .limit(MEETING_REPORT_LIMIT);
-          if (departmentFilter) {
-            query = query.eq("department_id", departmentFilter);
-          }
-          if (params.client_id) {
-            query = query.eq("client_id", params.client_id);
-          }
-          return query;
-        })(),
-        (() => {
-          let query = supabase
-            .from("department_weekly_submissions")
-            .select("id,status,department_id,week_start_date,finalized_at,department_weekly_contents(section_type,current_week_content,next_week_content)")
-            .eq("week_start_date", selectedWeek.weekStartDate)
-            .is("deleted_at", null)
-            .limit(MEETING_REPORT_LIMIT);
-          if (departmentFilter) {
-            query = query.eq("department_id", departmentFilter);
-          }
-          return query;
-        })()
-      ]);
+    const needsDepartments = activeTab === "collection" || activeTab === "holiday" || activeTab === "facility";
+    const needsClients = activeTab === "collection";
+    const needsReports = activeTab === "collection" || activeTab === "materials" || activeTab === "volumes";
+    const needsSubmissions = activeTab === "collection" || activeTab === "holiday" || activeTab === "facility";
+    const contentSectionFilter = getDepartmentContentSection(activeTab);
 
-    departments = (departmentData ?? []) as DepartmentRow[];
-    clients = ((clientData ?? []) as ClientLinkSummaryRow[]).map((link) => ({
+    const [departmentResult, clientResult, reportResult, submissionResult] = await Promise.all([
+      needsDepartments
+        ? (() => {
+            let query = supabase
+              .from("departments")
+              .select("id,department_name")
+              .eq("is_active", true)
+              .order("sort_order", { ascending: true })
+              .order("department_name", { ascending: true });
+            if (departmentFilter) {
+              query = query.eq("id", departmentFilter);
+            }
+            return query;
+          })()
+        : Promise.resolve({ data: [] }),
+      needsClients
+        ? (() => {
+            let query = supabase
+              .from("department_client_links")
+              .select("department_id,client_id")
+              .eq("is_active", true);
+            if (departmentFilter) {
+              query = query.eq("department_id", departmentFilter);
+            }
+            if (params.client_id) {
+              query = query.eq("client_id", params.client_id);
+            }
+            return query;
+          })()
+        : Promise.resolve({ data: [] }),
+      needsReports
+        ? (() => {
+            let query = supabase
+              .from("weekly_client_reports")
+              .select(getMeetingReportSelect(activeTab))
+              .eq("week_start_date", selectedWeek.weekStartDate)
+              .is("deleted_at", null)
+              .order("updated_at", { ascending: false })
+              .limit(MEETING_REPORT_LIMIT);
+            if (departmentFilter) {
+              query = query.eq("department_id", departmentFilter);
+            }
+            if (params.client_id) {
+              query = query.eq("client_id", params.client_id);
+            }
+            return query;
+          })()
+        : Promise.resolve({ data: [], error: null }),
+      needsSubmissions
+        ? (() => {
+            let query = supabase
+              .from("department_weekly_submissions")
+              .select(getSubmissionSelect(activeTab))
+              .eq("week_start_date", selectedWeek.weekStartDate)
+              .is("deleted_at", null)
+              .limit(MEETING_REPORT_LIMIT);
+            if (departmentFilter) {
+              query = query.eq("department_id", departmentFilter);
+            }
+            if (contentSectionFilter) {
+              query = query.eq("department_weekly_contents.section_type", contentSectionFilter);
+            }
+            return query;
+          })()
+        : Promise.resolve({ data: [] })
+    ]);
+
+    departments = (departmentResult.data ?? []) as DepartmentRow[];
+    clients = ((clientResult.data ?? []) as ClientLinkSummaryRow[]).map((link) => ({
       id: link.client_id,
       department_id: link.department_id
     }));
-    const reportRows = reportError ? [] : ((reportData ?? []) as unknown as MeetingReportRow[]);
-    if (reportRows.length > 0) {
-      const creatorIds = Array.from(new Set(reportRows.map((report) => report.created_by)));
-      const { data: creatorData } = await supabase.from("profiles").select("id,full_name").in("id", creatorIds);
-      const creatorNameMap = new Map((creatorData ?? []).map((creator) => [creator.id, creator.full_name]));
-      reports = reportRows.map((report) => ({
-        ...report,
-        profiles: { full_name: creatorNameMap.get(report.created_by) ?? "-" }
-      }));
-    }
-    submissions = (submissionData ?? []) as unknown as SubmissionRow[];
+    reports = ((reportResult.error ? [] : reportResult.data ?? []) as unknown as MeetingReportRow[]).map((report) => ({
+      ...report,
+      weekly_client_report_items: report.weekly_client_report_items ?? [],
+      weekly_volumes: report.weekly_volumes ?? []
+    }));
+    submissions = ((submissionResult.data ?? []) as unknown as SubmissionRow[]).map((submission) => ({
+      ...submission,
+      department_weekly_contents: submission.department_weekly_contents ?? []
+    }));
   }
 
   const chartRows = makeChartRows(reports);

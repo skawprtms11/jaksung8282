@@ -23,17 +23,18 @@ export const getCurrentUserProfile = cache(async (): Promise<{
   }
 
   const {
-    data: { user }
-  } = await supabase.auth.getUser();
+    data: { session }
+  } = await supabase.auth.getSession();
 
-  if (!user) {
+  const userId = session?.user.id;
+  if (!userId) {
     return { profile: null, setupRequired: false };
   }
 
   const { data } = await supabase
     .from("profiles")
     .select("id,email,employee_no,full_name,app_role,department_id,is_active,departments(department_name)")
-    .eq("id", user.id)
+    .eq("id", userId)
     .maybeSingle<ProfileQueryRow>();
 
   if (!data) {
