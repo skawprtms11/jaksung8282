@@ -84,6 +84,7 @@ type ReportItemRequestRow = {
   created_by: string;
   created_at: string;
   updated_at: string;
+  deleted_at?: string | null;
 };
 
 type DepartmentContentRow = {
@@ -218,7 +219,7 @@ function getMeetingReportSelect(tab: MeetingTab) {
     return "id,department_id,client_id,clients(client_name),weekly_volumes(volume_type,quantity,unit)";
   }
 
-  return "id,department_id,client_id,departments(department_name),clients(client_name),weekly_client_report_items(id,item_period,importance,title,content,work_categories(category_name))";
+  return "id,department_id,client_id,departments(department_name),clients(client_name),weekly_client_report_items(id,item_period,importance,title,content,work_categories(category_name),weekly_report_item_requests(id,target_type,target_key,report_item_id,department_submission_id,section_type,item_period,item_sort_order,request_content,request_author_name,request_author_department_name,result_content,result_author_name,result_author_department_name,result_created_by,result_created_at,result_updated_at,closed_by,closed_author_name,closed_author_department_name,closed_at,created_by,created_at,updated_at,deleted_at))";
 }
 
 function getSubmissionSelect(tab: MeetingTab) {
@@ -575,7 +576,9 @@ export default async function MeetingMaterialsPage({
       ...report,
       weekly_client_report_items: (report.weekly_client_report_items ?? []).map((item) => ({
         ...item,
-        weekly_report_item_requests: [],
+        weekly_report_item_requests: (item.weekly_report_item_requests ?? [])
+          .filter((request) => !request.deleted_at)
+          .sort((left, right) => left.created_at.localeCompare(right.created_at)),
         request_target_key: item.id,
         request_target_type: "client_item" as const,
         request_department_submission_id: null,
@@ -591,16 +594,16 @@ export default async function MeetingMaterialsPage({
     workCategories = (categoryResult.data ?? []) as WorkCategoryRow[];
     commonReports = activeTab === "materials" ? makeCommonMeetingRows(submissions, departments, workCategories) : [];
     if (activeTab === "materials") {
-      const materialTargetKeys = [...commonReports, ...reports].flatMap((report) =>
+      const commonTargetKeys = commonReports.flatMap((report) =>
         report.weekly_client_report_items.map((item) => item.request_target_key)
       );
-      if (materialTargetKeys.length > 0) {
+      if (commonTargetKeys.length > 0) {
         const { data: requestRows } = await dataClient
           .from("weekly_report_item_requests")
           .select(
             "id,target_type,target_key,report_item_id,department_submission_id,section_type,item_period,item_sort_order,request_content,request_author_name,request_author_department_name,result_content,result_author_name,result_author_department_name,result_created_by,result_created_at,result_updated_at,closed_by,closed_author_name,closed_author_department_name,closed_at,created_by,created_at,updated_at"
           )
-          .in("target_key", materialTargetKeys)
+          .in("target_key", commonTargetKeys)
           .is("deleted_at", null)
           .order("created_at", { ascending: true });
         const requestMap = new Map<string, ReportItemRequestRow[]>();
@@ -618,7 +621,6 @@ export default async function MeetingMaterialsPage({
             }))
           }));
         commonReports = attachRequests(commonReports);
-        reports = attachRequests(reports);
       }
     }
   }
