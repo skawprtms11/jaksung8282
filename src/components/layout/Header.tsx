@@ -57,6 +57,14 @@ function hasFilterOptions(options: HeaderFilterOptions) {
   return options.departments.length > 0 || options.clients.length > 0;
 }
 
+function sortHeaderFilterOptions(options: HeaderFilterOptions): HeaderFilterOptions {
+  return {
+    departments: options.departments,
+    clients: [...options.clients].sort((left, right) => left.client_name.localeCompare(right.client_name, "ko")),
+    assignedClientIds: options.assignedClientIds
+  };
+}
+
 function getRouteMeta(pathname: string) {
   if (pathname.startsWith("/notices/")) {
     return {
@@ -82,19 +90,32 @@ function HeaderScopeFilter({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
-  const [loadedOptions, setLoadedOptions] = useState<HeaderFilterOptions>(() => (hasFilterOptions(options) ? options : emptyFilterOptions));
+  const [loadedOptions, setLoadedOptions] = useState<HeaderFilterOptions>(() =>
+    hasFilterOptions(options) ? sortHeaderFilterOptions(options) : emptyFilterOptions
+  );
   const [isLoadingOptions, setIsLoadingOptions] = useState(() => !hasFilterOptions(options));
   const hasLoadedOptions = hasFilterOptions(loadedOptions);
   const activeOptions = hasLoadedOptions ? loadedOptions : emptyFilterOptions;
   const selectedDepartmentId = searchParams.get("department_id") ?? "";
   const selectedClientId = searchParams.get("client_id") ?? "";
   const isClientWritePage = pathname === "/client-reports";
-  const requiresDepartmentSelection = pathname === "/department-reports";
+  const isDepartmentReportPage = pathname === "/department-reports";
+  const requiresDepartmentSelection = isDepartmentReportPage || isClientWritePage;
   const activeMeetingTab = searchParams.get("tab") ?? "collection";
+  const isMeetingMaterialsTab = pathname === "/meeting-materials" && activeMeetingTab === "materials";
   const restrictMeetingMaterialsAll =
     pathname === "/meeting-materials" && activeMeetingTab === "materials" && !selectedClientId;
-  const fallbackDepartmentId = restrictMeetingMaterialsAll ? activeOptions.departments[0]?.id ?? "" : "";
+  const restrictClientReportsAll = isClientWritePage && !selectedDepartmentId;
+  const restrictDepartmentReportsAll = isDepartmentReportPage && !selectedDepartmentId;
+  const fallbackDepartmentId =
+    restrictMeetingMaterialsAll || restrictClientReportsAll || restrictDepartmentReportsAll ? activeOptions.departments[0]?.id ?? "" : "";
   const effectiveDepartmentId = selectedDepartmentId || fallbackDepartmentId;
+  const effectiveDepartmentIndex = activeOptions.departments.findIndex((department) => department.id === effectiveDepartmentId);
+  const previousDepartment = isMeetingMaterialsTab && effectiveDepartmentIndex > 0 ? activeOptions.departments[effectiveDepartmentIndex - 1] : null;
+  const nextDepartment =
+    isMeetingMaterialsTab && effectiveDepartmentIndex >= 0 && effectiveDepartmentIndex < activeOptions.departments.length - 1
+      ? activeOptions.departments[effectiveDepartmentIndex + 1]
+      : null;
   const assignedClientIdSet = useMemo(() => new Set(activeOptions.assignedClientIds), [activeOptions.assignedClientIds]);
   const departmentScopedClients = useMemo(
     () =>
@@ -111,6 +132,24 @@ function HeaderScopeFilter({
   );
   const effectiveClientId = selectedClientId;
 
+  const adjacentDepartmentHrefs = useMemo(() => {
+    if (!isMeetingMaterialsTab) {
+      return { previous: null, next: null };
+    }
+
+    const buildHref = (departmentId: string) => {
+      const nextParams = new URLSearchParams(searchParams.toString());
+      nextParams.set("department_id", departmentId);
+      nextParams.delete("client_id");
+      return `${pathname}?${nextParams.toString()}`;
+    };
+
+    return {
+      previous: previousDepartment ? buildHref(previousDepartment.id) : null,
+      next: nextDepartment ? buildHref(nextDepartment.id) : null
+    };
+  }, [isMeetingMaterialsTab, nextDepartment, pathname, previousDepartment, searchParams]);
+
   useEffect(() => {
     if (hasLoadedOptions) {
       return;
@@ -125,7 +164,7 @@ function HeaderScopeFilter({
         return response.json() as Promise<HeaderFilterOptions>;
       })
       .then((nextOptions) => {
-        setLoadedOptions(nextOptions);
+        setLoadedOptions(sortHeaderFilterOptions(nextOptions));
       })
       .catch(() => {
         if (!controller.signal.aborted) {
@@ -140,6 +179,18 @@ function HeaderScopeFilter({
 
     return () => controller.abort();
   }, [hasLoadedOptions, profile.id]);
+
+  useEffect(() => {
+    if (!isMeetingMaterialsTab) {
+      return;
+    }
+    if (adjacentDepartmentHrefs.previous) {
+      router.prefetch(adjacentDepartmentHrefs.previous);
+    }
+    if (adjacentDepartmentHrefs.next) {
+      router.prefetch(adjacentDepartmentHrefs.next);
+    }
+  }, [adjacentDepartmentHrefs.next, adjacentDepartmentHrefs.previous, isMeetingMaterialsTab, router]);
 
   function updateFilter(nextDepartmentId: string, nextClientId: string) {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -172,6 +223,10 @@ function HeaderScopeFilter({
     updateFilter(nextDepartmentId, nextClientStillVisible ? selectedClientId : "");
   }
 
+  function handleDepartmentPager(nextDepartmentId: string) {
+    updateFilter(nextDepartmentId, "");
+  }
+
   return (
     <div className="hidden items-center gap-2 rounded-full border border-[#dbe8fb] bg-white/90 px-2 py-1.5 shadow-[0_12px_26px_rgba(16,34,61,0.06)] xl:flex">
       <label className="flex items-center gap-1.5 rounded-full bg-[#f5f9ff] px-2 py-1 text-xs font-black text-slate-500">
@@ -185,7 +240,7 @@ function HeaderScopeFilter({
           aria-label="부서 필터"
         >
           {isLoadingOptions ? <option value="">부서 불러오는 중</option> : null}
-          <option value="" disabled={restrictMeetingMaterialsAll}>
+          <option value="" disabled={restrictMeetingMaterialsAll || requiresDepartmentSelection}>
             {requiresDepartmentSelection ? "부서 선택" : "전체 부서"}
           </option>
           {activeOptions.departments.map((department) => (
@@ -214,6 +269,34 @@ function HeaderScopeFilter({
           ))}
         </select>
       </label>
+      {isMeetingMaterialsTab ? (
+        <div className="flex items-center gap-1 border-l border-[#dbe8fb] pl-2" aria-label="부서 자료 이동">
+          <button
+            type="button"
+            onClick={() => (previousDepartment ? handleDepartmentPager(previousDepartment.id) : undefined)}
+            disabled={!previousDepartment || isPending || isLoadingOptions}
+            className="focus-ring flex h-9 w-9 items-center justify-center rounded-full border border-[#dbe8fb] bg-white text-[#075be8] shadow-[0_8px_18px_rgba(7,91,232,0.08)] transition hover:-translate-x-0.5 hover:border-[#9fc2f6] hover:bg-[#eaf3ff] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-x-0"
+            aria-label={previousDepartment ? `이전 부서 ${previousDepartment.department_name} 조회` : "이전 부서 없음"}
+            title={previousDepartment ? `이전 부서: ${previousDepartment.department_name}` : "이전 부서 없음"}
+          >
+            <span className="text-[15px] leading-none" aria-hidden="true">
+              ◀
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => (nextDepartment ? handleDepartmentPager(nextDepartment.id) : undefined)}
+            disabled={!nextDepartment || isPending || isLoadingOptions}
+            className="focus-ring flex h-9 w-9 items-center justify-center rounded-full border border-[#dbe8fb] bg-white text-[#075be8] shadow-[0_8px_18px_rgba(7,91,232,0.08)] transition hover:translate-x-0.5 hover:border-[#9fc2f6] hover:bg-[#eaf3ff] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-x-0"
+            aria-label={nextDepartment ? `다음 부서 ${nextDepartment.department_name} 조회` : "다음 부서 없음"}
+            title={nextDepartment ? `다음 부서: ${nextDepartment.department_name}` : "다음 부서 없음"}
+          >
+            <span className="text-[15px] leading-none" aria-hidden="true">
+              ▶
+            </span>
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

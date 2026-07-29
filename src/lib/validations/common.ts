@@ -48,6 +48,35 @@ export const noticeSchema = z.object({
   is_active: formBooleanSchema.default(true)
 });
 
+export const noticeCommentSchema = z.object({
+  id: optionalIdSchema,
+  notice_id: idSchema,
+  parent_id: optionalIdSchema,
+  content: z.string().trim().min(1, "댓글 내용을 입력하세요.").max(2000, "댓글은 2,000자 이하로 입력하세요.")
+});
+
+export const reportItemRequestSchema = z.object({
+  id: optionalIdSchema,
+  target_type: z.enum(["client_item", "department_common"]).default("client_item"),
+  report_item_id: optionalIdSchema,
+  department_submission_id: optionalIdSchema,
+  item_period: z.enum(itemPeriods).optional(),
+  item_sort_order: z.coerce.number().int().min(0).optional(),
+  request_content: z.string().trim().min(1, "요청사항을 입력하세요.").max(2000, "요청사항은 2,000자 이하로 입력하세요.")
+}).superRefine((value, ctx) => {
+  if (value.target_type === "client_item" && !value.report_item_id) {
+    ctx.addIssue({ code: "custom", path: ["report_item_id"], message: "화주자료 항목을 확인하세요." });
+  }
+  if (value.target_type === "department_common" && (!value.department_submission_id || !value.item_period || typeof value.item_sort_order !== "number")) {
+    ctx.addIssue({ code: "custom", path: ["department_submission_id"], message: "공통사항 항목을 확인하세요." });
+  }
+});
+
+export const reportItemRequestResultSchema = z.object({
+  id: idSchema,
+  result_content: z.string().trim().min(1, "처리결과를 입력하세요.").max(2000, "처리결과는 2,000자 이하로 입력하세요.")
+});
+
 export const departmentSchema = z.object({
   id: optionalIdSchema,
   department_code: z.string().trim().min(1, "부서코드를 입력하세요.").max(30),

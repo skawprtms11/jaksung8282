@@ -131,6 +131,38 @@ export async function saveDepartmentAction(_: ActionResult | null, formData: For
   return { ok: true, message: "부서 정보를 저장했습니다." };
 }
 
+export async function deleteDepartmentsAction(_: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  const { profile, error: authError } = await requireAdmin();
+  if (authError || !profile) {
+    return { ok: false, message: authError ?? "권한이 없습니다." };
+  }
+
+  const departmentIds = String(formData.get("department_ids") ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const parsed = z.array(idSchema).min(1, "삭제할 부서를 선택하세요.").safeParse(departmentIds);
+  if (!parsed.success) {
+    return { ok: false, message: "삭제할 부서를 선택하세요." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요." };
+  }
+
+  const { error } = await supabase
+    .from("departments")
+    .update({ is_active: false, updated_by: profile.id })
+    .in("id", parsed.data);
+  if (error) {
+    return { ok: false, message: safeErrorMessage(error.message) };
+  }
+
+  revalidateMasterPath("/admin/departments");
+  return { ok: true, message: "선택한 부서를 삭제했습니다." };
+}
+
 async function updateDepartmentLeaders(departmentId: string, headUserId: string, managerUserIds: string[]) {
   if (!departmentId || (!headUserId && managerUserIds.length === 0)) {
     return null;

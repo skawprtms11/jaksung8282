@@ -1,9 +1,8 @@
 import { redirect } from "next/navigation";
-import { Building2, Search } from "lucide-react";
-import { DepartmentClientManager, DepartmentCreateButton } from "@/components/masters/MasterForms";
+import { Search } from "lucide-react";
+import { DepartmentCreateButton, DepartmentMasterTable } from "@/components/masters/MasterForms";
 import { EmptyState } from "@/components/common/EmptyState";
 import { PageHeader } from "@/components/common/PageHeader";
-import { TableShell } from "@/components/common/TableShell";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { canViewDepartmentMaster, isAdmin } from "@/lib/auth/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -69,6 +68,7 @@ export default async function DepartmentsPage({ searchParams }: { searchParams: 
       let query = supabase
         .from("departments")
         .select(withNotes ? "id,department_code,department_name,notes,is_active,sort_order,created_at,updated_at" : "id,department_code,department_name,is_active,sort_order,created_at,updated_at")
+        .eq("is_active", true)
         .order("sort_order")
         .order("department_name");
 
@@ -142,15 +142,6 @@ export default async function DepartmentsPage({ searchParams }: { searchParams: 
   }
 
   const showAdminDepartmentTools = isAdmin(profile);
-  const headsByDepartment = new Map<string, string[]>();
-  users.forEach((user) => {
-    if (!user.department_id) {
-      return;
-    }
-    if (user.app_role === "department_head") {
-      headsByDepartment.set(user.department_id, [...(headsByDepartment.get(user.department_id) ?? []), user.full_name]);
-    }
-  });
 
   return (
     <>
@@ -168,41 +159,15 @@ export default async function DepartmentsPage({ searchParams }: { searchParams: 
       {departments.length === 0 ? (
         <EmptyState title="부서 정보가 없습니다." />
       ) : (
-        <TableShell>
-          <table className="table-sticky min-w-[640px] w-full text-left text-sm">
-            <thead>
-              <tr>
-                <th className="px-3 py-3">부서명</th>
-                <th className="px-3 py-3">부서장</th>
-                <th className="px-3 py-3">화주등록</th>
-                <th className="px-3 py-3">비고</th>
-              </tr>
-            </thead>
-            <tbody>
-              {departments.map((department) => (
-                <tr key={department.id} className="border-t border-slate-100">
-                  <td className="px-3 py-3">
-                    <span className="inline-flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-[#075be8]" />
-                      {department.department_name}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3">{headsByDepartment.get(department.id)?.join(", ") || "-"}</td>
-                  <td className="px-3 py-3">
-                    <DepartmentClientManager
-                      department={department}
-                      clients={clients}
-                      departmentClientLinks={departmentClientLinks}
-                      users={users}
-                      assignments={assignments}
-                    />
-                  </td>
-                  <td className="px-3 py-3 text-slate-500">{department.notes?.trim() || "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableShell>
+        <DepartmentMasterTable
+          departments={departments}
+          users={users}
+          headCandidates={departmentCreateUsers}
+          clients={clients}
+          departmentClientLinks={departmentClientLinks}
+          assignments={assignments}
+          canManage={showAdminDepartmentTools}
+        />
       )}
     </>
   );

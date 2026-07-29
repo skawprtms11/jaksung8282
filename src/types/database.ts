@@ -155,6 +155,28 @@ export type Tables = {
     };
     Update: Partial<Tables["notices"]["Row"]>;
   };
+  notice_comments: {
+    Row: {
+      id: string;
+      notice_id: string;
+      parent_id: string | null;
+      content: string;
+      author_name: string;
+      author_department_name: string | null;
+      created_by: string;
+      created_at: string;
+      updated_at: string;
+      deleted_at: string | null;
+      deleted_by: string | null;
+    };
+    Insert: Partial<Tables["notice_comments"]["Row"]> & {
+      notice_id: string;
+      content: string;
+      author_name: string;
+      created_by: string;
+    };
+    Update: Partial<Tables["notice_comments"]["Row"]>;
+  };
   work_categories: {
     Row: {
       id: string;
@@ -228,6 +250,44 @@ export type Tables = {
       content: string;
     };
     Update: Partial<Tables["weekly_client_report_items"]["Row"]>;
+  };
+  weekly_report_item_requests: {
+    Row: {
+      id: string;
+      target_type: "client_item" | "department_common";
+      target_key: string;
+      report_item_id: string | null;
+      department_submission_id: string | null;
+      section_type: "common" | "facility" | "vacancy" | "holiday_work" | null;
+      item_period: ItemPeriod | null;
+      item_sort_order: number | null;
+      request_content: string;
+      request_author_name: string;
+      request_author_department_name: string | null;
+      result_content: string | null;
+      result_author_name: string | null;
+      result_author_department_name: string | null;
+      result_created_by: string | null;
+      result_created_at: string | null;
+      result_updated_at: string | null;
+      closed_by: string | null;
+      closed_author_name: string | null;
+      closed_author_department_name: string | null;
+      closed_at: string | null;
+      created_by: string;
+      created_at: string;
+      updated_at: string;
+      deleted_at: string | null;
+      deleted_by: string | null;
+    };
+    Insert: Partial<Tables["weekly_report_item_requests"]["Row"]> & {
+      target_type: "client_item" | "department_common";
+      target_key: string;
+      request_content: string;
+      request_author_name: string;
+      created_by: string;
+    };
+    Update: Partial<Tables["weekly_report_item_requests"]["Row"]>;
   };
   weekly_volumes: {
     Row: {
@@ -380,6 +440,12 @@ export type Database = {
       cancel_client_reports_submission_atomic: {
         Args: {
           p_report_ids: string[];
+        };
+        Returns: Json;
+      };
+      cancel_department_submission_atomic: {
+        Args: {
+          p_submission_id: string;
         };
         Returns: Json;
       };

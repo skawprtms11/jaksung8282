@@ -1,12 +1,12 @@
-import { Search } from "lucide-react";
 import { VolumeComparisonChart, type VolumeChartRow } from "@/components/charts/VolumeComparisonChart";
 import { EmptyState } from "@/components/common/EmptyState";
 import { TableShell } from "@/components/common/TableShell";
 import { MeetingFacilityConstructionBoard } from "@/components/reports/MeetingFacilityConstructionBoard";
+import { MeetingMaterialsTable } from "@/components/reports/MeetingMaterialsTable";
 import { MeetingMaterialsTabNav } from "@/components/reports/MeetingMaterialsTabNav";
 import { MeetingPriorityPanel, type MeetingPriorityItem } from "@/components/reports/MeetingPriorityPanel";
 import { MeetingHolidayWorkBoard } from "@/components/reports/MeetingHolidayWorkBoard";
-import { WeekSelect } from "@/components/reports/WeekSelect";
+import { MeetingMaterialsWeekFilter } from "@/components/reports/MeetingMaterialsWeekFilter";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { isAdmin } from "@/lib/auth/permissions";
 import {
@@ -18,6 +18,7 @@ import {
   type WeekOption
 } from "@/lib/dates/week";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { cn } from "@/lib/utils/cn";
 import { formatDateTime, volumeTypeLabels, volumeUnitLabels } from "@/lib/utils/labels";
 import type { DepartmentSubmissionStatus, Importance, ItemPeriod, VolumeType, VolumeUnit } from "@/types/enums";
@@ -49,13 +50,49 @@ type MeetingReportRow = {
     content: string;
     importance: Importance;
     work_categories: { category_name: string } | null;
+    weekly_report_item_requests: ReportItemRequestRow[];
+    request_target_key: string;
+    request_target_type: "client_item" | "department_common";
+    request_department_submission_id: string | null;
+    request_item_sort_order: number | null;
   }[];
   weekly_volumes: { volume_type: VolumeType; quantity: number; unit: VolumeUnit }[];
 };
 
+type ReportItemRequestRow = {
+  id: string;
+  target_type: "client_item" | "department_common";
+  target_key: string;
+  report_item_id: string | null;
+  department_submission_id: string | null;
+  section_type: "common" | "facility" | "vacancy" | "holiday_work" | null;
+  item_period: ItemPeriod | null;
+  item_sort_order: number | null;
+  request_content: string;
+  request_author_name: string;
+  request_author_department_name: string | null;
+  result_content: string | null;
+  result_author_name: string | null;
+  result_author_department_name: string | null;
+  result_created_by: string | null;
+  result_created_at: string | null;
+  result_updated_at: string | null;
+  closed_by: string | null;
+  closed_author_name: string | null;
+  closed_author_department_name: string | null;
+  closed_at: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
 type DepartmentContentRow = {
   section_type: "common" | "facility" | "vacancy" | "holiday_work";
+  current_importance: Importance;
+  current_work_category_id: string | null;
   current_week_content: string;
+  next_importance: Importance;
+  next_work_category_id: string | null;
   next_week_content: string;
 };
 
@@ -66,6 +103,21 @@ type SubmissionRow = {
   week_start_date: string;
   finalized_at: string | null;
   department_weekly_contents: DepartmentContentRow[];
+};
+
+type WorkCategoryRow = {
+  id: string;
+  category_name: string;
+};
+
+type MeetingWorkItemRow = MeetingReportRow["weekly_client_report_items"][number];
+
+type DepartmentCommonContentItem = {
+  importance: Importance;
+  work_category_id: string | null;
+  title: string;
+  content: string;
+  sort_order: number;
 };
 
 type PriorityItemQueryRow = {
@@ -94,6 +146,7 @@ type MeetingSearchParams = {
 };
 
 const MEETING_REPORT_LIMIT = 500;
+const COMMON_CONTENT_FORMAT = "department-common-items/v1";
 const tabs: { value: MeetingTab; label: string }[] = [
   { value: "collection", label: "취합현황" },
   { value: "materials", label: "회의자료" },
@@ -177,7 +230,7 @@ function getSubmissionSelect(tab: MeetingTab) {
     return "id,status,department_id,week_start_date,finalized_at,department_weekly_contents!inner(section_type,current_week_content,next_week_content)";
   }
 
-  return "id,status,department_id,week_start_date,finalized_at,department_weekly_contents(section_type,current_week_content,next_week_content)";
+  return "id,status,department_id,week_start_date,finalized_at,department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content)";
 }
 
 function getDepartmentContentSection(tab: MeetingTab): DepartmentContentRow["section_type"] | null {
@@ -251,17 +304,116 @@ function countByDepartment(clients: ClientSummaryRow[], reports: MeetingReportRo
   return { clientCountMap, writtenClientMap };
 }
 
-function importanceIconClassName(importance: Importance) {
-  if (importance === "very_high") {
-    return "border-red-100 bg-red-50 text-red-600";
+function normalizeImportance(value: unknown, fallback: Importance): Importance {
+  return value === "very_high" || value === "high" || value === "medium" || value === "low" ? value : fallback;
+}
+
+function parseDepartmentCommonItems(
+  value: string,
+  fallbackImportance: Importance,
+  fallbackCategoryId: string | null
+): DepartmentCommonContentItem[] {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) {
+    return [];
   }
-  if (importance === "high") {
-    return "border-orange-100 bg-orange-50 text-orange-500";
+
+  try {
+    const parsed = JSON.parse(trimmedValue) as {
+      format?: string;
+      items?: Array<Partial<DepartmentCommonContentItem>>;
+    };
+    if (parsed.format === COMMON_CONTENT_FORMAT && Array.isArray(parsed.items)) {
+      return parsed.items
+        .map((item, index) => ({
+          importance: normalizeImportance(item.importance, fallbackImportance),
+          work_category_id:
+            typeof item.work_category_id === "string" && item.work_category_id ? item.work_category_id : fallbackCategoryId,
+          title: String(item.title ?? ""),
+          content: String(item.content ?? ""),
+          sort_order: Number.isFinite(item.sort_order) ? Number(item.sort_order) : index
+        }))
+        .filter((item) => item.title.trim() || item.content.trim())
+        .sort((left, right) => left.sort_order - right.sort_order);
+    }
+  } catch {
+    // Old plain text content is displayed as a single row.
   }
-  if (importance === "medium") {
-    return "border-emerald-100 bg-emerald-50 text-emerald-600";
-  }
-  return "border-slate-200 bg-slate-50 text-slate-500";
+
+  return [
+    {
+      importance: fallbackImportance,
+      work_category_id: fallbackCategoryId,
+      title: "공통사항",
+      content: trimmedValue,
+      sort_order: 0
+    }
+  ];
+}
+
+function makeCommonMeetingRows(submissions: SubmissionRow[], departments: DepartmentRow[], categories: WorkCategoryRow[]): MeetingReportRow[] {
+  const departmentNameMap = new Map(departments.map((department) => [department.id, department.department_name]));
+  const categoryNameMap = new Map(categories.map((category) => [category.id, category.category_name]));
+  const commonRows: MeetingReportRow[] = [];
+
+  submissions.forEach((submission) => {
+    const commonContent = submission.department_weekly_contents.find((content) => content.section_type === "common");
+    if (!commonContent) {
+      return;
+    }
+
+    const currentItems = parseDepartmentCommonItems(
+      commonContent.current_week_content,
+      commonContent.current_importance,
+      commonContent.current_work_category_id
+    ).map<MeetingWorkItemRow>((item) => ({
+      id: `${submission.id}:common:current:${item.sort_order}`,
+      item_period: "current",
+      title: item.title,
+      content: item.content,
+      importance: item.importance,
+      work_categories: { category_name: item.work_category_id ? categoryNameMap.get(item.work_category_id) ?? "기타" : "기타" },
+      weekly_report_item_requests: [],
+      request_target_key: `${submission.id}:common:current:${item.sort_order}`,
+      request_target_type: "department_common",
+      request_department_submission_id: submission.id,
+      request_item_sort_order: item.sort_order
+    }));
+
+    const nextItems = parseDepartmentCommonItems(
+      commonContent.next_week_content,
+      commonContent.next_importance,
+      commonContent.next_work_category_id
+    ).map<MeetingWorkItemRow>((item) => ({
+      id: `${submission.id}:common:next:${item.sort_order}`,
+      item_period: "next",
+      title: item.title,
+      content: item.content,
+      importance: item.importance,
+      work_categories: { category_name: item.work_category_id ? categoryNameMap.get(item.work_category_id) ?? "기타" : "기타" },
+      weekly_report_item_requests: [],
+      request_target_key: `${submission.id}:common:next:${item.sort_order}`,
+      request_target_type: "department_common",
+      request_department_submission_id: submission.id,
+      request_item_sort_order: item.sort_order
+    }));
+
+    if (currentItems.length === 0 && nextItems.length === 0) {
+      return;
+    }
+
+    commonRows.push({
+      id: `${submission.id}-common`,
+      department_id: submission.department_id,
+      client_id: "common",
+      departments: { department_name: departmentNameMap.get(submission.department_id) ?? "-" },
+      clients: { client_name: "공통사항" },
+      weekly_client_report_items: [...currentItems, ...nextItems],
+      weekly_volumes: []
+    });
+  });
+
+  return commonRows;
 }
 
 function compactDepartmentStatus(status: DepartmentSubmissionStatus | null) {
@@ -295,11 +447,19 @@ export default async function MeetingMaterialsPage({
   let reports: MeetingReportRow[] = [];
   let priorityItemRows: PriorityItemQueryRow[] = [];
   let submissions: SubmissionRow[] = [];
+  let workCategories: WorkCategoryRow[] = [];
+  let commonReports: MeetingReportRow[] = [];
 
   if (supabase && profile) {
+    let dataClient = supabase;
+    try {
+      dataClient = createSupabaseAdminClient();
+    } catch {
+      dataClient = supabase;
+    }
     let materialsDepartmentLimit: string | undefined;
     if (isAdmin(profile) && activeTab === "materials" && !params.department_id && !params.client_id) {
-      const { data: firstDepartment } = await supabase
+      const { data: firstDepartment } = await dataClient
         .from("departments")
         .select("id")
         .eq("is_active", true)
@@ -310,16 +470,16 @@ export default async function MeetingMaterialsPage({
       materialsDepartmentLimit = firstDepartment?.id;
     }
     const departmentFilter = isAdmin(profile) ? params.department_id ?? materialsDepartmentLimit : profile.department_id;
-    const needsDepartments = activeTab === "collection" || activeTab === "holiday" || activeTab === "facility";
+    const needsDepartments = activeTab === "collection" || activeTab === "materials" || activeTab === "holiday" || activeTab === "facility";
     const needsClients = activeTab === "collection";
     const needsReports = activeTab === "collection" || activeTab === "materials" || activeTab === "volumes";
-    const needsSubmissions = activeTab === "collection" || activeTab === "holiday" || activeTab === "facility";
+    const needsSubmissions = activeTab === "collection" || activeTab === "materials" || activeTab === "holiday" || activeTab === "facility";
     const contentSectionFilter = getDepartmentContentSection(activeTab);
 
-    const [departmentResult, clientResult, reportResult, priorityItemResult, submissionResult] = await Promise.all([
+    const [departmentResult, clientResult, reportResult, priorityItemResult, submissionResult, categoryResult] = await Promise.all([
       needsDepartments
         ? (() => {
-            let query = supabase
+            let query = dataClient
               .from("departments")
               .select("id,department_name")
               .eq("is_active", true)
@@ -333,7 +493,7 @@ export default async function MeetingMaterialsPage({
         : Promise.resolve({ data: [] }),
       needsClients
         ? (() => {
-            let query = supabase
+            let query = dataClient
               .from("department_client_links")
               .select("department_id,client_id")
               .eq("is_active", true);
@@ -348,7 +508,7 @@ export default async function MeetingMaterialsPage({
         : Promise.resolve({ data: [] }),
       needsReports
         ? (() => {
-            let query = supabase
+            let query = dataClient
               .from("weekly_client_reports")
               .select(getMeetingReportSelect(activeTab))
               .eq("week_start_date", selectedWeek.weekStartDate)
@@ -366,7 +526,7 @@ export default async function MeetingMaterialsPage({
         : Promise.resolve({ data: [], error: null }),
       activeTab === "collection"
         ? (() => {
-            let query = supabase
+            let query = dataClient
               .from("weekly_client_report_items")
               .select(
                 "id,item_period,title,content,importance,work_categories(category_name),weekly_client_reports!inner(department_id,client_id,departments(department_name),clients(client_name))"
@@ -386,7 +546,7 @@ export default async function MeetingMaterialsPage({
         : Promise.resolve({ data: [] }),
       needsSubmissions
         ? (() => {
-            let query = supabase
+            let query = dataClient
               .from("department_weekly_submissions")
               .select(getSubmissionSelect(activeTab))
               .eq("week_start_date", selectedWeek.weekStartDate)
@@ -400,6 +560,9 @@ export default async function MeetingMaterialsPage({
             }
             return query;
           })()
+        : Promise.resolve({ data: [] }),
+      activeTab === "materials"
+        ? dataClient.from("work_categories").select("id,category_name").eq("is_active", true).order("sort_order", { ascending: true })
         : Promise.resolve({ data: [] })
     ]);
 
@@ -410,7 +573,14 @@ export default async function MeetingMaterialsPage({
     }));
     reports = ((reportResult.error ? [] : reportResult.data ?? []) as unknown as MeetingReportRow[]).map((report) => ({
       ...report,
-      weekly_client_report_items: report.weekly_client_report_items ?? [],
+      weekly_client_report_items: (report.weekly_client_report_items ?? []).map((item) => ({
+        ...item,
+        weekly_report_item_requests: [],
+        request_target_key: item.id,
+        request_target_type: "client_item" as const,
+        request_department_submission_id: null,
+        request_item_sort_order: null
+      })),
       weekly_volumes: report.weekly_volumes ?? []
     }));
     priorityItemRows = (priorityItemResult.data ?? []) as unknown as PriorityItemQueryRow[];
@@ -418,10 +588,44 @@ export default async function MeetingMaterialsPage({
       ...submission,
       department_weekly_contents: submission.department_weekly_contents ?? []
     }));
+    workCategories = (categoryResult.data ?? []) as WorkCategoryRow[];
+    commonReports = activeTab === "materials" ? makeCommonMeetingRows(submissions, departments, workCategories) : [];
+    if (activeTab === "materials") {
+      const materialTargetKeys = [...commonReports, ...reports].flatMap((report) =>
+        report.weekly_client_report_items.map((item) => item.request_target_key)
+      );
+      if (materialTargetKeys.length > 0) {
+        const { data: requestRows } = await dataClient
+          .from("weekly_report_item_requests")
+          .select(
+            "id,target_type,target_key,report_item_id,department_submission_id,section_type,item_period,item_sort_order,request_content,request_author_name,request_author_department_name,result_content,result_author_name,result_author_department_name,result_created_by,result_created_at,result_updated_at,closed_by,closed_author_name,closed_author_department_name,closed_at,created_by,created_at,updated_at"
+          )
+          .in("target_key", materialTargetKeys)
+          .is("deleted_at", null)
+          .order("created_at", { ascending: true });
+        const requestMap = new Map<string, ReportItemRequestRow[]>();
+        ((requestRows ?? []) as ReportItemRequestRow[]).forEach((request) => {
+          const rows = requestMap.get(request.target_key) ?? [];
+          rows.push(request);
+          requestMap.set(request.target_key, rows);
+        });
+        const attachRequests = (rows: MeetingReportRow[]) =>
+          rows.map((report) => ({
+            ...report,
+            weekly_client_report_items: report.weekly_client_report_items.map((item) => ({
+              ...item,
+              weekly_report_item_requests: requestMap.get(item.request_target_key) ?? []
+            }))
+          }));
+        commonReports = attachRequests(commonReports);
+        reports = attachRequests(reports);
+      }
+    }
   }
 
   const chartRows = activeTab === "volumes" ? makeChartRows(reports) : [];
   const priorityItems = activeTab === "collection" ? makePriorityItems(priorityItemRows) : [];
+  const materialRows = activeTab === "materials" ? [...commonReports, ...reports] : reports;
   const { clientCountMap, writtenClientMap } =
     activeTab === "collection" ? countByDepartment(clients, reports) : { clientCountMap: new Map(), writtenClientMap: new Map() };
 
@@ -436,25 +640,7 @@ export default async function MeetingMaterialsPage({
               href: buildTabHref(tab.value, params, selectedWeek)
             }))}
           />
-          <form className="flex shrink-0 flex-wrap items-center justify-end gap-2" method="get">
-            <input type="hidden" name="tab" value={activeTab} />
-            {params.department_id ? <input type="hidden" name="department_id" value={params.department_id} /> : null}
-            {params.client_id ? <input type="hidden" name="client_id" value={params.client_id} /> : null}
-            <div className="rounded-full border border-[#dbe8fb] bg-white/90 px-2 py-1.5 shadow-[0_10px_22px_rgba(16,34,61,0.05)]">
-              <WeekSelect
-                defaultWeekStartDate={selectedWeek.weekStartDate}
-                compactWeekLabel
-                className="flex flex-wrap items-center gap-1.5"
-                labelClassName="flex items-center gap-1 text-[11px] font-black text-slate-500"
-                weekLabelClassName="flex items-center gap-1 text-[11px] font-black text-slate-500"
-                controlClassName="h-8 w-[78px] rounded-full border border-[#d7e4f6] bg-[#f5f9ff] px-2 text-sm font-black text-[#10223d] outline-none"
-              />
-            </div>
-            <button className="tool-button tool-button-primary min-h-9 py-1.5">
-              <Search className="h-4 w-4" aria-hidden="true" />
-              조회
-            </button>
-          </form>
+          <MeetingMaterialsWeekFilter defaultWeekStartDate={selectedWeek.weekStartDate} />
         </div>
       </div>
 
@@ -468,7 +654,14 @@ export default async function MeetingMaterialsPage({
           writtenClientMap={writtenClientMap}
         />
       ) : null}
-      {activeTab === "materials" ? <MaterialsView reports={reports} /> : null}
+      {activeTab === "materials" ? (
+        <MeetingMaterialsTable
+          key={`materials-${selectedWeek.weekStartDate}-${params.department_id ?? "all"}-${params.client_id ?? "all"}`}
+          reports={materialRows}
+          currentUserId={profile?.id ?? ""}
+          canManageAllRequests={isAdmin(profile)}
+        />
+      ) : null}
       {activeTab === "volumes" ? <VolumesView chartRows={chartRows} reports={reports} /> : null}
       {activeTab === "holiday" ? (
         <MeetingHolidayWorkBoard departments={departments} submissions={submissions} selectedWeek={selectedWeek} />
@@ -553,77 +746,6 @@ function CollectionView({
         </TableShell>
       </section>
     </div>
-  );
-}
-
-function MaterialsView({ reports }: { reports: MeetingReportRow[] }) {
-  if (reports.length === 0) {
-    return <EmptyState title="선택한 주차의 회의자료가 없습니다." />;
-  }
-  return (
-    <TableShell>
-      <table className="table-sticky w-full min-w-[1100px] table-fixed text-left text-sm">
-        <colgroup>
-          <col className="w-[190px]" />
-          <col className="w-[455px]" />
-          <col className="w-[455px]" />
-        </colgroup>
-        <thead>
-          <tr>
-            <th className="px-3 py-3">화주</th>
-            <th className="px-3 py-3">금주 실시사항</th>
-            <th className="px-3 py-3">차주 예정사항</th>
-          </tr>
-        </thead>
-        <tbody>
-          {reports.map((report) => (
-            <tr key={report.id} className="border-t border-slate-100 align-top">
-              <td className="px-3 py-4">
-                <div className="font-black text-[#10223d]">{report.clients?.client_name ?? "-"}</div>
-                <div className="mt-1 text-xs font-bold text-slate-400">{report.departments?.department_name ?? "-"}</div>
-              </td>
-              <td className="px-3 py-4">
-                <MeetingWorkItemList rows={report.weekly_client_report_items} period="current" />
-              </td>
-              <td className="px-3 py-4">
-                <MeetingWorkItemList rows={report.weekly_client_report_items} period="next" />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </TableShell>
-  );
-}
-
-function MeetingWorkItemList({ rows, period }: { rows: MeetingReportRow["weekly_client_report_items"]; period: ItemPeriod }) {
-  const values = rows.filter((row) => row.item_period === period);
-  if (values.length === 0) {
-    return <span className="text-slate-400">-</span>;
-  }
-
-  return (
-    <ol className="space-y-3">
-      {values.map((row, index) => (
-        <li key={`${period}-${row.id}-${index}`} className="flex gap-2.5 rounded-2xl bg-[#f8fbff] px-3 py-2.5">
-          <span
-            className={cn(
-              "mt-0.5 inline-flex h-7 min-w-11 shrink-0 items-center justify-center rounded-xl border px-2 text-xs font-black",
-              importanceIconClassName(row.importance)
-            )}
-            title={row.work_categories?.category_name ?? "기타"}
-          >
-            {row.work_categories?.category_name ?? "기타"}
-          </span>
-          <span className="min-w-0">
-            <span className="block break-words text-[15px] font-black leading-6 text-[#10223d]">
-              {row.title?.trim() || "제목 없음"}
-            </span>
-            <span className="mt-1 block whitespace-pre-wrap break-words text-sm leading-6 text-slate-600">{row.content}</span>
-          </span>
-        </li>
-      ))}
-    </ol>
   );
 }
 

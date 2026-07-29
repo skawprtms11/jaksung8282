@@ -41,6 +41,7 @@ type DepartmentSubmissionInitialRow = {
   department_id: string;
   week_start_date: string;
   status: "draft" | "submitted_to_division" | "division_approved" | "division_rejected";
+  finalized_at: string | null;
   department_weekly_contents: DepartmentSubmissionEditorInitialSubmission["department_weekly_contents"];
 };
 
@@ -162,7 +163,19 @@ export default async function DepartmentReportsPage({
   let initialLookupDepartmentId: string | null = null;
   const currentWeek = getCurrentWeekOption();
   if (supabase && profile) {
-    const departmentFilter = isAdmin(profile) ? undefined : profile.department_id;
+    let adminDefaultDepartmentId: string | undefined;
+    if (isAdmin(profile) && !params.department_id) {
+      const { data: firstDepartment } = await supabase
+        .from("departments")
+        .select("id")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+        .order("department_name", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      adminDefaultDepartmentId = firstDepartment?.id;
+    }
+    const departmentFilter = isAdmin(profile) ? params.department_id ?? adminDefaultDepartmentId : profile.department_id;
     const selectedDepartmentFilter = departmentFilter ?? params.department_id;
     const selectedClientFilter = params.client_id;
     initialLookupDepartmentId = selectedDepartmentFilter ?? null;
@@ -177,11 +190,8 @@ export default async function DepartmentReportsPage({
     ] = await Promise.all([
       (() => {
         let query = supabase.from("departments").select("id,department_name").eq("is_active", true).order("sort_order");
-        if (departmentFilter) {
+        if (!isAdmin(profile) && departmentFilter) {
           query = query.eq("id", departmentFilter);
-        }
-        if (!departmentFilter && params.department_id) {
-          query = query.eq("id", params.department_id);
         }
         return query;
       })(),
@@ -225,7 +235,7 @@ export default async function DepartmentReportsPage({
         ? supabase
             .from("department_weekly_submissions")
             .select(
-              "id,department_id,week_start_date,status,department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content)"
+              "id,department_id,week_start_date,status,finalized_at,department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content)"
             )
             .eq("department_id", selectedDepartmentFilter)
             .eq("week_start_date", currentWeek.weekStartDate)
@@ -289,7 +299,7 @@ export default async function DepartmentReportsPage({
         initialSubmission={initialSubmission}
         initialLookupDepartmentId={initialLookupDepartmentId}
         initialLookupWeekStartDate={currentWeek.weekStartDate}
-        requireExplicitDepartmentSelection={isAdmin(profile) && !params.department_id}
+        requireExplicitDepartmentSelection={false}
         reviewSlot={
           <>
             <h2 className="section-doodle-title mb-3 mt-6">화주별 자료 검토</h2>

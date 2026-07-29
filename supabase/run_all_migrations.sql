@@ -1646,6 +1646,150 @@ $$;
 
 grant execute on function public.save_client_report_atomic(uuid, uuid, uuid, date, date, integer, integer, integer, text, boolean, jsonb, jsonb) to authenticated;
 
+-- 021_notice_comments.sql
+create table if not exists public.notice_comments (
+  id uuid primary key default gen_random_uuid(),
+  notice_id uuid not null references public.notices(id) on delete cascade,
+  parent_id uuid references public.notice_comments(id) on delete cascade,
+  content text not null check (length(btrim(content)) > 0),
+  author_name text not null,
+  author_department_name text,
+  created_by uuid not null references auth.users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz,
+  deleted_by uuid references auth.users(id)
+);
+
+create or replace function public.ensure_notice_comment_parent()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+declare
+  parent_notice_id uuid;
+begin
+  if tg_op = 'UPDATE'
+    and new.notice_id = old.notice_id
+    and new.parent_id is not distinct from old.parent_id then
+    return new;
+  end if;
+
+  if new.parent_id is null then
+    return new;
+  end if;
+
+  select notice_id into parent_notice_id
+  from public.notice_comments
+  where id = new.parent_id
+    and deleted_at is null;
+
+  if parent_notice_id is null then
+    raise exception '답글 대상 댓글을 찾을 수 없습니다.';
+  end if;
+
+  if parent_notice_id <> new.notice_id then
+    raise exception '같은 게시글의 댓글에만 답글을 등록할 수 있습니다.';
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.protect_notice_comment_immutable_fields()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if old.deleted_at is not null then
+    raise exception '삭제된 댓글은 수정할 수 없습니다.';
+  end if;
+
+  if new.notice_id <> old.notice_id
+    or new.parent_id is distinct from old.parent_id
+    or new.created_by <> old.created_by
+    or new.created_at <> old.created_at
+    or new.author_name <> old.author_name
+    or new.author_department_name is distinct from old.author_department_name then
+    raise exception '댓글의 작성자와 연결 정보는 변경할 수 없습니다.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists notice_comments_set_updated_at on public.notice_comments;
+create trigger notice_comments_set_updated_at
+  before update on public.notice_comments
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists notice_comments_protect_immutable on public.notice_comments;
+create trigger notice_comments_protect_immutable
+  before update on public.notice_comments
+  for each row execute function public.protect_notice_comment_immutable_fields();
+
+drop trigger if exists notice_comments_ensure_parent on public.notice_comments;
+create trigger notice_comments_ensure_parent
+  before insert or update on public.notice_comments
+  for each row execute function public.ensure_notice_comment_parent();
+
+alter table public.notice_comments enable row level security;
+
+drop policy if exists "notice_comments_select_active_notice" on public.notice_comments;
+create policy "notice_comments_select_active_notice" on public.notice_comments
+  for select to authenticated using (
+    deleted_at is null
+    and exists (
+      select 1
+      from public.notices n
+      where n.id = notice_id
+        and n.deleted_at is null
+        and n.is_active = true
+    )
+  );
+
+drop policy if exists "notice_comments_insert_authenticated" on public.notice_comments;
+create policy "notice_comments_insert_authenticated" on public.notice_comments
+  for insert to authenticated with check (
+    created_by = auth.uid()
+    and deleted_at is null
+    and exists (
+      select 1
+      from public.profiles p
+      where p.id = auth.uid()
+        and p.is_active = true
+    )
+    and exists (
+      select 1
+      from public.notices n
+      where n.id = notice_id
+        and n.deleted_at is null
+        and n.is_active = true
+    )
+  );
+
+drop policy if exists "notice_comments_update_owner_or_admin" on public.notice_comments;
+create policy "notice_comments_update_owner_or_admin" on public.notice_comments
+  for update to authenticated using (
+    deleted_at is null
+    and (created_by = auth.uid() or public.is_admin())
+  ) with check (
+    created_by = auth.uid() or public.is_admin()
+  );
+
+create index if not exists notice_comments_notice_created_idx
+  on public.notice_comments(notice_id, created_at)
+  where deleted_at is null;
+
+create index if not exists notice_comments_parent_created_idx
+  on public.notice_comments(parent_id, created_at)
+  where deleted_at is null;
+
+create index if not exists notice_comments_created_by_idx
+  on public.notice_comments(created_by)
+  where deleted_at is null;
+
 create or replace function public.save_department_submission_atomic(
   p_submission_id uuid,
   p_department_id uuid,
@@ -2288,3 +2432,634 @@ grant execute on function public.is_assigned_client(uuid) to authenticated;
 grant execute on function public.can_write_client_report(uuid, uuid, public.client_report_status) to authenticated;
 grant execute on function public.save_client_report_atomic(uuid, uuid, uuid, date, date, integer, integer, integer, text, boolean, jsonb, jsonb) to authenticated;
 
+-- 022_report_item_requests.sql
+create table if not exists public.weekly_report_item_requests (
+  id uuid primary key default gen_random_uuid(),
+  report_item_id uuid not null references public.weekly_client_report_items(id) on delete cascade,
+  request_content text not null check (length(btrim(request_content)) > 0),
+  request_author_name text not null,
+  request_author_department_name text,
+  result_content text,
+  result_author_name text,
+  result_author_department_name text,
+  result_created_by uuid references auth.users(id),
+  result_created_at timestamptz,
+  result_updated_at timestamptz,
+  created_by uuid not null references auth.users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz,
+  deleted_by uuid references auth.users(id)
+);
+
+create index if not exists idx_weekly_report_item_requests_item
+  on public.weekly_report_item_requests(report_item_id)
+  where deleted_at is null;
+
+create index if not exists idx_weekly_report_item_requests_created
+  on public.weekly_report_item_requests(created_at);
+
+drop trigger if exists weekly_report_item_requests_set_updated_at on public.weekly_report_item_requests;
+create trigger weekly_report_item_requests_set_updated_at
+before update on public.weekly_report_item_requests
+for each row execute function public.set_updated_at();
+
+alter table public.weekly_report_item_requests enable row level security;
+
+drop policy if exists "weekly_report_item_requests_select_scope" on public.weekly_report_item_requests;
+create policy "weekly_report_item_requests_select_scope" on public.weekly_report_item_requests
+for select using (
+  deleted_at is null
+  and exists (
+    select 1
+    from public.weekly_client_report_items item
+    join public.weekly_client_reports report on report.id = item.report_id
+    where item.id = weekly_report_item_requests.report_item_id
+      and report.deleted_at is null
+      and (
+        public.is_admin()
+        or report.department_id = public.current_department_id()
+      )
+  )
+);
+
+drop policy if exists "weekly_report_item_requests_insert_scope" on public.weekly_report_item_requests;
+create policy "weekly_report_item_requests_insert_scope" on public.weekly_report_item_requests
+for insert with check (
+  auth.uid() = created_by
+  and public.current_app_role() in ('admin', 'department_head', 'manager', 'client_owner')
+  and exists (
+    select 1
+    from public.weekly_client_report_items item
+    join public.weekly_client_reports report on report.id = item.report_id
+    where item.id = weekly_report_item_requests.report_item_id
+      and report.deleted_at is null
+      and (
+        public.is_admin()
+        or report.department_id = public.current_department_id()
+      )
+  )
+);
+
+drop policy if exists "weekly_report_item_requests_update_owner" on public.weekly_report_item_requests;
+create policy "weekly_report_item_requests_update_owner" on public.weekly_report_item_requests
+for update using (
+  deleted_at is null
+  and (
+    public.is_admin()
+    or created_by = auth.uid()
+    or result_created_by = auth.uid()
+  )
+) with check (
+  deleted_at is null
+  and (
+    public.is_admin()
+    or created_by = auth.uid()
+    or result_created_by = auth.uid()
+  )
+);
+
+-- 026_report_item_request_closure.sql
+alter table public.weekly_report_item_requests
+  add column if not exists closed_by uuid references auth.users(id),
+  add column if not exists closed_author_name text,
+  add column if not exists closed_author_department_name text,
+  add column if not exists closed_at timestamptz;
+
+create index if not exists idx_weekly_report_item_requests_closed
+  on public.weekly_report_item_requests(closed_at)
+  where deleted_at is null and closed_at is not null;
+
+drop policy if exists "weekly_report_item_requests_update_owner" on public.weekly_report_item_requests;
+create policy "weekly_report_item_requests_update_owner" on public.weekly_report_item_requests
+for update using (
+  deleted_at is null
+  and (
+    public.is_admin()
+    or created_by = auth.uid()
+    or result_created_by = auth.uid()
+    or closed_by = auth.uid()
+  )
+) with check (
+  deleted_at is null
+  and (
+    public.is_admin()
+    or created_by = auth.uid()
+    or result_created_by = auth.uid()
+    or closed_by = auth.uid()
+  )
+);
+
+-- 026_report_item_request_closure.sql
+alter table public.weekly_report_item_requests
+  add column if not exists closed_by uuid references auth.users(id),
+  add column if not exists closed_author_name text,
+  add column if not exists closed_author_department_name text,
+  add column if not exists closed_at timestamptz;
+
+create index if not exists idx_weekly_report_item_requests_closed
+  on public.weekly_report_item_requests(closed_at)
+  where deleted_at is null and closed_at is not null;
+
+drop policy if exists "weekly_report_item_requests_update_owner" on public.weekly_report_item_requests;
+create policy "weekly_report_item_requests_update_owner" on public.weekly_report_item_requests
+for update using (
+  deleted_at is null
+  and (
+    public.is_admin()
+    or created_by = auth.uid()
+    or result_created_by = auth.uid()
+    or closed_by = auth.uid()
+  )
+) with check (
+  deleted_at is null
+  and (
+    public.is_admin()
+    or created_by = auth.uid()
+    or result_created_by = auth.uid()
+    or closed_by = auth.uid()
+  )
+);
+
+-- 026_report_item_request_closure.sql
+alter table public.weekly_report_item_requests
+  add column if not exists closed_by uuid references auth.users(id),
+  add column if not exists closed_author_name text,
+  add column if not exists closed_author_department_name text,
+  add column if not exists closed_at timestamptz;
+
+create index if not exists idx_weekly_report_item_requests_closed
+  on public.weekly_report_item_requests(closed_at)
+  where deleted_at is null and closed_at is not null;
+
+drop policy if exists "weekly_report_item_requests_update_owner" on public.weekly_report_item_requests;
+create policy "weekly_report_item_requests_update_owner" on public.weekly_report_item_requests
+for update using (
+  deleted_at is null
+  and (
+    public.is_admin()
+    or created_by = auth.uid()
+    or result_created_by = auth.uid()
+    or closed_by = auth.uid()
+  )
+) with check (
+  deleted_at is null
+  and (
+    public.is_admin()
+    or created_by = auth.uid()
+    or result_created_by = auth.uid()
+    or closed_by = auth.uid()
+  )
+);
+
+-- 024_confirmation_cancel_window.sql
+create or replace function public.cancel_client_reports_submission_atomic(p_report_ids uuid[])
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_id uuid := auth.uid();
+  actor_role public.app_role := public.current_app_role();
+  expected_count integer;
+  found_count integer := 0;
+  target public.weekly_client_reports%rowtype;
+begin
+  if actor_id is null or actor_role is null then
+    raise exception '사용자 정보가 없거나 비활성화 상태입니다.';
+  end if;
+
+  select count(*) into expected_count
+  from (
+    select distinct report_id
+    from unnest(coalesce(p_report_ids, array[]::uuid[])) as selected(report_id)
+  ) selected;
+
+  if expected_count = 0 then
+    raise exception '확정취소할 화주별 자료를 선택하세요.';
+  end if;
+
+  for target in
+    select *
+    from public.weekly_client_reports
+    where id = any(p_report_ids)
+      and deleted_at is null
+    order by id
+    for update
+  loop
+    found_count := found_count + 1;
+
+    if not public.can_access_department(target.department_id) then
+      raise exception '처리 권한이 없습니다.';
+    end if;
+
+    if actor_role not in ('admin', 'department_head', 'manager', 'client_owner') then
+      raise exception '확정취소 권한이 없습니다.';
+    end if;
+
+    if actor_role = 'client_owner'
+      and (target.created_by <> actor_id or not public.is_assigned_client(target.client_id)) then
+      raise exception '배정된 본인 자료만 확정취소할 수 있습니다.';
+    end if;
+
+    if target.status <> 'submitted' then
+      raise exception '확정 상태의 자료만 확정취소할 수 있습니다.';
+    end if;
+
+    if target.submitted_at is not null and now() > target.submitted_at + interval '3 days' then
+      raise exception '확정 후 3일이 지난 화주자료는 확정취소할 수 없습니다.';
+    end if;
+
+    update public.weekly_client_reports
+    set status = 'draft',
+        submitted_at = null,
+        review_comment = '확정취소',
+        updated_by = actor_id,
+        updated_at = now()
+    where id = target.id;
+
+    insert into public.approval_history(target_type, target_id, action, previous_status, next_status, comment, actor_id)
+    values ('client_report', target.id, '확정취소', target.status::text, 'draft', '확정취소', actor_id);
+  end loop;
+
+  if found_count <> expected_count then
+    raise exception '선택한 자료 중 조회할 수 없는 자료가 있습니다.';
+  end if;
+
+  return jsonb_build_object('ok', true, 'count', found_count);
+end;
+$$;
+
+grant execute on function public.cancel_client_reports_submission_atomic(uuid[]) to authenticated;
+
+create or replace function public.cancel_department_submission_atomic(p_submission_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_id uuid := auth.uid();
+  actor_role public.app_role := public.current_app_role();
+  actor_department_id uuid := public.current_department_id();
+  target public.department_weekly_submissions%rowtype;
+begin
+  if actor_id is null or actor_role is null then
+    raise exception '사용자 정보가 없거나 비활성화 상태입니다.';
+  end if;
+
+  if actor_role not in ('admin', 'department_head') then
+    raise exception '확정취소는 부서장과 관리자만 가능합니다.';
+  end if;
+
+  select * into target
+  from public.department_weekly_submissions
+  where id = p_submission_id
+    and deleted_at is null
+  for update;
+
+  if not found then
+    raise exception '확정취소할 부서자료를 찾을 수 없습니다.';
+  end if;
+
+  if actor_role <> 'admin' and actor_department_id is distinct from target.department_id then
+    raise exception '소속 부서 자료만 확정취소할 수 있습니다.';
+  end if;
+
+  if target.status <> 'submitted_to_division' then
+    raise exception '사업부 검토요청 상태의 부서자료만 확정취소할 수 있습니다.';
+  end if;
+
+  if target.finalized_at is not null and now() > target.finalized_at + interval '3 days' then
+    raise exception '확정 후 3일이 지난 부서자료는 확정취소할 수 없습니다.';
+  end if;
+
+  update public.department_weekly_submissions
+  set status = 'draft',
+      finalized_by = null,
+      finalized_at = null,
+      updated_at = now()
+  where id = target.id;
+
+  insert into public.approval_history(target_type, target_id, action, previous_status, next_status, comment, actor_id)
+  values ('department_submission', target.id, '확정취소', target.status::text, 'draft', '부서 확정취소', actor_id);
+
+  return jsonb_build_object('ok', true, 'id', target.id, 'status', 'draft');
+end;
+$$;
+
+grant execute on function public.cancel_department_submission_atomic(uuid) to authenticated;
+
+-- 026_report_item_request_closure.sql
+alter table public.weekly_report_item_requests
+  add column if not exists closed_by uuid references auth.users(id),
+  add column if not exists closed_author_name text,
+  add column if not exists closed_author_department_name text,
+  add column if not exists closed_at timestamptz;
+
+create index if not exists idx_weekly_report_item_requests_closed
+  on public.weekly_report_item_requests(closed_at)
+  where deleted_at is null and closed_at is not null;
+
+drop policy if exists "weekly_report_item_requests_update_owner" on public.weekly_report_item_requests;
+create policy "weekly_report_item_requests_update_owner" on public.weekly_report_item_requests
+for update using (
+  deleted_at is null
+  and (
+    public.is_admin()
+    or created_by = auth.uid()
+    or result_created_by = auth.uid()
+    or closed_by = auth.uid()
+  )
+) with check (
+  deleted_at is null
+  and (
+    public.is_admin()
+    or created_by = auth.uid()
+    or result_created_by = auth.uid()
+    or closed_by = auth.uid()
+  )
+);
+
+-- 025_confirmation_cancel_window_three_days.sql
+create or replace function public.cancel_client_reports_submission_atomic(p_report_ids uuid[])
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_id uuid := auth.uid();
+  actor_role public.app_role := public.current_app_role();
+  expected_count integer;
+  found_count integer := 0;
+  target public.weekly_client_reports%rowtype;
+begin
+  if actor_id is null or actor_role is null then
+    raise exception '사용자 정보가 없거나 비활성화 상태입니다.';
+  end if;
+
+  select count(*) into expected_count
+  from (
+    select distinct report_id
+    from unnest(coalesce(p_report_ids, array[]::uuid[])) as selected(report_id)
+  ) selected;
+
+  if expected_count = 0 then
+    raise exception '확정취소할 화주별 자료를 선택하세요.';
+  end if;
+
+  for target in
+    select *
+    from public.weekly_client_reports
+    where id = any(p_report_ids)
+      and deleted_at is null
+    order by id
+    for update
+  loop
+    found_count := found_count + 1;
+
+    if not public.can_access_department(target.department_id) then
+      raise exception '처리 권한이 없습니다.';
+    end if;
+
+    if actor_role not in ('admin', 'department_head', 'manager', 'client_owner') then
+      raise exception '확정취소 권한이 없습니다.';
+    end if;
+
+    if actor_role = 'client_owner'
+      and (target.created_by <> actor_id or not public.is_assigned_client(target.client_id)) then
+      raise exception '배정된 본인 자료만 확정취소할 수 있습니다.';
+    end if;
+
+    if target.status <> 'submitted' then
+      raise exception '확정 상태의 자료만 확정취소할 수 있습니다.';
+    end if;
+
+    if target.submitted_at is not null and now() > target.submitted_at + interval '3 days' then
+      raise exception '확정 후 3일이 지난 화주자료는 확정취소할 수 없습니다.';
+    end if;
+
+    update public.weekly_client_reports
+    set status = 'draft',
+        submitted_at = null,
+        review_comment = '확정취소',
+        updated_by = actor_id,
+        updated_at = now()
+    where id = target.id;
+
+    insert into public.approval_history(target_type, target_id, action, previous_status, next_status, comment, actor_id)
+    values ('client_report', target.id, '확정취소', target.status::text, 'draft', '확정취소', actor_id);
+  end loop;
+
+  if found_count <> expected_count then
+    raise exception '선택한 자료 중 조회할 수 없는 자료가 있습니다.';
+  end if;
+
+  return jsonb_build_object('ok', true, 'count', found_count);
+end;
+$$;
+
+grant execute on function public.cancel_client_reports_submission_atomic(uuid[]) to authenticated;
+
+create or replace function public.cancel_department_submission_atomic(p_submission_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_id uuid := auth.uid();
+  actor_role public.app_role := public.current_app_role();
+  actor_department_id uuid := public.current_department_id();
+  target public.department_weekly_submissions%rowtype;
+begin
+  if actor_id is null or actor_role is null then
+    raise exception '사용자 정보가 없거나 비활성화 상태입니다.';
+  end if;
+
+  if actor_role not in ('admin', 'department_head') then
+    raise exception '확정취소는 부서장과 관리자만 가능합니다.';
+  end if;
+
+  select * into target
+  from public.department_weekly_submissions
+  where id = p_submission_id
+    and deleted_at is null
+  for update;
+
+  if not found then
+    raise exception '확정취소할 부서자료를 찾을 수 없습니다.';
+  end if;
+
+  if actor_role <> 'admin' and actor_department_id is distinct from target.department_id then
+    raise exception '소속 부서 자료만 확정취소할 수 있습니다.';
+  end if;
+
+  if target.status <> 'submitted_to_division' then
+    raise exception '사업부 검토요청 상태의 부서자료만 확정취소할 수 있습니다.';
+  end if;
+
+  if target.finalized_at is not null and now() > target.finalized_at + interval '3 days' then
+    raise exception '확정 후 3일이 지난 부서자료는 확정취소할 수 없습니다.';
+  end if;
+
+  update public.department_weekly_submissions
+  set status = 'draft',
+      finalized_by = null,
+      finalized_at = null,
+      updated_at = now()
+  where id = target.id;
+
+  insert into public.approval_history(target_type, target_id, action, previous_status, next_status, comment, actor_id)
+  values ('department_submission', target.id, '확정취소', target.status::text, 'draft', '부서 확정취소', actor_id);
+
+  return jsonb_build_object('ok', true, 'id', target.id, 'status', 'draft');
+end;
+$$;
+
+grant execute on function public.cancel_department_submission_atomic(uuid) to authenticated;
+
+-- 023_common_report_item_requests.sql
+alter table public.weekly_report_item_requests
+  add column if not exists target_type text not null default 'client_item',
+  add column if not exists target_key text,
+  add column if not exists department_submission_id uuid references public.department_weekly_submissions(id) on delete cascade,
+  add column if not exists section_type public.department_section_type,
+  add column if not exists item_period public.item_period,
+  add column if not exists item_sort_order integer;
+
+alter table public.weekly_report_item_requests
+  alter column report_item_id drop not null;
+
+update public.weekly_report_item_requests
+set target_key = report_item_id::text
+where target_key is null
+  and report_item_id is not null;
+
+alter table public.weekly_report_item_requests
+  alter column target_key set not null;
+
+alter table public.weekly_report_item_requests
+  drop constraint if exists weekly_report_item_requests_target_check;
+
+alter table public.weekly_report_item_requests
+  add constraint weekly_report_item_requests_target_check
+  check (
+    (
+      target_type = 'client_item'
+      and report_item_id is not null
+      and target_key = report_item_id::text
+    )
+    or
+    (
+      target_type = 'department_common'
+      and report_item_id is null
+      and department_submission_id is not null
+      and section_type = 'common'
+      and item_period is not null
+      and item_sort_order is not null
+      and target_key = department_submission_id::text || ':common:' || item_period::text || ':' || item_sort_order::text
+    )
+  );
+
+create index if not exists idx_weekly_report_item_requests_target_key
+  on public.weekly_report_item_requests(target_key)
+  where deleted_at is null;
+
+create index if not exists idx_weekly_report_item_requests_common_target
+  on public.weekly_report_item_requests(department_submission_id, section_type, item_period, item_sort_order)
+  where deleted_at is null
+    and target_type = 'department_common';
+
+drop policy if exists "weekly_report_item_requests_select_scope" on public.weekly_report_item_requests;
+create policy "weekly_report_item_requests_select_scope" on public.weekly_report_item_requests
+for select using (
+  deleted_at is null
+  and (
+    (
+      target_type = 'client_item'
+      and exists (
+        select 1
+        from public.weekly_client_report_items item
+        join public.weekly_client_reports report on report.id = item.report_id
+        where item.id = weekly_report_item_requests.report_item_id
+          and report.deleted_at is null
+          and (
+            public.is_admin()
+            or report.department_id = public.current_department_id()
+          )
+      )
+    )
+    or
+    (
+      target_type = 'department_common'
+      and exists (
+        select 1
+        from public.department_weekly_submissions submission
+        where submission.id = weekly_report_item_requests.department_submission_id
+          and submission.deleted_at is null
+          and (
+            public.is_admin()
+            or submission.department_id = public.current_department_id()
+          )
+      )
+    )
+  )
+);
+
+drop policy if exists "weekly_report_item_requests_insert_scope" on public.weekly_report_item_requests;
+create policy "weekly_report_item_requests_insert_scope" on public.weekly_report_item_requests
+for insert with check (
+  auth.uid() = created_by
+  and public.current_app_role() in ('admin', 'department_head', 'manager', 'client_owner')
+  and (
+    (
+      target_type = 'client_item'
+      and exists (
+        select 1
+        from public.weekly_client_report_items item
+        join public.weekly_client_reports report on report.id = item.report_id
+        where item.id = weekly_report_item_requests.report_item_id
+          and report.deleted_at is null
+          and (
+            public.is_admin()
+            or report.department_id = public.current_department_id()
+          )
+      )
+    )
+    or
+    (
+      target_type = 'department_common'
+      and exists (
+        select 1
+        from public.department_weekly_submissions submission
+        where submission.id = weekly_report_item_requests.department_submission_id
+          and submission.deleted_at is null
+          and (
+            public.is_admin()
+            or submission.department_id = public.current_department_id()
+          )
+      )
+    )
+  )
+);
+
+drop policy if exists "weekly_report_item_requests_update_owner" on public.weekly_report_item_requests;
+create policy "weekly_report_item_requests_update_owner" on public.weekly_report_item_requests
+for update using (
+  deleted_at is null
+  and (
+    public.is_admin()
+    or created_by = auth.uid()
+    or result_created_by = auth.uid()
+  )
+) with check (
+  deleted_at is null
+  and (
+    public.is_admin()
+    or created_by = auth.uid()
+    or result_created_by = auth.uid()
+  )
+);

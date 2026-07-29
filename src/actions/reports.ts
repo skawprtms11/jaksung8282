@@ -1,4 +1,5 @@
 "use server";
+import { revalidatePath } from "next/cache";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import {
   canSubmitDepartment,
@@ -9,7 +10,13 @@ import {
 } from "@/lib/auth/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { clientReportSchema, departmentSubmissionSchema, idSchema } from "@/lib/validations/common";
+import {
+  clientReportSchema,
+  departmentSubmissionSchema,
+  idSchema,
+  reportItemRequestResultSchema,
+  reportItemRequestSchema
+} from "@/lib/validations/common";
 import { formDataToObject, safeErrorMessage, type ActionResult } from "@/lib/utils/form";
 import type { Json } from "@/types/database";
 import type { ClientReportStatus, DepartmentSubmissionStatus, VolumeType, VolumeUnit } from "@/types/enums";
@@ -30,6 +37,7 @@ type DepartmentSubmissionLoadRow = {
   week_start_date: string;
   status: DepartmentSubmissionStatus;
   exception_reason: string | null;
+  finalized_at: string | null;
   department_weekly_contents: DepartmentSubmissionContentPayload[];
 };
 
@@ -50,6 +58,7 @@ type ClientHistoricalReportRow = {
 type SavedDepartmentSubmissionResult = {
   id?: string;
   status: DepartmentSubmissionStatus;
+  finalized_at?: string | null;
 };
 
 type SavedClientReportDbRow = {
@@ -59,6 +68,7 @@ type SavedClientReportDbRow = {
   client_id: string;
   week_start_date: string;
   status: ClientReportStatus;
+  submitted_at: string | null;
   clients: { client_name: string } | null;
   weekly_client_report_items: {
     item_period: "current" | "next";
@@ -79,11 +89,60 @@ type SavedClientReportDbRow = {
   }[];
 };
 
+type ReportItemAccessRow = {
+  id: string;
+  weekly_client_reports: {
+    department_id: string;
+    client_id: string;
+  } | null;
+};
+
+type DepartmentSubmissionAccessRow = {
+  id: string;
+  department_id: string;
+};
+
+type ReportItemRequestTarget = {
+  target_type: "client_item" | "department_common";
+  report_item_id?: string | null;
+  department_submission_id?: string | null;
+  item_period?: "current" | "next" | null;
+  item_sort_order?: number | null;
+};
+
+export type ReportItemRequestActionRow = {
+  id: string;
+  target_type: "client_item" | "department_common";
+  target_key: string;
+  report_item_id: string | null;
+  department_submission_id: string | null;
+  section_type: "common" | "facility" | "vacancy" | "holiday_work" | null;
+  item_period: "current" | "next" | null;
+  item_sort_order: number | null;
+  request_content: string;
+  request_author_name: string;
+  request_author_department_name: string | null;
+  result_content: string | null;
+  result_author_name: string | null;
+  result_author_department_name: string | null;
+  result_created_by: string | null;
+  result_created_at: string | null;
+  result_updated_at: string | null;
+  closed_by: string | null;
+  closed_author_name: string | null;
+  closed_author_department_name: string | null;
+  closed_at: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type SavedClientReportRow = {
   id: string;
   clientId: string;
   clientName: string;
   authorName: string;
+  submittedAt: string | null;
   currentItems: {
     importance: "very_high" | "high" | "medium" | "low";
     title: string;
@@ -129,7 +188,10 @@ export type SavedClientReportRow = {
 };
 
 const SAVED_CLIENT_REPORT_SELECT =
-  "id,created_by,department_id,client_id,week_start_date,status,clients(client_name),weekly_client_report_items(item_period,importance,work_category_id,title,content,sort_order,work_categories(category_name)),weekly_volumes(volume_type,quantity,unit,custom_unit,note,sort_order)";
+  "id,created_by,department_id,client_id,week_start_date,status,submitted_at,clients(client_name),weekly_client_report_items(item_period,importance,work_category_id,title,content,sort_order,work_categories(category_name)),weekly_volumes(volume_type,quantity,unit,custom_unit,note,sort_order)";
+
+const REPORT_ITEM_REQUEST_SELECT =
+  "id,target_type,target_key,report_item_id,department_submission_id,section_type,item_period,item_sort_order,request_content,request_author_name,request_author_department_name,result_content,result_author_name,result_author_department_name,result_created_by,result_created_at,result_updated_at,closed_by,closed_author_name,closed_author_department_name,closed_at,created_by,created_at,updated_at";
 
 function parseJsonField<T>(formData: FormData, key: string, fallback: T): T {
   const raw = formData.get(key);
@@ -145,6 +207,90 @@ function parseJsonField<T>(formData: FormData, key: string, fallback: T): T {
 
 function getSelectedReportIds(formData: FormData) {
   return Array.from(new Set(formData.getAll("report_ids").map((value) => String(value)).filter(Boolean)));
+}
+
+const CONFIRMATION_CANCEL_WINDOW_DAYS = 3;
+const CONFIRMATION_CANCEL_WINDOW_MS = CONFIRMATION_CANCEL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+
+function isPastConfirmationCancelWindow(confirmedAt: string | null | undefined) {
+  if (!confirmedAt) {
+    return false;
+  }
+  const confirmedTime = new Date(confirmedAt).getTime();
+  if (!Number.isFinite(confirmedTime)) {
+    return false;
+  }
+  return Date.now() - confirmedTime > CONFIRMATION_CANCEL_WINDOW_MS;
+}
+
+function makeReportItemRequestTargetKey(target: ReportItemRequestTarget) {
+  if (target.target_type === "client_item") {
+    return target.report_item_id ?? "";
+  }
+  return `${target.department_submission_id ?? ""}:common:${target.item_period ?? ""}:${target.item_sort_order ?? ""}`;
+}
+
+async function canAccessReportItemRequestTarget(target: ReportItemRequestTarget) {
+  const { profile } = await getCurrentUserProfile();
+  if (!profile) {
+    return { ok: false as const, message: "로그인이 필요합니다.", profile: null };
+  }
+  if (!profile.is_active) {
+    return { ok: false as const, message: "비활성 사용자는 요청사항을 처리할 수 없습니다.", profile: null };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return { ok: false as const, message: "Supabase 환경변수를 먼저 설정하세요.", profile: null };
+  }
+
+  if (target.target_type === "client_item") {
+    if (!target.report_item_id) {
+      return { ok: false as const, message: "화주자료 항목을 확인하세요.", profile: null };
+    }
+    const { data, error } = await supabase
+      .from("weekly_client_report_items")
+      .select("id,weekly_client_reports!inner(department_id,client_id)")
+      .eq("id", target.report_item_id)
+      .is("weekly_client_reports.deleted_at", null)
+      .maybeSingle();
+
+    if (error) {
+      return { ok: false as const, message: safeErrorMessage(error.message), profile: null };
+    }
+
+    const row = data as unknown as ReportItemAccessRow | null;
+    if (!row?.weekly_client_reports) {
+      return { ok: false as const, message: "화주자료 항목을 찾을 수 없습니다.", profile: null };
+    }
+
+    if (!isAdmin(profile) && row.weekly_client_reports.department_id !== profile.department_id) {
+      return { ok: false as const, message: "소속 부서의 화주자료에만 요청사항을 등록할 수 있습니다.", profile: null };
+    }
+
+    return { ok: true as const, profile };
+  }
+
+  if (!target.department_submission_id || !target.item_period || typeof target.item_sort_order !== "number") {
+    return { ok: false as const, message: "공통사항 항목을 확인하세요.", profile: null };
+  }
+  const { data, error } = await supabase
+    .from("department_weekly_submissions")
+    .select("id,department_id")
+    .eq("id", target.department_submission_id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (error) {
+    return { ok: false as const, message: safeErrorMessage(error.message), profile: null };
+  }
+  const row = data as DepartmentSubmissionAccessRow | null;
+  if (!row) {
+    return { ok: false as const, message: "부서 공통사항을 찾을 수 없습니다.", profile: null };
+  }
+  if (!isAdmin(profile) && row.department_id !== profile.department_id) {
+    return { ok: false as const, message: "소속 부서의 공통사항에만 요청사항을 등록할 수 있습니다.", profile: null };
+  }
+  return { ok: true as const, profile };
 }
 
 async function softDeleteClientReports(reportIds: string[]) {
@@ -235,6 +381,7 @@ export async function saveClientReportAction(_: ActionResult<SavedClientReportRo
     clientId: report.client_id,
     clientName: report.clients?.client_name ?? "-",
     authorName: profile?.id === report.created_by ? profile.full_name : "-",
+    submittedAt: report.submitted_at,
     currentItems: sortedItems
       .filter((item) => item.item_period === "current")
       .map((item) => ({
@@ -366,6 +513,18 @@ export async function cancelSubmittedClientReportsAction(_: ActionResult | null,
     return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요." };
   }
 
+  const { data: selectedReports, error: selectedReportsError } = await supabase
+    .from("weekly_client_reports")
+    .select("id,status,submitted_at")
+    .in("id", reportIds)
+    .is("deleted_at", null);
+  if (selectedReportsError) {
+    return { ok: false, message: safeErrorMessage(selectedReportsError.message) };
+  }
+  if ((selectedReports ?? []).some((report) => isPastConfirmationCancelWindow(report.submitted_at))) {
+    return { ok: false, message: "확정 후 3일이 지난 화주자료는 확정취소할 수 없습니다." };
+  }
+
   const { error } = await supabase.rpc("cancel_client_reports_submission_atomic", {
     p_report_ids: reportIds
   });
@@ -425,7 +584,8 @@ export async function saveDepartmentSubmissionAction(
     message: status === "submitted_to_division" ? "사업부 검토요청을 완료했습니다." : "부서자료를 저장했습니다.",
     data: {
       id: typeof saved.id === "string" ? saved.id : id,
-      status: status === "submitted_to_division" ? "submitted_to_division" : status
+      status: status === "submitted_to_division" ? "submitted_to_division" : status,
+      finalized_at: status === "submitted_to_division" ? new Date().toISOString() : null
     }
   };
 }
@@ -454,7 +614,7 @@ export async function cancelDepartmentSubmissionAction(
 
   const { data: submission, error: submissionError } = await supabase
     .from("department_weekly_submissions")
-    .select("id,department_id,status")
+    .select("id,department_id,status,finalized_at")
     .eq("id", submissionId)
     .is("deleted_at", null)
     .maybeSingle();
@@ -470,35 +630,48 @@ export async function cancelDepartmentSubmissionAction(
   if (submission.status !== "submitted_to_division") {
     return { ok: false, message: "사업부 검토요청 상태의 부서자료만 확정취소할 수 있습니다." };
   }
+  if (isPastConfirmationCancelWindow(submission.finalized_at)) {
+    return { ok: false, message: "확정 후 3일이 지난 부서자료는 확정취소할 수 없습니다." };
+  }
 
-  try {
-    const adminClient = createSupabaseAdminClient();
-    const { error } = await adminClient
-      .from("department_weekly_submissions")
-      .update({
-        status: "draft",
-        finalized_by: null,
-        finalized_at: null,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", submissionId)
-      .eq("status", "submitted_to_division");
-
-    if (error) {
+  const { error } = await supabase.rpc("cancel_department_submission_atomic", {
+    p_submission_id: submissionId
+  });
+  if (error) {
+    const isMissingRpc = error.message.includes("cancel_department_submission_atomic") || error.message.includes("function");
+    if (!isMissingRpc) {
       return { ok: false, message: safeErrorMessage(error.message) };
     }
 
-    await adminClient.from("approval_history").insert({
-      target_type: "department_submission",
-      target_id: submissionId,
-      action: "제출취소",
-      previous_status: "submitted_to_division",
-      next_status: "draft",
-      comment: "부서 확정취소",
-      actor_id: profile.id
-    });
-  } catch {
-    return { ok: false, message: "Supabase 관리자 환경변수를 확인하세요." };
+    try {
+      const adminClient = createSupabaseAdminClient();
+      const { error: fallbackError } = await adminClient
+        .from("department_weekly_submissions")
+        .update({
+          status: "draft",
+          finalized_by: null,
+          finalized_at: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", submissionId)
+        .eq("status", "submitted_to_division");
+
+      if (fallbackError) {
+        return { ok: false, message: safeErrorMessage(fallbackError.message) };
+      }
+
+      await adminClient.from("approval_history").insert({
+        target_type: "department_submission",
+        target_id: submissionId,
+        action: "확정취소",
+        previous_status: "submitted_to_division",
+        next_status: "draft",
+        comment: "부서 확정취소",
+        actor_id: profile.id
+      });
+    } catch {
+      return { ok: false, message: "Supabase 관리자 환경변수를 확인하세요." };
+    }
   }
 
   return {
@@ -506,7 +679,8 @@ export async function cancelDepartmentSubmissionAction(
     message: "부서자료 확정을 취소했습니다.",
     data: {
       id: submissionId,
-      status: "draft"
+      status: "draft",
+      finalized_at: null
     }
   };
 }
@@ -543,7 +717,7 @@ export async function loadDepartmentSubmissionAction({
   const { data, error } = await supabase
     .from("department_weekly_submissions")
     .select(
-      "id,department_id,week_start_date,status,exception_reason,department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content)"
+      "id,department_id,week_start_date,status,exception_reason,finalized_at,department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content)"
     )
     .eq("department_id", department_id)
     .eq("week_start_date", week_start_date)
@@ -671,4 +845,344 @@ export async function transitionDepartmentSubmissionAction(_: ActionResult | nul
     return { ok: false, message: safeErrorMessage(error.message) };
   }
   return { ok: true, message: "부서자료 상태를 변경했습니다." };
+}
+
+export async function saveReportItemRequestAction(formData: FormData): Promise<ActionResult<ReportItemRequestActionRow>> {
+  const parsed = reportItemRequestSchema.safeParse(formDataToObject(formData));
+  if (!parsed.success) {
+    return { ok: false, message: "요청사항 내용을 확인하세요.", fieldErrors: parsed.error.flatten().fieldErrors };
+  }
+
+  const requestTarget: ReportItemRequestTarget = {
+    target_type: parsed.data.target_type,
+    report_item_id: parsed.data.report_item_id ?? null,
+    department_submission_id: parsed.data.department_submission_id ?? null,
+    item_period: parsed.data.item_period ?? null,
+    item_sort_order: parsed.data.item_sort_order ?? null
+  };
+  const access = await canAccessReportItemRequestTarget(requestTarget);
+  if (!access.ok || !access.profile) {
+    return { ok: false, message: access.message };
+  }
+  const targetKey = makeReportItemRequestTargetKey(requestTarget);
+
+  let adminClient: ReturnType<typeof createSupabaseAdminClient>;
+  try {
+    adminClient = createSupabaseAdminClient();
+  } catch {
+    return { ok: false, message: "Supabase 관리자 환경변수를 확인하세요." };
+  }
+
+  if (parsed.data.id) {
+    const { data: target, error: targetError } = await adminClient
+      .from("weekly_report_item_requests")
+      .select("id,created_by,target_key,closed_at")
+      .eq("id", parsed.data.id)
+      .eq("target_key", targetKey)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (targetError) {
+      return { ok: false, message: safeErrorMessage(targetError.message) };
+    }
+    if (!target) {
+      return { ok: false, message: "수정할 요청사항을 찾을 수 없습니다." };
+    }
+    if (!isAdmin(access.profile) && target.created_by !== access.profile.id) {
+      return { ok: false, message: "본인이 등록한 요청사항만 수정할 수 있습니다." };
+    }
+    if (target.closed_at) {
+      return { ok: false, message: "종결된 요청사항은 수정할 수 없습니다." };
+    }
+
+    const { data, error } = await adminClient
+      .from("weekly_report_item_requests")
+      .update({ request_content: parsed.data.request_content })
+      .eq("id", parsed.data.id)
+      .select(REPORT_ITEM_REQUEST_SELECT)
+      .single();
+    if (error) {
+      return { ok: false, message: safeErrorMessage(error.message) };
+    }
+    revalidatePath("/meeting-materials");
+    return { ok: true, message: "요청사항을 수정했습니다.", data: data as ReportItemRequestActionRow };
+  }
+
+  const { data, error } = await adminClient
+    .from("weekly_report_item_requests")
+    .insert({
+      target_type: requestTarget.target_type,
+      target_key: targetKey,
+      report_item_id: requestTarget.target_type === "client_item" ? requestTarget.report_item_id ?? null : null,
+      department_submission_id: requestTarget.target_type === "department_common" ? requestTarget.department_submission_id ?? null : null,
+      section_type: requestTarget.target_type === "department_common" ? "common" : null,
+      item_period: requestTarget.target_type === "department_common" ? requestTarget.item_period ?? null : null,
+      item_sort_order: requestTarget.target_type === "department_common" ? requestTarget.item_sort_order ?? null : null,
+      request_content: parsed.data.request_content,
+      request_author_name: access.profile.full_name,
+      request_author_department_name: access.profile.department_name ?? null,
+      created_by: access.profile.id
+    })
+    .select(REPORT_ITEM_REQUEST_SELECT)
+    .single();
+  if (error) {
+    return { ok: false, message: safeErrorMessage(error.message) };
+  }
+
+  revalidatePath("/meeting-materials");
+  return { ok: true, message: "요청사항을 등록했습니다.", data: data as ReportItemRequestActionRow };
+}
+
+export async function deleteReportItemRequestAction(formData: FormData): Promise<ActionResult<{ id: string }>> {
+  const parsed = idSchema.safeParse(String(formData.get("id") ?? ""));
+  if (!parsed.success) {
+    return { ok: false, message: "삭제할 요청사항을 확인하세요." };
+  }
+
+  const { profile } = await getCurrentUserProfile();
+  if (!profile) {
+    return { ok: false, message: "로그인이 필요합니다." };
+  }
+
+  let adminClient: ReturnType<typeof createSupabaseAdminClient>;
+  try {
+    adminClient = createSupabaseAdminClient();
+  } catch {
+    return { ok: false, message: "Supabase 관리자 환경변수를 확인하세요." };
+  }
+
+  const { data: target, error: targetError } = await adminClient
+    .from("weekly_report_item_requests")
+    .select("id,target_type,report_item_id,department_submission_id,item_period,item_sort_order,created_by,closed_at")
+    .eq("id", parsed.data)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (targetError) {
+    return { ok: false, message: safeErrorMessage(targetError.message) };
+  }
+  if (!target) {
+    return { ok: false, message: "삭제할 요청사항을 찾을 수 없습니다." };
+  }
+
+  const access = await canAccessReportItemRequestTarget(target as ReportItemRequestTarget);
+  if (!access.ok || !access.profile) {
+    return { ok: false, message: access.message };
+  }
+  if (!isAdmin(access.profile) && target.created_by !== access.profile.id) {
+    return { ok: false, message: "본인이 등록한 요청사항만 삭제할 수 있습니다." };
+  }
+  if (target.closed_at) {
+    return { ok: false, message: "종결된 요청사항은 삭제할 수 없습니다." };
+  }
+
+  const { error } = await adminClient
+    .from("weekly_report_item_requests")
+    .update({ deleted_at: new Date().toISOString(), deleted_by: profile.id })
+    .eq("id", parsed.data);
+  if (error) {
+    return { ok: false, message: safeErrorMessage(error.message) };
+  }
+
+  revalidatePath("/meeting-materials");
+  return { ok: true, message: "요청사항을 삭제했습니다.", data: { id: parsed.data } };
+}
+
+export async function saveReportItemRequestResultAction(formData: FormData): Promise<ActionResult<ReportItemRequestActionRow>> {
+  const parsed = reportItemRequestResultSchema.safeParse(formDataToObject(formData));
+  if (!parsed.success) {
+    return { ok: false, message: "처리결과 내용을 확인하세요.", fieldErrors: parsed.error.flatten().fieldErrors };
+  }
+
+  const { profile } = await getCurrentUserProfile();
+  if (!profile?.is_active) {
+    return { ok: false, message: "사용자 정보가 없거나 비활성화 상태입니다." };
+  }
+
+  let adminClient: ReturnType<typeof createSupabaseAdminClient>;
+  try {
+    adminClient = createSupabaseAdminClient();
+  } catch {
+    return { ok: false, message: "Supabase 관리자 환경변수를 확인하세요." };
+  }
+
+  const { data: target, error: targetError } = await adminClient
+    .from("weekly_report_item_requests")
+    .select("id,target_type,report_item_id,department_submission_id,item_period,item_sort_order,result_created_by,closed_at")
+    .eq("id", parsed.data.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (targetError) {
+    return { ok: false, message: safeErrorMessage(targetError.message) };
+  }
+  if (!target) {
+    return { ok: false, message: "처리결과를 등록할 요청사항을 찾을 수 없습니다." };
+  }
+
+  const access = await canAccessReportItemRequestTarget(target as ReportItemRequestTarget);
+  if (!access.ok || !access.profile) {
+    return { ok: false, message: access.message };
+  }
+  if (target.result_created_by && !isAdmin(access.profile) && target.result_created_by !== access.profile.id) {
+    return { ok: false, message: "본인이 등록한 처리결과만 수정할 수 있습니다." };
+  }
+  if (target.closed_at) {
+    return { ok: false, message: "종결된 요청사항은 처리결과를 수정할 수 없습니다." };
+  }
+
+  const now = new Date().toISOString();
+  const resultUpdate = target.result_created_by
+    ? {
+        result_content: parsed.data.result_content,
+        result_author_name: access.profile.full_name,
+        result_author_department_name: access.profile.department_name ?? null,
+        result_updated_at: now
+      }
+    : {
+        result_content: parsed.data.result_content,
+        result_author_name: access.profile.full_name,
+        result_author_department_name: access.profile.department_name ?? null,
+        result_created_by: access.profile.id,
+        result_created_at: now,
+        result_updated_at: now
+      };
+  const { data, error } = await adminClient
+    .from("weekly_report_item_requests")
+    .update(resultUpdate)
+    .eq("id", parsed.data.id)
+    .select(REPORT_ITEM_REQUEST_SELECT)
+    .single();
+  if (error) {
+    return { ok: false, message: safeErrorMessage(error.message) };
+  }
+
+  revalidatePath("/meeting-materials");
+  return { ok: true, message: "처리결과를 저장했습니다.", data: data as ReportItemRequestActionRow };
+}
+
+export async function deleteReportItemRequestResultAction(formData: FormData): Promise<ActionResult<ReportItemRequestActionRow>> {
+  const parsed = idSchema.safeParse(String(formData.get("id") ?? ""));
+  if (!parsed.success) {
+    return { ok: false, message: "삭제할 처리결과를 확인하세요." };
+  }
+
+  const { profile } = await getCurrentUserProfile();
+  if (!profile?.is_active) {
+    return { ok: false, message: "사용자 정보가 없거나 비활성화 상태입니다." };
+  }
+
+  let adminClient: ReturnType<typeof createSupabaseAdminClient>;
+  try {
+    adminClient = createSupabaseAdminClient();
+  } catch {
+    return { ok: false, message: "Supabase 관리자 환경변수를 확인하세요." };
+  }
+
+  const { data: target, error: targetError } = await adminClient
+    .from("weekly_report_item_requests")
+    .select("id,target_type,report_item_id,department_submission_id,item_period,item_sort_order,result_created_by,closed_at")
+    .eq("id", parsed.data)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (targetError) {
+    return { ok: false, message: safeErrorMessage(targetError.message) };
+  }
+  if (!target?.result_created_by) {
+    return { ok: false, message: "삭제할 처리결과를 찾을 수 없습니다." };
+  }
+
+  const access = await canAccessReportItemRequestTarget(target as ReportItemRequestTarget);
+  if (!access.ok || !access.profile) {
+    return { ok: false, message: access.message };
+  }
+  if (!isAdmin(access.profile) && target.result_created_by !== access.profile.id) {
+    return { ok: false, message: "본인이 등록한 처리결과만 삭제할 수 있습니다." };
+  }
+  if (target.closed_at) {
+    return { ok: false, message: "종결된 요청사항은 처리결과를 삭제할 수 없습니다." };
+  }
+
+  const { data, error } = await adminClient
+    .from("weekly_report_item_requests")
+    .update({
+      result_content: null,
+      result_author_name: null,
+      result_author_department_name: null,
+      result_created_by: null,
+      result_created_at: null,
+      result_updated_at: null
+    })
+    .eq("id", parsed.data)
+    .select(REPORT_ITEM_REQUEST_SELECT)
+    .single();
+  if (error) {
+    return { ok: false, message: safeErrorMessage(error.message) };
+  }
+
+  revalidatePath("/meeting-materials");
+  return { ok: true, message: "처리결과를 삭제했습니다.", data: data as ReportItemRequestActionRow };
+}
+
+export async function closeReportItemRequestAction(formData: FormData): Promise<ActionResult<ReportItemRequestActionRow>> {
+  const parsed = idSchema.safeParse(String(formData.get("id") ?? ""));
+  if (!parsed.success) {
+    return { ok: false, message: "종결할 요청사항을 확인하세요." };
+  }
+
+  const { profile } = await getCurrentUserProfile();
+  if (!profile?.is_active) {
+    return { ok: false, message: "사용자 정보가 없거나 비활성화 상태입니다." };
+  }
+
+  let adminClient: ReturnType<typeof createSupabaseAdminClient>;
+  try {
+    adminClient = createSupabaseAdminClient();
+  } catch {
+    return { ok: false, message: "Supabase 관리자 환경변수를 확인하세요." };
+  }
+
+  const { data: target, error: targetError } = await adminClient
+    .from("weekly_report_item_requests")
+    .select("id,target_type,report_item_id,department_submission_id,item_period,item_sort_order,created_by,result_content,result_created_by,closed_at")
+    .eq("id", parsed.data)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (targetError) {
+    return { ok: false, message: safeErrorMessage(targetError.message) };
+  }
+  if (!target) {
+    return { ok: false, message: "종결할 요청사항을 찾을 수 없습니다." };
+  }
+  if (target.closed_at) {
+    return { ok: false, message: "이미 종결된 요청사항입니다." };
+  }
+  if (!target.result_content) {
+    return { ok: false, message: "처리결과가 등록된 요청사항만 종결할 수 있습니다." };
+  }
+
+  const access = await canAccessReportItemRequestTarget(target as ReportItemRequestTarget);
+  if (!access.ok || !access.profile) {
+    return { ok: false, message: access.message };
+  }
+  const canClose =
+    isAdmin(access.profile) || target.created_by === access.profile.id || target.result_created_by === access.profile.id;
+  if (!canClose) {
+    return { ok: false, message: "요청 등록자 또는 처리결과 등록자만 종결할 수 있습니다." };
+  }
+
+  const { data, error } = await adminClient
+    .from("weekly_report_item_requests")
+    .update({
+      closed_by: access.profile.id,
+      closed_author_name: access.profile.full_name,
+      closed_author_department_name: access.profile.department_name ?? null,
+      closed_at: new Date().toISOString()
+    })
+    .eq("id", parsed.data)
+    .select(REPORT_ITEM_REQUEST_SELECT)
+    .single();
+  if (error) {
+    return { ok: false, message: safeErrorMessage(error.message) };
+  }
+
+  revalidatePath("/meeting-materials");
+  return { ok: true, message: "요청사항을 종결했습니다.", data: data as ReportItemRequestActionRow };
 }

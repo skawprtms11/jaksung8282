@@ -143,13 +143,16 @@ export function MeetingHolidayWorkBoard({
     [columns]
   );
   const periodDateKeys = useMemo(() => new Set(columns.map((column) => column.key)), [columns]);
-  const departmentRows = departments.map((department) => {
-    const submission = submissions.find((row) => row.department_id === department.id);
-    return {
-      department,
-      items: getHolidayItemsByDepartment(submission)
-    };
-  });
+  const departmentRows = departments
+    .map((department) => {
+      const submission = submissions.find((row) => row.department_id === department.id);
+      const periodItems = getHolidayItemsByDepartment(submission).filter((item) => periodDateKeys.has(item.work_date));
+      return {
+        department,
+        items: periodItems
+      };
+    })
+    .filter((row) => row.items.length > 0);
   const allItems = departmentRows.flatMap((row) => row.items);
   const summary = {
     itemCount: allItems.length,
@@ -245,6 +248,13 @@ export function MeetingHolidayWorkBoard({
                   );
                 })}
               </tr>
+              {departmentRows.length === 0 ? (
+                <tr className="border-t border-slate-100">
+                  <td colSpan={15} className="px-4 py-10 text-center text-sm font-bold text-slate-400">
+                    조회범위에 등록된 공휴일근무 데이터가 없습니다.
+                  </td>
+                </tr>
+              ) : null}
               {departmentRows.map(({ department, items }) => {
                 const periodItems = items.filter((item) => periodDateKeys.has(item.work_date));
                 const openDepartmentDetail = () => {

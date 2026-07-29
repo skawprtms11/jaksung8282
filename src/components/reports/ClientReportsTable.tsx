@@ -35,6 +35,7 @@ export type ClientReportTableRow = {
   clientId: string;
   clientName: string;
   authorName: string;
+  submittedAt: string | null;
   currentItems: ClientReportItem[];
   nextItems: ClientReportItem[];
   volumes: ClientReportVolume[];
@@ -44,6 +45,20 @@ export type ClientReportTableRow = {
 
 function isEditableStatus(status: ClientReportStatus) {
   return status === "draft" || status === "rejected";
+}
+
+const CONFIRMATION_CANCEL_WINDOW_DAYS = 3;
+const CONFIRMATION_CANCEL_WINDOW_MS = CONFIRMATION_CANCEL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+
+function isPastConfirmationCancelWindow(confirmedAt: string | null) {
+  if (!confirmedAt) {
+    return false;
+  }
+  const confirmedTime = new Date(confirmedAt).getTime();
+  if (!Number.isFinite(confirmedTime)) {
+    return false;
+  }
+  return Date.now() - confirmedTime > CONFIRMATION_CANCEL_WINDOW_MS;
 }
 
 function reportStatusLabel(status: ClientReportStatus) {
@@ -108,6 +123,7 @@ export function ClientReportsTable({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
   const [statusOverrides, setStatusOverrides] = useState<Map<string, ClientReportStatus>>(() => new Map());
+  const [submittedAtOverrides, setSubmittedAtOverrides] = useState<Map<string, string | null>>(() => new Map());
   const [volumeDialogState, setVolumeDialogState] = useState<{
     report: ClientReportTableRow;
     historicalVolumes: VolumeAnalysisHistoricalVolume[];
@@ -122,9 +138,10 @@ export function ClientReportsTable({
         .filter((report) => !hiddenIds.has(report.id))
         .map((report) => ({
           ...report,
-          status: statusOverrides.get(report.id) ?? report.status
+          status: statusOverrides.get(report.id) ?? report.status,
+          submittedAt: submittedAtOverrides.has(report.id) ? submittedAtOverrides.get(report.id) ?? null : report.submittedAt
         })),
-    [hiddenIds, reports, statusOverrides]
+    [hiddenIds, reports, statusOverrides, submittedAtOverrides]
   );
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const selectedReports = useMemo(
@@ -133,8 +150,11 @@ export function ClientReportsTable({
   );
   const allSelected = displayedReports.length > 0 && selectedIds.length === displayedReports.length;
   const singleSelectedReport = selectedReports.length === 1 ? selectedReports[0] : null;
+  const hasExpiredCancelSelection = selectedReports.some((report) => isPastConfirmationCancelWindow(report.submittedAt));
   const canCancelSubmit =
-    selectedReports.length > 0 && selectedReports.every((report) => report.status === "submitted");
+    selectedReports.length > 0 &&
+    selectedReports.every((report) => report.status === "submitted") &&
+    !hasExpiredCancelSelection;
   const canSubmitSelected =
     selectedReports.length > 0 && selectedReports.every((report) => isEditableStatus(report.status));
   const actionMessage = localMessage;
@@ -175,6 +195,12 @@ export function ClientReportsTable({
       setStatusOverrides((current) => {
         const next = new Map(current);
         ids.forEach((id) => next.set(id, actionType === "submit" ? "submitted" : "draft"));
+        return next;
+      });
+      setSubmittedAtOverrides((current) => {
+        const next = new Map(current);
+        const submittedAt = new Date().toISOString();
+        ids.forEach((id) => next.set(id, actionType === "submit" ? submittedAt : null));
         return next;
       });
     }
@@ -355,6 +381,8 @@ export function ClientReportsTable({
                   ? "수정 중에는 확정취소할 수 없습니다."
                   : selectedReports.length === 0
 	                    ? "확정취소할 자료를 선택하세요."
+	                    : hasExpiredCancelSelection
+	                      ? "확정 후 3일이 지난 자료는 확정취소할 수 없습니다."
 	                    : !canCancelSubmit
 	                      ? "확정 상태의 자료만 확정취소할 수 있습니다."
 	                      : undefined

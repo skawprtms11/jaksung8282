@@ -111,19 +111,18 @@ export function ClientReportEditor({
   const draftSubmitRef = useRef<HTMLButtonElement>(null);
   const [state, action] = useActionState(saveClientReportAction, null);
   const isEditMode = Boolean(initialReport);
-  const initialClient =
+  const selectedClient =
     clients.find((client) => client.id === initialReport?.client_id) ??
-    clients.find((client) => client.id === defaultClientId) ??
-    clients.find((client) => client.department_id === defaultDepartmentId) ??
-    clients[0];
-  const departmentId = initialReport?.department_id ?? initialClient?.department_id ?? defaultDepartmentId ?? departments[0]?.id ?? "";
-  const clientId = initialReport?.client_id ?? initialClient?.id ?? "";
+    (defaultClientId ? clients.find((client) => client.id === defaultClientId) : null);
+  const departmentId = initialReport?.department_id ?? selectedClient?.department_id ?? defaultDepartmentId ?? departments[0]?.id ?? "";
+  const clientId = initialReport?.client_id ?? selectedClient?.id ?? "";
   const [items, setItems] = useState<ItemDraft[]>(initialReport?.items ?? []);
   const [volumes, setVolumes] = useState<VolumeDraft[]>(initialReport?.volumes ?? []);
   const [activeDialog, setActiveDialog] = useState<ActiveDialog>(initialReport ? initialDialog ?? null : null);
+  const [selectionMessage, setSelectionMessage] = useState<{ ok: boolean; message: string } | null>(null);
   const previousInitialDialogRef = useRef<ActiveDialog>(initialDialog ?? null);
   const firstCategory = categories[0]?.id ?? "";
-  const needsClientSelection = !isEditMode && !defaultClientId;
+  const needsClientSelection = !isEditMode && !clientId;
   const currentItems = items.filter((item) => item.item_period === "current");
   const nextItems = items.filter((item) => item.item_period === "next");
   const normalizedItems = useMemo(() => {
@@ -177,6 +176,11 @@ export function ClientReportEditor({
   }
 
   function openItemDialog(period: ItemPeriod) {
+    if (needsClientSelection) {
+      setSelectionMessage({ ok: false, message: "자료를 작성하려면 최상단 화주 필터에서 특정 화주를 선택하세요." });
+      return;
+    }
+    setSelectionMessage(null);
     if (!items.some((item) => item.item_period === period)) {
       addItem(period);
     }
@@ -184,6 +188,11 @@ export function ClientReportEditor({
   }
 
   function openVolumeDialog() {
+    if (needsClientSelection) {
+      setSelectionMessage({ ok: false, message: "자료를 작성하려면 최상단 화주 필터에서 특정 화주를 선택하세요." });
+      return;
+    }
+    setSelectionMessage(null);
     if (volumes.length === 0) {
       addVolume();
     }
@@ -210,19 +219,6 @@ export function ClientReportEditor({
     }
     setActiveDialog(null);
     draftSubmitRef.current?.click();
-  }
-
-  if (needsClientSelection) {
-    return (
-      <section className="sketch-panel rounded-md p-3">
-        <div className="rounded-2xl border border-dashed border-[#b9cce6] bg-white/72 px-4 py-5 text-center">
-          <p className="text-sm font-black text-[#10223d]">전체 화주 조회 중입니다.</p>
-          <p className="mt-1 text-xs font-bold text-slate-500">
-            자료를 작성하려면 최상단 화주 필터에서 특정 화주를 선택하세요.
-          </p>
-        </div>
-      </section>
-    );
   }
 
   return (
@@ -279,7 +275,7 @@ export function ClientReportEditor({
         </div>
       </section>
 
-      <ActionMessage state={state} />
+      <ActionMessage state={selectionMessage ?? state} />
 
       {(activeDialog === "current" || activeDialog === "next") && (
         <ItemDialog

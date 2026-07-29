@@ -1,18 +1,41 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
+import { useActionState, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, ClipboardList, FilePlus2, Megaphone, Pin, Search, Send, Table2, X } from "lucide-react";
-import { saveNoticeAction, saveNoticeCollectionStatusAction } from "@/actions/notices";
+import {
+  CheckCircle2,
+  ClipboardList,
+  FilePlus2,
+  Megaphone,
+  MessageCircle,
+  Pencil,
+  Pin,
+  Reply,
+  Save,
+  Search,
+  Send,
+  Table2,
+  Trash2,
+  X
+} from "lucide-react";
+import {
+  deleteNoticeCommentAction,
+  incrementNoticeView,
+  saveNoticeAction,
+  saveNoticeCollectionStatusAction,
+  saveNoticeCommentAction,
+  type NoticeCommentActionRow
+} from "@/actions/notices";
 import { ActionMessage } from "@/components/common/ActionMessage";
+import { buildNoticeCommentTree, type NoticeCommentTreeNode } from "@/lib/notices/comments";
 import {
   parseNoticeContent,
   serializeNoticeContent,
   type NoticeCollectionStatus,
 } from "@/lib/notices/content";
 import { noticeTypeLabels } from "@/lib/utils/labels";
-import type { NoticeType } from "@/types/enums";
+import type { AppRole, NoticeType } from "@/types/enums";
 
 type NoticeBoardRow = {
   id: string;
@@ -20,8 +43,12 @@ type NoticeBoardRow = {
   title: string;
   content: string;
   is_pinned: boolean;
+  view_count: number;
+  comment_count: number;
   created_at: string;
 };
+
+type NoticeCommentRow = NoticeCommentActionRow;
 
 type DepartmentRow = {
   id: string;
@@ -29,6 +56,8 @@ type DepartmentRow = {
 };
 
 type CurrentUser = {
+  id: string;
+  app_role: AppRole;
   department_id: string | null;
   department_name?: string | null;
   full_name: string;
@@ -61,6 +90,28 @@ function formatShortDate(value: string) {
     year: "2-digit",
     month: "2-digit",
     day: "2-digit",
+    timeZone: "Asia/Seoul"
+  })
+    .format(date)
+    .replaceAll(". ", ".")
+    .replace(/\.$/, "");
+}
+
+function formatCollectionDateTime(value?: string) {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
     timeZone: "Asia/Seoul"
   })
     .format(date)
@@ -102,6 +153,7 @@ function NoticeTypeBadge({ type }: { type: NoticeType }) {
 export function NoticeBoard({
   notices,
   importantNotices,
+  comments,
   departments,
   canCreate,
   currentUser,
@@ -110,6 +162,7 @@ export function NoticeBoard({
 }: {
   notices: NoticeBoardRow[];
   importantNotices: NoticeBoardRow[];
+  comments: NoticeCommentRow[];
   departments: DepartmentRow[];
   canCreate: boolean;
   currentUser: CurrentUser | null;
@@ -120,6 +173,9 @@ export function NoticeBoard({
   const [writeOpen, setWriteOpen] = useState(false);
   const [detailNotice, setDetailNotice] = useState<NoticeBoardRow | null>(null);
   const [collectionNotice, setCollectionNotice] = useState<NoticeBoardRow | null>(null);
+  const [visibleNotices, setVisibleNotices] = useState(notices);
+  const [visibleImportantNotices, setVisibleImportantNotices] = useState(importantNotices);
+  const [visibleComments, setVisibleComments] = useState(comments);
   const [saveState, saveAction, isNoticeSaving] = useActionState(
     async (previousState: Awaited<ReturnType<typeof saveNoticeAction>> | null, formData: FormData) => {
       const result = await saveNoticeAction(previousState, formData);
@@ -131,6 +187,60 @@ export function NoticeBoard({
     },
     null
   );
+
+  function openNoticeDetail(notice: NoticeBoardRow) {
+    setDetailNotice({ ...notice, view_count: notice.view_count + 1 });
+    setVisibleNotices((rows) => rows.map((row) => (row.id === notice.id ? { ...row, view_count: row.view_count + 1 } : row)));
+    setVisibleImportantNotices((rows) =>
+      rows.map((row) => (row.id === notice.id ? { ...row, view_count: row.view_count + 1 } : row))
+    );
+    void incrementNoticeView(notice.id);
+  }
+
+  function updateNoticeCommentCount(noticeId: string, delta: number) {
+    setVisibleNotices((rows) =>
+      rows.map((row) => (row.id === noticeId ? { ...row, comment_count: Math.max(row.comment_count + delta, 0) } : row))
+    );
+    setVisibleImportantNotices((rows) =>
+      rows.map((row) => (row.id === noticeId ? { ...row, comment_count: Math.max(row.comment_count + delta, 0) } : row))
+    );
+  }
+
+  function upsertVisibleComment(comment: NoticeCommentRow) {
+    setVisibleComments((rows) => {
+      const exists = rows.some((row) => row.id === comment.id);
+      return exists ? rows.map((row) => (row.id === comment.id ? comment : row)) : [...rows, comment];
+    });
+    if (!visibleComments.some((row) => row.id === comment.id)) {
+      updateNoticeCommentCount(comment.notice_id, 1);
+    }
+  }
+
+  function removeVisibleComment(comment: NoticeCommentRow) {
+    setVisibleComments((rows) => rows.filter((row) => row.id !== comment.id));
+    updateNoticeCommentCount(comment.notice_id, -1);
+  }
+
+  function updateNoticeCollectionStatus(noticeId: string, status: NoticeCollectionStatus) {
+    const updateNotice = (notice: NoticeBoardRow) => {
+      if (notice.id !== noticeId) {
+        return notice;
+      }
+      const parsed = parseNoticeContent(notice.content);
+      const collectionStatuses = [
+        ...parsed.collectionStatuses.filter((row) => row.department_id !== status.department_id),
+        status
+      ];
+      return {
+        ...notice,
+        content: serializeNoticeContent({ ...parsed, collectionStatuses })
+      };
+    };
+    setVisibleNotices((rows) => rows.map(updateNotice));
+    setVisibleImportantNotices((rows) => rows.map(updateNotice));
+    setDetailNotice((current) => (current ? updateNotice(current) : current));
+    setCollectionNotice((current) => (current ? updateNotice(current) : current));
+  }
 
   return (
     <section className="sketch-panel p-4">
@@ -178,18 +288,18 @@ export function NoticeBoard({
         </div>
       </div>
 
-      {importantNotices.length > 0 ? (
+      {visibleImportantNotices.length > 0 ? (
         <div className="mb-3 rounded-2xl border border-blue-100 bg-[#f5f9ff] p-3">
           <div className="mb-2 flex items-center gap-2 text-sm font-black text-[#10223d]">
             <Pin className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
             중요 게시글
           </div>
           <div className="grid gap-2 lg:grid-cols-5">
-            {importantNotices.map((notice) => (
+            {visibleImportantNotices.map((notice) => (
               <button
                 key={notice.id}
                 type="button"
-                onClick={() => setDetailNotice(notice)}
+                onClick={() => openNoticeDetail(notice)}
                 className="min-w-0 rounded-2xl border border-[#d9e7f7] bg-white px-3 py-2 text-left shadow-[0_10px_22px_rgba(16,34,61,0.04)] transition hover:border-blue-200 hover:text-[#075be8]"
               >
                 <span className="block text-[11px] font-black text-slate-400">{formatShortDate(notice.created_at)}</span>
@@ -203,11 +313,13 @@ export function NoticeBoard({
       <div className="overflow-x-hidden rounded-2xl border border-[#d9e7f7] bg-white/88">
         <table className="table-sticky w-full table-fixed text-left text-sm">
           <colgroup>
-            <col className="w-[8%]" />
+            <col className="w-[7%]" />
+            <col className="w-[13%]" />
             <col className="w-[14%]" />
-            <col className="w-[14%]" />
-            <col className="w-[44%]" />
-            <col className="w-[20%]" />
+            <col className="w-[38%]" />
+            <col className="w-[16%]" />
+            <col className="w-[6%]" />
+            <col className="w-[6%]" />
           </colgroup>
           <thead>
             <tr>
@@ -216,17 +328,19 @@ export function NoticeBoard({
               <th className="px-3 py-3">게시구분</th>
               <th className="px-3 py-3">제목</th>
               <th className="px-3 py-3">비고</th>
+              <th className="px-3 py-3">조회수</th>
+              <th className="px-3 py-3">댓글</th>
             </tr>
           </thead>
           <tbody>
-            {notices.length === 0 ? (
+            {visibleNotices.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-sm font-bold text-slate-400">
+                <td colSpan={7} className="px-4 py-10 text-center text-sm font-bold text-slate-400">
                   등록된 게시글이 없습니다.
                 </td>
               </tr>
             ) : (
-              notices.map((notice, index) => {
+              visibleNotices.map((notice, index) => {
                 const parsedContent = parseNoticeContent(notice.content);
                 return (
                   <tr key={notice.id} className="border-t border-slate-100 align-top">
@@ -238,13 +352,20 @@ export function NoticeBoard({
                     <td className="px-3 py-3">
                       <button
                         type="button"
-                        onClick={() => setDetailNotice(notice)}
+                        onClick={() => openNoticeDetail(notice)}
                         className="text-left font-black text-[#075be8] underline-offset-4 hover:underline"
                       >
                         {notice.title}
                       </button>
                     </td>
                     <td className="whitespace-pre-wrap break-words px-3 py-3 text-slate-600">{parsedContent.note || "-"}</td>
+                    <td className="px-3 py-3 font-black text-slate-600">{notice.view_count.toLocaleString("ko-KR")}</td>
+                    <td className="px-3 py-3">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-[#d9e7f7] bg-[#f5f9ff] px-2 py-1 text-xs font-black text-[#075be8]">
+                        <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                        {notice.comment_count}
+                      </span>
+                    </td>
                   </tr>
                 );
               })
@@ -265,9 +386,13 @@ export function NoticeBoard({
       {detailNotice ? (
         <NoticeDetailDialog
           notice={detailNotice}
+          comments={visibleComments.filter((comment) => comment.notice_id === detailNotice.id)}
+          currentUser={currentUser}
           departments={departments}
           onClose={() => setDetailNotice(null)}
           onOpenCollection={() => setCollectionNotice(detailNotice)}
+          onCommentSaved={upsertVisibleComment}
+          onCommentDeleted={removeVisibleComment}
         />
       ) : null}
       {collectionNotice ? (
@@ -277,8 +402,8 @@ export function NoticeBoard({
           currentUser={currentUser}
           onClose={() => {
             setCollectionNotice(null);
-            router.refresh();
           }}
+          onStatusSaved={(status) => updateNoticeCollectionStatus(collectionNotice.id, status)}
         />
       ) : null}
     </section>
@@ -408,18 +533,40 @@ function NoticeWriteDialog({
 
 function NoticeDetailDialog({
   notice,
+  comments,
+  currentUser,
   departments,
   onClose,
-  onOpenCollection
+  onOpenCollection,
+  onCommentSaved,
+  onCommentDeleted
 }: {
   notice: NoticeBoardRow;
+  comments: NoticeCommentRow[];
+  currentUser: CurrentUser | null;
   departments: DepartmentRow[];
   onClose: () => void;
   onOpenCollection: () => void;
+  onCommentSaved: (comment: NoticeCommentRow) => void;
+  onCommentDeleted: (comment: NoticeCommentRow) => void;
 }) {
   const parsedContent = parseNoticeContent(notice.content);
   const collectionRows = mergeCollectionStatuses(departments, parsedContent.collectionStatuses);
   const completedCount = collectionRows.filter((row) => row.is_completed).length;
+  const [visibleComments, setVisibleComments] = useState(comments);
+
+  function handleCommentSaved(comment: NoticeCommentRow) {
+    setVisibleComments((rows) => {
+      const exists = rows.some((row) => row.id === comment.id);
+      return exists ? rows.map((row) => (row.id === comment.id ? comment : row)) : [...rows, comment];
+    });
+    onCommentSaved(comment);
+  }
+
+  function handleCommentDeleted(comment: NoticeCommentRow) {
+    setVisibleComments((rows) => rows.filter((row) => row.id !== comment.id));
+    onCommentDeleted(comment);
+  }
 
   return (
     <ModalPortal>
@@ -454,6 +601,13 @@ function NoticeDetailDialog({
               <p className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-7 text-slate-700">{parsedContent.note}</p>
             </section>
           ) : null}
+          <NoticeCommentsSection
+            noticeId={notice.id}
+            comments={visibleComments}
+            currentUser={currentUser}
+            onCommentSaved={handleCommentSaved}
+            onCommentDeleted={handleCommentDeleted}
+          />
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
           <button type="button" onClick={onClose} className="tool-button tool-button-primary">닫기</button>
@@ -464,36 +618,367 @@ function NoticeDetailDialog({
   );
 }
 
+function NoticeCommentsSection({
+  noticeId,
+  comments,
+  currentUser,
+  onCommentSaved,
+  onCommentDeleted
+}: {
+  noticeId: string;
+  comments: NoticeCommentRow[];
+  currentUser: CurrentUser | null;
+  onCommentSaved: (comment: NoticeCommentRow) => void;
+  onCommentDeleted: (comment: NoticeCommentRow) => void;
+}) {
+  const commentTree = buildNoticeCommentTree(comments);
+
+  return (
+    <section className="mt-3 rounded-2xl border border-[#d9e7f7] bg-white px-4 py-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <MessageCircle className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
+          <p className="text-sm font-black text-[#10223d]">댓글 {comments.length}</p>
+        </div>
+      </div>
+      <NoticeCommentForm
+        noticeId={noticeId}
+        currentUser={currentUser}
+        submitLabel="댓글 등록"
+        onCommentSaved={onCommentSaved}
+      />
+      <div className="mt-4 space-y-2">
+        {commentTree.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-[#b9cce6] px-4 py-6 text-center text-sm font-bold text-slate-400">
+            아직 등록된 댓글이 없습니다.
+          </div>
+        ) : (
+          commentTree.map((comment) => (
+            <NoticeCommentItem
+              key={comment.id}
+              comment={comment}
+              currentUser={currentUser}
+              onCommentSaved={onCommentSaved}
+              onCommentDeleted={onCommentDeleted}
+            />
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
+function NoticeCommentForm({
+  noticeId,
+  parentId,
+  commentId,
+  initialContent = "",
+  currentUser,
+  submitLabel,
+  onCancel,
+  onCommentSaved
+}: {
+  noticeId: string;
+  parentId?: string | null;
+  commentId?: string;
+  initialContent?: string;
+  currentUser: CurrentUser | null;
+  submitLabel: string;
+  onCancel?: () => void;
+  onCommentSaved: (comment: NoticeCommentRow) => void;
+}) {
+  const [content, setContent] = useState(initialContent);
+  const [state, setState] = useState<Awaited<ReturnType<typeof saveNoticeCommentAction>> | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const disabled = isPending || !currentUser;
+
+  function submitComment() {
+    const trimmedContent = content.trim();
+    if (!trimmedContent) {
+      setState({ ok: false, message: "댓글 내용을 입력하세요." });
+      return;
+    }
+
+    setState(null);
+    startTransition(() => {
+      const formData = new FormData();
+      formData.set("notice_id", noticeId);
+      formData.set("content", trimmedContent);
+      if (parentId) {
+        formData.set("parent_id", parentId);
+      }
+      if (commentId) {
+        formData.set("id", commentId);
+      }
+
+      void saveNoticeCommentAction(formData)
+        .then((result) => {
+          setState(result);
+          if (!result.ok || !result.data) {
+            return;
+          }
+          onCommentSaved(result.data);
+          if (!commentId) {
+            setContent("");
+          }
+          onCancel?.();
+        })
+        .catch(() => setState({ ok: false, message: "댓글을 저장하지 못했습니다." }));
+    });
+  }
+
+  return (
+    <div className="rounded-2xl border border-[#d9e7f7] bg-[#f5f9ff] p-3">
+      <label className="sr-only" htmlFor={`comment-${commentId ?? parentId ?? noticeId}`}>
+        댓글 내용
+      </label>
+      <textarea
+        id={`comment-${commentId ?? parentId ?? noticeId}`}
+        value={content}
+        onChange={(event) => setContent(event.target.value)}
+        disabled={disabled}
+        rows={commentId || parentId ? 3 : 4}
+        className="min-h-20 w-full rounded-2xl border border-[#d7e4f6] bg-white px-3 py-2 text-sm font-semibold leading-6 text-[#10223d] outline-none disabled:opacity-60"
+        placeholder={currentUser ? "댓글을 입력하세요." : "로그인 후 댓글을 등록할 수 있습니다."}
+      />
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <ActionMessage state={state} />
+        <div className="ml-auto flex gap-2">
+          {onCancel ? (
+            <button type="button" onClick={onCancel} disabled={isPending} className="tool-button min-h-9 py-1.5 disabled:opacity-50">
+              취소
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={submitComment}
+            disabled={disabled}
+            className="tool-button tool-button-primary min-h-9 py-1.5 disabled:opacity-50"
+          >
+            <Save className="h-4 w-4" aria-hidden="true" />
+            {isPending ? "저장 중" : submitLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NoticeCommentItem({
+  comment,
+  currentUser,
+  onCommentSaved,
+  onCommentDeleted,
+  depth = 0
+}: {
+  comment: NoticeCommentTreeNode<NoticeCommentRow>;
+  currentUser: CurrentUser | null;
+  onCommentSaved: (comment: NoticeCommentRow) => void;
+  onCommentDeleted: (comment: NoticeCommentRow) => void;
+  depth?: number;
+}) {
+  const [isReplying, setIsReplying] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [state, setState] = useState<Awaited<ReturnType<typeof deleteNoticeCommentAction>> | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const canManage = currentUser?.app_role === "admin" || currentUser?.id === comment.created_by;
+
+  function deleteComment() {
+    if (!window.confirm("댓글을 삭제하시겠습니까?")) {
+      return;
+    }
+
+    setState(null);
+    startTransition(() => {
+      const formData = new FormData();
+      formData.set("id", comment.id);
+      void deleteNoticeCommentAction(formData)
+        .then((result) => {
+          setState(result);
+          if (!result.ok) {
+            return;
+          }
+          onCommentDeleted(comment);
+        })
+        .catch(() => setState({ ok: false, message: "댓글을 삭제하지 못했습니다." }));
+    });
+  }
+
+  return (
+    <article
+      className="rounded-2xl border border-[#d9e7f7] bg-white p-3"
+      style={{ marginLeft: depth > 0 ? `${Math.min(depth, 6) * 18}px` : undefined }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            {depth > 0 ? <Reply className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" /> : null}
+            <p className="font-black text-[#10223d]">{comment.author_name}</p>
+            {comment.author_department_name ? (
+              <span className="rounded-full bg-[#f5f9ff] px-2 py-0.5 text-[11px] font-black text-slate-500">
+                {comment.author_department_name}
+              </span>
+            ) : null}
+            <span className="text-xs font-bold text-slate-400">{formatCollectionDateTime(comment.created_at)}</span>
+          </div>
+          {isEditing ? (
+            <div className="mt-2">
+              <NoticeCommentForm
+                noticeId={comment.notice_id}
+                commentId={comment.id}
+                initialContent={comment.content}
+                currentUser={currentUser}
+                submitLabel="수정 완료"
+                onCancel={() => setIsEditing(false)}
+                onCommentSaved={(savedComment) => {
+                  onCommentSaved(savedComment);
+                  setIsEditing(false);
+                }}
+              />
+            </div>
+          ) : (
+            <p className="mt-2 whitespace-pre-wrap break-words text-sm font-semibold leading-6 text-slate-700">{comment.content}</p>
+          )}
+          <ActionMessage state={state} />
+        </div>
+        <div className="flex shrink-0 flex-wrap justify-end gap-1">
+          <button type="button" onClick={() => setIsReplying((value) => !value)} className="icon-tool-button" aria-label="답글 등록">
+            <Reply className="h-4 w-4" aria-hidden="true" />
+          </button>
+          {canManage ? (
+            <>
+              <button type="button" onClick={() => setIsEditing(true)} className="icon-tool-button" aria-label="댓글 수정">
+                <Pencil className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={deleteComment}
+                disabled={isPending}
+                className="icon-tool-button text-rose-600 disabled:opacity-50"
+                aria-label="댓글 삭제"
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </>
+          ) : null}
+        </div>
+      </div>
+      {isReplying ? (
+        <div className="mt-3">
+          <NoticeCommentForm
+            noticeId={comment.notice_id}
+            parentId={comment.id}
+            currentUser={currentUser}
+            submitLabel="답글 등록"
+            onCancel={() => setIsReplying(false)}
+            onCommentSaved={(savedComment) => {
+              onCommentSaved(savedComment);
+              setIsReplying(false);
+            }}
+          />
+        </div>
+      ) : null}
+      {comment.replies.length > 0 ? (
+        <div className="mt-2 space-y-2">
+          {comment.replies.map((reply) => (
+            <NoticeCommentItem
+              key={reply.id}
+              comment={reply}
+              currentUser={currentUser}
+              onCommentSaved={onCommentSaved}
+              onCommentDeleted={onCommentDeleted}
+              depth={depth + 1}
+            />
+          ))}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
 function NoticeCollectionDialog({
   notice,
   departments,
   currentUser,
-  onClose
+  onClose,
+  onStatusSaved
 }: {
   notice: NoticeBoardRow;
   departments: DepartmentRow[];
   currentUser: CurrentUser | null;
   onClose: () => void;
+  onStatusSaved: (status: NoticeCollectionStatus) => void;
 }) {
-  const router = useRouter();
-  const parsedContent = parseNoticeContent(notice.content);
-  const rows = mergeCollectionStatuses(departments, parsedContent.collectionStatuses);
-  const myDepartmentRow = rows.find((row) => row.department_id === currentUser?.department_id);
-  const [isCompleted, setIsCompleted] = useState(myDepartmentRow?.is_completed ?? false);
-  const [confirmerName, setConfirmerName] = useState(myDepartmentRow?.confirmer_name || currentUser?.full_name || "");
-  const [state, action] = useActionState(saveNoticeCollectionStatusAction, null);
-
-  useEffect(() => {
-    if (state?.ok) {
-      router.refresh();
-    }
-  }, [router, state]);
-
-  const currentRows = rows.map((row) =>
-    row.department_id === currentUser?.department_id
-      ? { ...row, is_completed: isCompleted, confirmer_name: confirmerName }
-      : row
+  const parsedContent = useMemo(() => parseNoticeContent(notice.content), [notice.content]);
+  const initialRows = useMemo(
+    () => mergeCollectionStatuses(departments, parsedContent.collectionStatuses),
+    [departments, parsedContent.collectionStatuses]
   );
+  const [currentRows, setCurrentRows] = useState(initialRows);
+  const [state, setState] = useState<Awaited<ReturnType<typeof saveNoticeCollectionStatusAction>> | null>(null);
+  const [pendingDepartmentId, setPendingDepartmentId] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
+
+  function updateMyDepartmentStatus(nextCompleted: boolean) {
+    if (!currentUser?.department_id) {
+      setState({ ok: false, message: "소속 부서가 지정된 사용자만 완료여부를 입력할 수 있습니다." });
+      return;
+    }
+
+    const previousRows = currentRows;
+    const optimisticUpdatedAt = nextCompleted ? new Date().toISOString() : undefined;
+    setState(null);
+    setPendingDepartmentId(currentUser.department_id);
+    setCurrentRows((rows) =>
+      rows.map((row) =>
+        row.department_id === currentUser.department_id
+          ? {
+              ...row,
+              is_completed: nextCompleted,
+              confirmer_name: nextCompleted ? currentUser.full_name : "",
+              updated_at: optimisticUpdatedAt
+            }
+          : row
+      )
+    );
+
+    startTransition(() => {
+      const formData = new FormData();
+      formData.set("notice_id", notice.id);
+      formData.set("is_completed", nextCompleted ? "true" : "false");
+
+      void saveNoticeCollectionStatusAction(formData)
+        .then((result) => {
+          setState(result);
+          if (!result.ok) {
+            setCurrentRows(previousRows);
+            return;
+          }
+          if (result.data) {
+            onStatusSaved(result.data);
+            setCurrentRows((rows) =>
+              rows.map((row) =>
+                row.department_id === result.data?.department_id
+                  ? {
+                      ...row,
+                      is_completed: result.data.is_completed,
+                      confirmer_name: result.data.confirmer_name,
+                      updated_at: result.data.updated_at
+                    }
+                  : row
+              )
+            );
+          }
+        })
+        .catch(() => {
+          setCurrentRows(previousRows);
+          setState({ ok: false, message: "자료취합 완료여부를 저장하지 못했습니다." });
+        })
+        .finally(() => {
+          setPendingDepartmentId(null);
+        });
+    });
+  }
 
   return (
     <ModalPortal>
@@ -508,78 +993,67 @@ function NoticeCollectionDialog({
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
-        <form action={action}>
-          <input type="hidden" name="notice_id" value={notice.id} />
-          <input type="hidden" name="is_completed" value={isCompleted ? "true" : "false"} />
-          <div className="max-h-[58vh] overflow-y-auto bg-[#f5f9ff] px-5 py-4">
-            <div className="overflow-hidden rounded-2xl border border-[#d9e7f7] bg-white">
-              <table className="table-sticky w-full table-fixed text-left text-sm">
-                <colgroup>
-                  <col className="w-[40%]" />
-                  <col className="w-[22%]" />
-                  <col className="w-[38%]" />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th className="px-3 py-3">부서명</th>
-                    <th className="px-3 py-3">완료여부</th>
-                    <th className="px-3 py-3">확인자</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {currentRows.map((row) => {
-                    const isMine = row.department_id === currentUser?.department_id;
-                    return (
-                      <tr key={row.department_id} className="border-t border-slate-100">
-                        <td className="px-3 py-3 font-black text-[#10223d]">{row.department_name}</td>
-                        <td className="px-3 py-3">
-                          {isMine ? (
-                            <label className="inline-flex items-center gap-2 font-bold text-slate-700">
-                              <input
-                                type="checkbox"
-                                checked={isCompleted}
-                                onChange={(event) => setIsCompleted(event.target.checked)}
-                                className="h-4 w-4 accent-[#075be8]"
-                              />
-                              완료
-                            </label>
-                          ) : (
-                            <span className={row.is_completed ? "font-black text-emerald-600" : "font-bold text-slate-400"}>
-                              {row.is_completed ? "완료" : "미완료"}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-3">
-                          {isMine ? (
+        <div className="max-h-[58vh] overflow-y-auto bg-[#f5f9ff] px-5 py-4">
+          <div className="overflow-hidden rounded-2xl border border-[#d9e7f7] bg-white">
+            <table className="table-sticky w-full table-fixed text-left text-sm">
+              <colgroup>
+                <col className="w-[32%]" />
+                <col className="w-[18%]" />
+                <col className="w-[25%]" />
+                <col className="w-[25%]" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="px-3 py-3">부서명</th>
+                  <th className="px-3 py-3">완료여부</th>
+                  <th className="px-3 py-3">확인자</th>
+                  <th className="px-3 py-3">확인시간</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentRows.map((row) => {
+                  const isMine = row.department_id === currentUser?.department_id;
+                  const isRowPending = pendingDepartmentId === row.department_id;
+                  return (
+                    <tr key={row.department_id} className="border-t border-slate-100">
+                      <td className="px-3 py-3 font-black text-[#10223d]">{row.department_name}</td>
+                      <td className="px-3 py-3">
+                        {isMine ? (
+                          <label className="inline-flex items-center gap-2 font-bold text-slate-700">
                             <input
-                              name="confirmer_name"
-                              value={confirmerName}
-                              onChange={(event) => setConfirmerName(event.target.value)}
-                              className="h-9 w-full rounded-full border border-[#d7e4f6] bg-[#f5f9ff] px-3 text-sm font-bold text-[#10223d] outline-none"
-                              placeholder="확인자 이름"
+                              type="checkbox"
+                              checked={row.is_completed}
+                              onChange={(event) => updateMyDepartmentStatus(event.target.checked)}
+                              disabled={isRowPending}
+                              className="h-4 w-4 accent-[#075be8] disabled:opacity-50"
                             />
-                          ) : (
-                            <span className="font-bold text-slate-600">{row.confirmer_name || "-"}</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div className="mt-3">
-              <ActionMessage state={state} />
-            </div>
+                            {isRowPending ? "저장 중" : "완료"}
+                          </label>
+                        ) : (
+                          <span className={row.is_completed ? "font-black text-emerald-600" : "font-bold text-slate-400"}>
+                            {row.is_completed ? "완료" : "미완료"}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className={row.confirmer_name ? "font-bold text-slate-700" : "font-bold text-slate-400"}>
+                          {row.confirmer_name || "-"}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 font-bold text-slate-600">{formatCollectionDateTime(row.updated_at)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-          <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
-            <button type="button" onClick={onClose} className="tool-button">닫기</button>
-            <button type="submit" disabled={!currentUser?.department_id} className="tool-button tool-button-primary disabled:opacity-50">
-              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-              저장
-            </button>
+          <div className="mt-3">
+            <ActionMessage state={state} />
           </div>
-        </form>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+          <button type="button" onClick={onClose} className="tool-button tool-button-primary">닫기</button>
+        </div>
       </div>
     </div>
     </ModalPortal>

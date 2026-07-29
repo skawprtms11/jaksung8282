@@ -44,5 +44,13 @@ export function safeErrorMessage(message?: string) {
   ) {
     return "Supabase SQL 016번을 먼저 실행하세요. 부서 공통자료의 중요도/업무구분 컬럼이 아직 DB에 없습니다.";
   }
+  if (
+    message.includes("weekly_report_item_requests") ||
+    message.includes("target_key") ||
+    message.includes("target_type") ||
+    message.includes("department_submission_id")
+  ) {
+    return "Supabase SQL 023번을 먼저 실행하세요. 공통사항 요청등록 컬럼이 아직 DB에 없습니다.";
+  }
   return "요청을 처리하지 못했습니다. 입력값과 권한을 확인하세요.";
 }

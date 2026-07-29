@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { clientSchema, departmentSchema, userSchema } from "@/lib/validations/common";
+import {
+  clientSchema,
+  departmentSchema,
+  reportItemRequestResultSchema,
+  reportItemRequestSchema,
+  userSchema
+} from "@/lib/validations/common";
 
 describe("master validation schemas", () => {
   it("allows client creation without id and department_id", () => {
@@ -49,5 +55,35 @@ describe("master validation schemas", () => {
     if (parsed.success) {
       expect(parsed.data.department_id).toBeUndefined();
     }
+  });
+
+  it("validates report item request content", () => {
+    const parsed = reportItemRequestSchema.safeParse({
+      report_item_id: "8a831fd5-754b-4604-a09e-3ffcdf809734",
+      request_content: "확인 요청드립니다."
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
+  it("validates common department item request content", () => {
+    const parsed = reportItemRequestSchema.safeParse({
+      target_type: "department_common",
+      department_submission_id: "8a831fd5-754b-4604-a09e-3ffcdf809734",
+      item_period: "current",
+      item_sort_order: "0",
+      request_content: "공통사항 확인 요청드립니다."
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
+  it("blocks blank report item request results", () => {
+    const parsed = reportItemRequestResultSchema.safeParse({
+      id: "8a831fd5-754b-4604-a09e-3ffcdf809734",
+      result_content: "   "
+    });
+
+    expect(parsed.success).toBe(false);
   });
 });

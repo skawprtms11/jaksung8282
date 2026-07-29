@@ -2,6 +2,7 @@ import { type ClientReportTableRow } from "@/components/reports/ClientReportsTab
 import { ClientReportsWorkspace } from "@/components/reports/ClientReportsWorkspace";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { isAdmin } from "@/lib/auth/permissions";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { ClientReportStatus, VolumeType, VolumeUnit } from "@/types/enums";
 
@@ -21,6 +22,7 @@ type ReportRow = {
   week_start_date: string;
   week_end_date: string;
   status: ClientReportStatus;
+  submitted_at: string | null;
   updated_at: string;
   departments: { department_name: string } | null;
   clients: { client_name: string } | null;
@@ -46,7 +48,7 @@ type ReportRow = {
 
 const REPORT_LIST_LIMIT = 100;
 const CLIENT_REPORT_SELECT =
-  "id,created_by,department_id,client_id,report_year,report_month,week_of_month,week_start_date,week_end_date,status,updated_at,departments(department_name),clients(client_name),weekly_client_report_items(item_period,importance,work_category_id,title,content,sort_order,work_categories(category_name,icon_key)),weekly_volumes(volume_type,quantity,unit,custom_unit,note,sort_order)";
+  "id,created_by,department_id,client_id,report_year,report_month,week_of_month,week_start_date,week_end_date,status,submitted_at,updated_at,departments(department_name),clients(client_name),weekly_client_report_items(item_period,importance,work_category_id,title,content,sort_order,work_categories(category_name,icon_key)),weekly_volumes(volume_type,quantity,unit,custom_unit,note,sort_order)";
 
 export default async function ClientReportsPage({
   searchParams
@@ -65,20 +67,40 @@ export default async function ClientReportsPage({
   let editorClients: ClientOption[] = [];
   let categories: CategoryOption[] = [];
   let reports: ReportRow[] = [];
+  let defaultDepartmentId = params.department_id ?? null;
 
   if (supabase && profile) {
-    const departmentFilter = isAdmin(profile) ? undefined : profile.department_id;
+    let dataClient = supabase;
+    try {
+      dataClient = createSupabaseAdminClient();
+    } catch {
+      dataClient = supabase;
+    }
+    let adminDefaultDepartmentId: string | undefined;
+    if (isAdmin(profile) && !params.department_id) {
+      const { data: firstDepartment } = await dataClient
+        .from("departments")
+        .select("id")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+        .order("department_name", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      adminDefaultDepartmentId = firstDepartment?.id;
+    }
+    const departmentFilter = isAdmin(profile) ? params.department_id ?? adminDefaultDepartmentId : profile.department_id;
+    defaultDepartmentId = departmentFilter ?? null;
     const [{ data: departmentData }, { data: categoryData }, { data: clientData }, { data: assignmentData }, { data: reportData, error: reportError }] = await Promise.all([
       (() => {
-        let query = supabase.from("departments").select("id,department_name").eq("is_active", true).order("sort_order");
-        if (departmentFilter) {
+        let query = dataClient.from("departments").select("id,department_name").eq("is_active", true).order("sort_order");
+        if (!isAdmin(profile) && departmentFilter) {
           query = query.eq("id", departmentFilter);
         }
         return query;
       })(),
-      supabase.from("work_categories").select("id,category_name,icon_key").eq("is_active", true).order("sort_order"),
+      dataClient.from("work_categories").select("id,category_name,icon_key").eq("is_active", true).order("sort_order"),
       (() => {
-        let query = supabase
+        let query = dataClient
           .from("department_client_links")
           .select("department_id,clients(id,client_name)")
           .eq("is_active", true)
@@ -89,20 +111,19 @@ export default async function ClientReportsPage({
         return query;
       })(),
       profile.app_role === "client_owner"
-        ? supabase.from("client_assignments").select("client_id").eq("user_id", profile.id).eq("is_active", true)
+        ? dataClient.from("client_assignments").select("client_id").eq("user_id", profile.id).eq("is_active", true)
         : Promise.resolve({ data: [] }),
       (() => {
-        let query = supabase
+        let query = dataClient
           .from("weekly_client_reports")
           .select(CLIENT_REPORT_SELECT)
           .is("deleted_at", null)
           .order("week_start_date", { ascending: false })
           .limit(REPORT_LIST_LIMIT);
-        if (departmentFilter) {
-          query = query.eq("department_id", departmentFilter);
-        }
         if (params.department_id) {
           query = query.eq("department_id", params.department_id);
+        } else if (departmentFilter) {
+          query = query.eq("department_id", departmentFilter);
         }
         if (params.client_id) {
           query = query.eq("client_id", params.client_id);
@@ -127,7 +148,7 @@ export default async function ClientReportsPage({
     const reportRows = reportError ? [] : ((reportData ?? []) as unknown as ReportRow[]);
     if (reportRows.length > 0) {
       const creatorIds = Array.from(new Set(reportRows.map((report) => report.created_by)));
-      const { data: creatorData } = await supabase.from("profiles").select("id,full_name").in("id", creatorIds);
+      const { data: creatorData } = await dataClient.from("profiles").select("id,full_name").in("id", creatorIds);
       const creatorNameMap = new Map((creatorData ?? []).map((creator) => [creator.id, creator.full_name]));
       reports = reportRows.map((report) => ({
         ...report,
@@ -140,6 +161,7 @@ export default async function ClientReportsPage({
     clientId: report.client_id,
     clientName: report.clients?.client_name ?? "-",
     authorName: report.profiles?.full_name ?? "-",
+    submittedAt: report.submitted_at,
     currentItems: report.weekly_client_report_items
       .filter((item) => item.item_period === "current")
       .sort((left, right) => left.sort_order - right.sort_order)
@@ -202,10 +224,11 @@ export default async function ClientReportsPage({
   return (
     <>
       <ClientReportsWorkspace
+        key={`client-reports-${defaultDepartmentId ?? "department"}-${params.client_id ?? "all"}-${params.status ?? "all"}`}
         departments={departments}
         clients={editorClients}
         categories={categories}
-        defaultDepartmentId={params.department_id ?? (isAdmin(profile) ? null : profile?.department_id)}
+        defaultDepartmentId={defaultDepartmentId}
         defaultClientId={params.client_id}
         reports={tableRows}
       />

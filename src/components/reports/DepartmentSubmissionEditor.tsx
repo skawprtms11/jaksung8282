@@ -39,6 +39,7 @@ export type DepartmentSubmissionEditorInitialSubmission = {
   department_id: string;
   week_start_date: string;
   status: DepartmentSubmissionStatus;
+  finalized_at: string | null;
   department_weekly_contents: LoadedDepartmentContent[];
 };
 type ContentPeriod = "current" | "next";
@@ -124,6 +125,20 @@ function normalizeLoadedContents(firstCategoryId: string, loadedContents: Loaded
 
 function isEditableSubmissionStatus(status: DepartmentSubmissionStatus | null) {
   return status === null || status === "draft" || status === "division_rejected";
+}
+
+const CONFIRMATION_CANCEL_WINDOW_DAYS = 3;
+const CONFIRMATION_CANCEL_WINDOW_MS = CONFIRMATION_CANCEL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+
+function isPastConfirmationCancelWindow(confirmedAt: string | null) {
+  if (!confirmedAt) {
+    return false;
+  }
+  const confirmedTime = new Date(confirmedAt).getTime();
+  if (!Number.isFinite(confirmedTime)) {
+    return false;
+  }
+  return Date.now() - confirmedTime > CONFIRMATION_CANCEL_WINDOW_MS;
 }
 
 function importanceIconClassName(importance: Importance) {
@@ -389,6 +404,7 @@ export function DepartmentSubmissionEditor({
   const [weekStartDate, setWeekStartDate] = useState(currentWeek.weekStartDate);
   const [submissionId, setSubmissionId] = useState(initialSubmission?.id ?? "");
   const [loadedStatus, setLoadedStatus] = useState<DepartmentSubmissionStatus | null>(initialSubmission?.status ?? null);
+  const [loadedFinalizedAt, setLoadedFinalizedAt] = useState<string | null>(initialSubmission?.finalized_at ?? null);
   const [loadState, setLoadState] = useState<{ ok: boolean; message: string } | null>(null);
   const [isLoadingSubmission, setIsLoadingSubmission] = useState(false);
   const [contents, setContents] = useState<DepartmentContent[]>(() =>
@@ -403,6 +419,7 @@ export function DepartmentSubmissionEditor({
       if (result.ok && result.data) {
         setSubmissionId(result.data.id ?? "");
         setLoadedStatus(result.data.status);
+        setLoadedFinalizedAt(result.data.finalized_at ?? null);
         setLoadState(null);
       }
       return result;
@@ -418,6 +435,7 @@ export function DepartmentSubmissionEditor({
       if (result.ok && result.data) {
         setSubmissionId(result.data.id ?? "");
         setLoadedStatus(result.data.status);
+        setLoadedFinalizedAt(result.data.finalized_at ?? null);
         setLoadState(null);
       }
       return result;
@@ -431,6 +449,7 @@ export function DepartmentSubmissionEditor({
   const effectiveSubmissionId = submissionId;
   const canEditSubmission = isEditableSubmissionStatus(effectiveStatus);
   const isSubmittedToDivision = effectiveStatus === "submitted_to_division";
+  const isCancelWindowExpired = isSubmittedToDivision && isPastConfirmationCancelWindow(loadedFinalizedAt);
   const isSubmissionBusy = isLoadingSubmission || isSavingSubmission || isCancellingSubmission;
   const showOverviewAndReview = active !== "facility" && active !== "holiday_work";
   const facilityContentValue = contents.find((content) => content.section_type === "facility")?.current_week_content ?? "";
@@ -468,6 +487,7 @@ export function DepartmentSubmissionEditor({
         if (!result.ok) {
           setSubmissionId("");
           setLoadedStatus(null);
+          setLoadedFinalizedAt(null);
           setContents(makeEmptyContents(firstCategoryId));
           setLoadState({ ok: false, message: result.message ?? "부서자료를 불러오지 못했습니다." });
           return;
@@ -475,6 +495,7 @@ export function DepartmentSubmissionEditor({
 
         setSubmissionId(result.submission?.id ?? "");
         setLoadedStatus(result.submission?.status ?? null);
+        setLoadedFinalizedAt(result.submission?.finalized_at ?? null);
         setContents(normalizeLoadedContents(firstCategoryId, result.submission?.department_weekly_contents ?? []));
         setLoadState(
           result.submission && !isEditableSubmissionStatus(result.submission.status)
@@ -486,6 +507,7 @@ export function DepartmentSubmissionEditor({
         if (!ignore) {
           setSubmissionId("");
           setLoadedStatus(null);
+          setLoadedFinalizedAt(null);
           setContents(makeEmptyContents(firstCategoryId));
           setLoadState({ ok: false, message: "부서자료를 불러오지 못했습니다." });
         }
@@ -507,6 +529,7 @@ export function DepartmentSubmissionEditor({
       if (current !== week.weekStartDate) {
         setSubmissionId("");
         setLoadedStatus(null);
+        setLoadedFinalizedAt(null);
         setIsLoadingSubmission(true);
         setLoadState(null);
       }
@@ -630,9 +653,15 @@ export function DepartmentSubmissionEditor({
               <button
                 type="submit"
                 formAction={cancelAction}
-                disabled={!canSubmit || isSubmissionBusy}
+                disabled={!canSubmit || isSubmissionBusy || isCancelWindowExpired}
                 className="tool-button min-h-9 py-1.5 text-[#075be8] disabled:opacity-50"
-                title={!canSubmit ? "확정취소는 부서장과 관리자만 가능합니다." : undefined}
+                title={
+                  !canSubmit
+                    ? "확정취소는 부서장과 관리자만 가능합니다."
+                    : isCancelWindowExpired
+                      ? "확정 후 3일이 지난 부서자료는 확정취소할 수 없습니다."
+                      : undefined
+                }
               >
                 <RotateCcw className="h-4 w-4" aria-hidden="true" />
                 {isCancellingSubmission ? "취소 중" : "확정취소"}

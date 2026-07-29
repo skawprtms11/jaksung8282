@@ -2,10 +2,11 @@
 
 import { type ClipboardEvent, useActionState, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowRight, FileSpreadsheet, PackagePlus, Pencil, Plus, RotateCcw, Save, Search, Trash2, UserRoundCheck, X } from "lucide-react";
+import { ArrowRight, Building2, FileSpreadsheet, PackagePlus, Pencil, Plus, RotateCcw, Save, Search, Trash2, UserRoundCheck, X } from "lucide-react";
 import {
   approveUserRegistrationRequestAction,
   deleteClientsAction,
+  deleteDepartmentsAction,
   deleteUsersAction,
   rejectUserRegistrationRequestAction,
   saveClientAction,
@@ -81,6 +82,223 @@ type DepartmentClientValue = {
 };
 type DepartmentClientLinkValue = { department_id: string; client_id: string; is_active: boolean };
 type DepartmentAssignmentValue = AssignmentValue & { department_id: string | null; client_id: string; is_active: boolean };
+
+export function DepartmentMasterTable({
+  departments,
+  users,
+  headCandidates,
+  clients,
+  departmentClientLinks,
+  assignments,
+  canManage
+}: {
+  departments: DepartmentFormValue[];
+  users: AssignmentUser[];
+  headCandidates: AssignmentUser[];
+  clients: DepartmentClientValue[];
+  departmentClientLinks: DepartmentClientLinkValue[];
+  assignments: DepartmentAssignmentValue[];
+  canManage: boolean;
+}) {
+  const [selectedDepartmentIds, setSelectedDepartmentIds] = useState<string[]>([]);
+  const [editingDepartment, setEditingDepartment] = useState<DepartmentFormValue | null>(null);
+  const [deleteState, deleteAction] = useActionState(deleteDepartmentsAction, null);
+  const selectedDepartment = departments.find((department) => department.id === selectedDepartmentIds[0]) ?? null;
+  const allSelected = departments.length > 0 && selectedDepartmentIds.length === departments.length;
+
+  function toggleDepartment(departmentId: string, checked: boolean) {
+    setSelectedDepartmentIds((current) =>
+      checked ? Array.from(new Set([...current, departmentId])) : current.filter((id) => id !== departmentId)
+    );
+  }
+
+  function toggleAll(checked: boolean) {
+    setSelectedDepartmentIds(checked ? departments.map((department) => department.id) : []);
+  }
+
+  function openEditDialog() {
+    if (selectedDepartmentIds.length !== 1 || !selectedDepartment) {
+      return;
+    }
+    setEditingDepartment(selectedDepartment);
+  }
+
+  return (
+    <section className="space-y-3">
+      {canManage ? (
+        <div className="flex items-center justify-end gap-2 rounded-[1.25rem] border border-[#d9e7f7] bg-white/82 px-3 py-2 shadow-[0_10px_26px_rgba(16,34,61,0.05)]">
+          <button
+            type="button"
+            onClick={openEditDialog}
+            disabled={selectedDepartmentIds.length !== 1}
+            title={selectedDepartmentIds.length !== 1 ? "수정할 부서를 1개만 선택하세요." : "선택한 부서 수정"}
+            className="tool-button min-h-9 py-1.5 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            <Pencil className="h-4 w-4" aria-hidden="true" />
+            수정
+          </button>
+          <form
+            action={deleteAction}
+            onSubmit={(event) => {
+              if (selectedDepartmentIds.length === 0 || !window.confirm("선택한 부서를 삭제할까요? 삭제된 부서는 비활성화됩니다.")) {
+                event.preventDefault();
+              }
+            }}
+          >
+            <input type="hidden" name="department_ids" value={selectedDepartmentIds.join(",")} />
+            <button
+              type="submit"
+              disabled={selectedDepartmentIds.length === 0}
+              title={selectedDepartmentIds.length === 0 ? "삭제할 부서를 선택하세요." : "선택한 부서 삭제"}
+              className="tool-button tool-button-danger min-h-9 py-1.5 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              삭제
+            </button>
+          </form>
+        </div>
+      ) : null}
+      <ActionMessage state={deleteState} />
+      <TableShell>
+        <table className="table-sticky min-w-[700px] w-full text-left text-sm">
+          <thead>
+            <tr>
+              {canManage ? (
+                <th className="w-12 px-3 py-3">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={(event) => toggleAll(event.target.checked)}
+                    aria-label="부서 전체 선택"
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                </th>
+              ) : null}
+              <th className="px-3 py-3">부서명</th>
+              <th className="px-3 py-3">부서장</th>
+              <th className="px-3 py-3">화주등록</th>
+              <th className="px-3 py-3">비고</th>
+            </tr>
+          </thead>
+          <tbody>
+            {departments.map((department) => {
+              const headNames = users
+                .filter((user) => user.department_id === department.id && user.app_role === "department_head")
+                .map((user) => user.full_name);
+              return (
+                <tr key={department.id} className="border-t border-slate-100">
+                  {canManage ? (
+                    <td className="px-3 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedDepartmentIds.includes(department.id)}
+                        onChange={(event) => toggleDepartment(department.id, event.target.checked)}
+                        aria-label={`${department.department_name} 선택`}
+                        className="h-4 w-4 rounded border-slate-300"
+                      />
+                    </td>
+                  ) : null}
+                  <td className="px-3 py-3">
+                    <span className="inline-flex items-center gap-2">
+                      <Building2 className="h-4 w-4 text-[#075be8]" />
+                      {department.department_name}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3">{headNames.join(", ") || "-"}</td>
+                  <td className="px-3 py-3">
+                    <DepartmentClientManager
+                      department={department}
+                      clients={clients}
+                      departmentClientLinks={departmentClientLinks}
+                      users={users}
+                      assignments={assignments}
+                    />
+                  </td>
+                  <td className="px-3 py-3 text-slate-500">{department.notes?.trim() || "-"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </TableShell>
+
+      {editingDepartment ? (
+        <DepartmentEditDialog
+          department={editingDepartment}
+          users={headCandidates}
+          onClose={() => setEditingDepartment(null)}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+function DepartmentEditDialog({
+  department,
+  users,
+  onClose
+}: {
+  department: DepartmentFormValue;
+  users: AssignmentUser[];
+  onClose: () => void;
+}) {
+  const [state, action] = useActionState(saveDepartmentAction, null);
+  const headCandidates = users.filter((user) => user.app_role === "department_head" || user.app_role === "manager");
+  const currentHead = headCandidates.find((user) => user.department_id === department.id && user.app_role === "department_head");
+
+  return (
+    <ModalPortal>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="department-edit-title">
+        <form action={action} className="w-full max-w-3xl overflow-hidden rounded-[1.5rem] border border-[#d9e4f2] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
+          <input type="hidden" name="id" value={department.id} />
+          <input type="hidden" name="department_code" value={department.department_code} />
+          <input type="hidden" name="sort_order" value={department.sort_order} />
+          <input type="hidden" name="is_active" value="true" />
+          <div className="flex items-start justify-between gap-4 border-b border-[#d9e4f2] px-5 py-4">
+            <div>
+              <h2 id="department-edit-title" className="text-lg font-black text-[#10223d]">부서 수정</h2>
+              <p className="mt-1 text-sm text-slate-500">부서명, 부서장, 비고를 수정합니다.</p>
+            </div>
+            <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="grid gap-3 p-5 md:grid-cols-2">
+            <label className="text-sm font-black text-[#10223d]">
+              부서명
+              <input name="department_name" required defaultValue={department.department_name} className="mt-1 h-11 w-full rounded-2xl border border-[#d7e4f6] px-3 text-sm font-bold outline-none focus:border-[#075be8]" />
+            </label>
+            <label className="text-sm font-black text-[#10223d]">
+              부서장
+              <select name="department_head_id" defaultValue={currentHead?.id ?? ""} className="mt-1 h-11 w-full rounded-2xl border border-[#d7e4f6] px-3 text-sm font-bold outline-none focus:border-[#075be8]">
+                <option value="">선택</option>
+                {headCandidates.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.full_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-black text-[#10223d] md:col-span-2">
+              비고
+              <input name="notes" defaultValue={department.notes ?? ""} className="mt-1 h-11 w-full rounded-2xl border border-[#d7e4f6] px-3 text-sm font-bold outline-none focus:border-[#075be8]" />
+            </label>
+            <div className="md:col-span-2">
+              <ActionMessage state={state} />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-[#d9e4f2] px-5 py-4">
+            <button type="button" onClick={onClose} className="tool-button">취소</button>
+            <SubmitButton>
+              <Save className="h-4 w-4" aria-hidden="true" />
+              저장
+            </SubmitButton>
+          </div>
+        </form>
+      </div>
+    </ModalPortal>
+  );
+}
 
 function ModalPortal({ children }: { children: React.ReactNode }) {
   if (typeof document === "undefined") {

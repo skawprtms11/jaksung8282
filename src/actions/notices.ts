@@ -6,8 +6,20 @@ import { isAdmin } from "@/lib/auth/permissions";
 import { parseNoticeContent, serializeNoticeContent, type NoticeCollectionStatus } from "@/lib/notices/content";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { noticeSchema } from "@/lib/validations/common";
+import { idSchema, noticeCommentSchema, noticeSchema } from "@/lib/validations/common";
 import { formDataToObject, safeErrorMessage, type ActionResult } from "@/lib/utils/form";
+
+export type NoticeCommentActionRow = {
+  id: string;
+  notice_id: string;
+  parent_id: string | null;
+  content: string;
+  author_name: string;
+  author_department_name: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
 
 export async function saveNoticeAction(_: ActionResult | null, formData: FormData): Promise<ActionResult> {
   const { profile } = await getCurrentUserProfile();
@@ -69,7 +81,7 @@ export async function incrementNoticeView(id: string) {
   await supabase.rpc("increment_notice_view", { notice_id: id });
 }
 
-export async function saveNoticeCollectionStatusAction(_: ActionResult | null, formData: FormData): Promise<ActionResult> {
+export async function saveNoticeCollectionStatusAction(formData: FormData): Promise<ActionResult<NoticeCollectionStatus>> {
   const { profile } = await getCurrentUserProfile();
   if (!profile) {
     return { ok: false, message: "로그인이 필요합니다." };
@@ -80,12 +92,8 @@ export async function saveNoticeCollectionStatusAction(_: ActionResult | null, f
 
   const noticeId = String(formData.get("notice_id") ?? "");
   const isCompleted = formData.get("is_completed") === "true";
-  const confirmerName = String(formData.get("confirmer_name") ?? "").trim();
   if (!noticeId) {
     return { ok: false, message: "공지사항을 확인할 수 없습니다." };
-  }
-  if (isCompleted && !confirmerName) {
-    return { ok: false, message: "완료 처리 시 확인자를 입력하세요." };
   }
 
   const serverClient = await createSupabaseServerClient();
@@ -111,8 +119,8 @@ export async function saveNoticeCollectionStatusAction(_: ActionResult | null, f
     department_id: profile.department_id,
     department_name: profile.department_name,
     is_completed: isCompleted,
-    confirmer_name: isCompleted ? confirmerName : "",
-    updated_at: new Date().toISOString()
+    confirmer_name: isCompleted ? profile.full_name : "",
+    updated_at: isCompleted ? new Date().toISOString() : undefined
   };
   nextStatuses.push(nextRow);
 
@@ -135,5 +143,138 @@ export async function saveNoticeCollectionStatusAction(_: ActionResult | null, f
   }
 
   revalidatePath("/notices");
-  return { ok: true, message: "자료취합 완료여부를 저장했습니다." };
+  return { ok: true, message: "자료취합 완료여부를 저장했습니다.", data: nextRow };
+}
+
+export async function saveNoticeCommentAction(formData: FormData): Promise<ActionResult<NoticeCommentActionRow>> {
+  const { profile } = await getCurrentUserProfile();
+  if (!profile) {
+    return { ok: false, message: "로그인이 필요합니다." };
+  }
+  if (!profile.is_active) {
+    return { ok: false, message: "비활성 사용자는 댓글을 등록할 수 없습니다." };
+  }
+
+  const parsed = noticeCommentSchema.safeParse(formDataToObject(formData));
+  if (!parsed.success) {
+    return { ok: false, message: "댓글 내용을 확인하세요.", fieldErrors: parsed.error.flatten().fieldErrors };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요." };
+  }
+
+  const { id, notice_id: noticeId, parent_id: parentId, content } = parsed.data;
+  const { data: notice } = await supabase
+    .from("notices")
+    .select("id")
+    .eq("id", noticeId)
+    .eq("is_active", true)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!notice) {
+    return { ok: false, message: "댓글을 등록할 게시글을 찾을 수 없습니다." };
+  }
+
+  if (parentId) {
+    const { data: parentComment } = await supabase
+      .from("notice_comments")
+      .select("id,notice_id")
+      .eq("id", parentId)
+      .eq("notice_id", noticeId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (!parentComment) {
+      return { ok: false, message: "답글을 등록할 댓글을 찾을 수 없습니다." };
+    }
+  }
+
+  if (id) {
+    const { data: target } = await supabase
+      .from("notice_comments")
+      .select("id,created_by")
+      .eq("id", id)
+      .eq("notice_id", noticeId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (!target) {
+      return { ok: false, message: "수정할 댓글을 찾을 수 없습니다." };
+    }
+    if (!isAdmin(profile) && target.created_by !== profile.id) {
+      return { ok: false, message: "본인이 작성한 댓글만 수정할 수 있습니다." };
+    }
+
+    const { data, error } = await supabase
+      .from("notice_comments")
+      .update({ content })
+      .eq("id", id)
+      .select("id,notice_id,parent_id,content,author_name,author_department_name,created_by,created_at,updated_at")
+      .single();
+    if (error) {
+      return { ok: false, message: safeErrorMessage(error.message) };
+    }
+    revalidatePath("/notices");
+    return { ok: true, message: "댓글을 수정했습니다.", data: data as NoticeCommentActionRow };
+  }
+
+  const { data, error } = await supabase
+    .from("notice_comments")
+    .insert({
+      notice_id: noticeId,
+      parent_id: parentId ?? null,
+      content,
+      author_name: profile.full_name,
+      author_department_name: profile.department_name ?? null,
+      created_by: profile.id
+    })
+    .select("id,notice_id,parent_id,content,author_name,author_department_name,created_by,created_at,updated_at")
+    .single();
+  if (error) {
+    return { ok: false, message: safeErrorMessage(error.message) };
+  }
+
+  revalidatePath("/notices");
+  return { ok: true, message: "댓글을 등록했습니다.", data: data as NoticeCommentActionRow };
+}
+
+export async function deleteNoticeCommentAction(formData: FormData): Promise<ActionResult<{ id: string }>> {
+  const { profile } = await getCurrentUserProfile();
+  if (!profile) {
+    return { ok: false, message: "로그인이 필요합니다." };
+  }
+
+  const parsed = idSchema.safeParse(String(formData.get("id") ?? ""));
+  if (!parsed.success) {
+    return { ok: false, message: "삭제할 댓글을 확인하세요." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요." };
+  }
+
+  const { data: target } = await supabase
+    .from("notice_comments")
+    .select("id,created_by")
+    .eq("id", parsed.data)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!target) {
+    return { ok: false, message: "삭제할 댓글을 찾을 수 없습니다." };
+  }
+  if (!isAdmin(profile) && target.created_by !== profile.id) {
+    return { ok: false, message: "본인이 작성한 댓글만 삭제할 수 있습니다." };
+  }
+
+  const { error } = await supabase
+    .from("notice_comments")
+    .update({ deleted_at: new Date().toISOString(), deleted_by: profile.id })
+    .eq("id", parsed.data);
+  if (error) {
+    return { ok: false, message: safeErrorMessage(error.message) };
+  }
+
+  revalidatePath("/notices");
+  return { ok: true, message: "댓글을 삭제했습니다.", data: { id: parsed.data } };
 }
