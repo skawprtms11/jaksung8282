@@ -1,9 +1,9 @@
-import Link from "next/link";
-import { BarChart3, CalendarDays, ClipboardCheck, FileText, Hammer, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { VolumeComparisonChart, type VolumeChartRow } from "@/components/charts/VolumeComparisonChart";
 import { EmptyState } from "@/components/common/EmptyState";
 import { TableShell } from "@/components/common/TableShell";
 import { MeetingFacilityConstructionBoard } from "@/components/reports/MeetingFacilityConstructionBoard";
+import { MeetingMaterialsTabNav } from "@/components/reports/MeetingMaterialsTabNav";
 import { MeetingPriorityPanel, type MeetingPriorityItem } from "@/components/reports/MeetingPriorityPanel";
 import { MeetingHolidayWorkBoard } from "@/components/reports/MeetingHolidayWorkBoard";
 import { WeekSelect } from "@/components/reports/WeekSelect";
@@ -68,6 +68,21 @@ type SubmissionRow = {
   department_weekly_contents: DepartmentContentRow[];
 };
 
+type PriorityItemQueryRow = {
+  id: string;
+  item_period: ItemPeriod;
+  title: string | null;
+  content: string;
+  importance: Extract<Importance, "very_high" | "high">;
+  work_categories: { category_name: string } | null;
+  weekly_client_reports: {
+    department_id: string;
+    client_id: string;
+    departments: { department_name: string } | null;
+    clients: { client_name: string } | null;
+  } | null;
+};
+
 type MeetingSearchParams = {
   tab?: string;
   department_id?: string;
@@ -79,12 +94,12 @@ type MeetingSearchParams = {
 };
 
 const MEETING_REPORT_LIMIT = 500;
-const tabs: { value: MeetingTab; label: string; icon: typeof ClipboardCheck }[] = [
-  { value: "collection", label: "취합현황", icon: ClipboardCheck },
-  { value: "materials", label: "회의자료", icon: FileText },
-  { value: "volumes", label: "물동량", icon: BarChart3 },
-  { value: "holiday", label: "공휴일", icon: CalendarDays },
-  { value: "facility", label: "시설공사", icon: Hammer }
+const tabs: { value: MeetingTab; label: string }[] = [
+  { value: "collection", label: "취합현황" },
+  { value: "materials", label: "회의자료" },
+  { value: "volumes", label: "물동량" },
+  { value: "holiday", label: "공휴일" },
+  { value: "facility", label: "시설공사" }
 ];
 
 function getActiveTab(value?: string): MeetingTab {
@@ -142,6 +157,10 @@ function buildTabHref(tab: MeetingTab, params: MeetingSearchParams, selectedWeek
 }
 
 function getMeetingReportSelect(tab: MeetingTab) {
+  if (tab === "collection") {
+    return "id,department_id,client_id";
+  }
+
   if (tab === "volumes") {
     return "id,department_id,client_id,clients(client_name),weekly_volumes(volume_type,quantity,unit)";
   }
@@ -192,22 +211,19 @@ function makeChartRows(reports: MeetingReportRow[]): VolumeChartRow[] {
   });
 }
 
-function makePriorityItems(reports: MeetingReportRow[]): MeetingPriorityItem[] {
-  return reports
-    .flatMap((report) =>
-      (report.weekly_client_report_items ?? [])
-        .filter((item) => item.importance === "very_high" || item.importance === "high")
-        .map((item) => ({
-          id: item.id,
-          title: item.title?.trim() || item.content.split("\n")[0]?.trim() || "제목 없음",
-          content: item.content,
-          importance: item.importance as MeetingPriorityItem["importance"],
-          period: item.item_period,
-          categoryName: item.work_categories?.category_name ?? "기타",
-          departmentName: report.departments?.department_name ?? "-",
-          clientName: report.clients?.client_name ?? "-"
-        }))
-    )
+function makePriorityItems(rows: PriorityItemQueryRow[]): MeetingPriorityItem[] {
+  return rows
+    .filter((row) => row.weekly_client_reports)
+    .map((row) => ({
+      id: row.id,
+      title: row.title?.trim() || row.content.split("\n")[0]?.trim() || "제목 없음",
+      content: row.content,
+      importance: row.importance,
+      period: row.item_period,
+      categoryName: row.work_categories?.category_name ?? "기타",
+      departmentName: row.weekly_client_reports?.departments?.department_name ?? "-",
+      clientName: row.weekly_client_reports?.clients?.client_name ?? "-"
+    }))
     .sort((left, right) => {
       if (left.importance !== right.importance) {
         return left.importance === "very_high" ? -1 : 1;
@@ -277,6 +293,7 @@ export default async function MeetingMaterialsPage({
   let departments: DepartmentRow[] = [];
   let clients: ClientSummaryRow[] = [];
   let reports: MeetingReportRow[] = [];
+  let priorityItemRows: PriorityItemQueryRow[] = [];
   let submissions: SubmissionRow[] = [];
 
   if (supabase && profile) {
@@ -299,7 +316,7 @@ export default async function MeetingMaterialsPage({
     const needsSubmissions = activeTab === "collection" || activeTab === "holiday" || activeTab === "facility";
     const contentSectionFilter = getDepartmentContentSection(activeTab);
 
-    const [departmentResult, clientResult, reportResult, submissionResult] = await Promise.all([
+    const [departmentResult, clientResult, reportResult, priorityItemResult, submissionResult] = await Promise.all([
       needsDepartments
         ? (() => {
             let query = supabase
@@ -347,6 +364,26 @@ export default async function MeetingMaterialsPage({
             return query;
           })()
         : Promise.resolve({ data: [], error: null }),
+      activeTab === "collection"
+        ? (() => {
+            let query = supabase
+              .from("weekly_client_report_items")
+              .select(
+                "id,item_period,title,content,importance,work_categories(category_name),weekly_client_reports!inner(department_id,client_id,departments(department_name),clients(client_name))"
+              )
+              .in("importance", ["very_high", "high"])
+              .eq("weekly_client_reports.week_start_date", selectedWeek.weekStartDate)
+              .is("weekly_client_reports.deleted_at", null)
+              .limit(MEETING_REPORT_LIMIT);
+            if (departmentFilter) {
+              query = query.eq("weekly_client_reports.department_id", departmentFilter);
+            }
+            if (params.client_id) {
+              query = query.eq("weekly_client_reports.client_id", params.client_id);
+            }
+            return query;
+          })()
+        : Promise.resolve({ data: [] }),
       needsSubmissions
         ? (() => {
             let query = supabase
@@ -376,45 +413,29 @@ export default async function MeetingMaterialsPage({
       weekly_client_report_items: report.weekly_client_report_items ?? [],
       weekly_volumes: report.weekly_volumes ?? []
     }));
+    priorityItemRows = (priorityItemResult.data ?? []) as unknown as PriorityItemQueryRow[];
     submissions = ((submissionResult.data ?? []) as unknown as SubmissionRow[]).map((submission) => ({
       ...submission,
       department_weekly_contents: submission.department_weekly_contents ?? []
     }));
   }
 
-  const chartRows = makeChartRows(reports);
-  const priorityItems = makePriorityItems(reports);
-  const { clientCountMap, writtenClientMap } = countByDepartment(clients, reports);
+  const chartRows = activeTab === "volumes" ? makeChartRows(reports) : [];
+  const priorityItems = activeTab === "collection" ? makePriorityItems(priorityItemRows) : [];
+  const { clientCountMap, writtenClientMap } =
+    activeTab === "collection" ? countByDepartment(clients, reports) : { clientCountMap: new Map(), writtenClientMap: new Map() };
 
   return (
     <div className="space-y-4">
       <div className="rounded-[1.4rem] border border-[#d9e7f7] bg-white/82 p-2 shadow-[0_14px_34px_rgba(16,34,61,0.06)]">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <nav className="grid min-w-0 flex-1 grid-cols-2 gap-1 rounded-[1rem] bg-[#f5f9ff] p-1 lg:grid-cols-5" aria-label="회의자료 화면 탭">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const isSelected = activeTab === tab.value;
-              return (
-                <Link
-                  key={tab.value}
-                  href={buildTabHref(tab.value, params, selectedWeek)}
-                  className={cn(
-                    "relative flex h-10 items-center justify-center gap-2 rounded-xl px-3 text-[13px] font-extrabold tracking-normal transition",
-                    isSelected
-                      ? "bg-white text-[#075be8] shadow-[0_8px_18px_rgba(7,91,232,0.12)]"
-                      : "text-slate-500 hover:bg-white/70 hover:text-[#10223d]"
-                  )}
-                  aria-current={isSelected ? "page" : undefined}
-                >
-                  <Icon className="h-4 w-4" aria-hidden="true" />
-                  {tab.label}
-                  {isSelected ? (
-                    <span className="absolute bottom-1 left-1/2 h-0.5 w-5 -translate-x-1/2 rounded-full bg-[#075be8]" aria-hidden="true" />
-                  ) : null}
-                </Link>
-              );
-            })}
-          </nav>
+          <MeetingMaterialsTabNav
+            activeTab={activeTab}
+            tabs={tabs.map((tab) => ({
+              ...tab,
+              href: buildTabHref(tab.value, params, selectedWeek)
+            }))}
+          />
           <form className="flex shrink-0 flex-wrap items-center justify-end gap-2" method="get">
             <input type="hidden" name="tab" value={activeTab} />
             {params.department_id ? <input type="hidden" name="department_id" value={params.department_id} /> : null}

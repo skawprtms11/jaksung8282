@@ -432,13 +432,16 @@ export function DepartmentSubmissionEditor({
   const canEditSubmission = isEditableSubmissionStatus(effectiveStatus);
   const isSubmittedToDivision = effectiveStatus === "submitted_to_division";
   const isSubmissionBusy = isLoadingSubmission || isSavingSubmission || isCancellingSubmission;
+  const showOverviewAndReview = active !== "facility" && active !== "holiday_work";
+  const facilityContentValue = contents.find((content) => content.section_type === "facility")?.current_week_content ?? "";
+  const holidayWorkContentValue = contents.find((content) => content.section_type === "holiday_work")?.current_week_content ?? "";
   const facilityItems = useMemo(
-    () => parseFacilityConstructionItems(contents.find((content) => content.section_type === "facility")?.current_week_content ?? ""),
-    [contents]
+    () => (active === "facility" || facilityDialogOpen ? parseFacilityConstructionItems(facilityContentValue) : []),
+    [active, facilityContentValue, facilityDialogOpen]
   );
   const holidayWorkItems = useMemo(
-    () => parseHolidayWorkItems(contents.find((content) => content.section_type === "holiday_work")?.current_week_content ?? ""),
-    [contents]
+    () => (active === "holiday_work" || holidayWorkDialogOpen ? parseHolidayWorkItems(holidayWorkContentValue) : []),
+    [active, holidayWorkContentValue, holidayWorkDialogOpen]
   );
 
   useEffect(() => {
@@ -639,11 +642,11 @@ export function DepartmentSubmissionEditor({
         </div>
       </div>
 
-      {active === "facility" || active === "holiday_work" || !children ? null : (
+      {children && showOverviewAndReview ? (
         <div className="rounded-[1.4rem] border border-[#d9e7f7] bg-white/80 p-2 shadow-[0_14px_34px_rgba(16,34,61,0.06)]">
           {children}
         </div>
-      )}
+      ) : null}
 
       <section className="rounded-2xl border border-[#d9e7f7] bg-white/86 p-3 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
         {active === "holiday_work" ? null : (
@@ -695,7 +698,7 @@ export function DepartmentSubmissionEditor({
             }}
           />
         ) : active === "holiday_work" ? (
-        <HolidayWorkTable
+          <HolidayWorkTable
             items={holidayWorkItems}
             disabled={!canEditSubmission || isSubmissionBusy}
             onItemsChange={updateHolidayWorkItems}
@@ -743,7 +746,11 @@ export function DepartmentSubmissionEditor({
       <ActionMessage state={state} />
       <ActionMessage state={cancelState} />
       <ActionMessage state={loadState} />
-      {active === "facility" || active === "holiday_work" ? null : reviewSlot}
+      {reviewSlot && showOverviewAndReview ? (
+        <div>
+          {reviewSlot}
+        </div>
+      ) : null}
       {activeDialog ? (
         <DepartmentContentPeriodDialog
           sectionLabel={sections.find((section) => section.value === activeDialog.section)?.label ?? "공통사항"}

@@ -89,6 +89,7 @@ function HeaderScopeFilter({
   const selectedDepartmentId = searchParams.get("department_id") ?? "";
   const selectedClientId = searchParams.get("client_id") ?? "";
   const isClientWritePage = pathname === "/client-reports";
+  const requiresDepartmentSelection = pathname === "/department-reports";
   const activeMeetingTab = searchParams.get("tab") ?? "collection";
   const restrictMeetingMaterialsAll =
     pathname === "/meeting-materials" && activeMeetingTab === "materials" && !selectedClientId;
@@ -185,7 +186,7 @@ function HeaderScopeFilter({
         >
           {isLoadingOptions ? <option value="">부서 불러오는 중</option> : null}
           <option value="" disabled={restrictMeetingMaterialsAll}>
-            전체 부서
+            {requiresDepartmentSelection ? "부서 선택" : "전체 부서"}
           </option>
           {activeOptions.departments.map((department) => (
             <option key={department.id} value={department.id}>
