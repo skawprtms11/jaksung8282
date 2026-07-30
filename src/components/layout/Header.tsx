@@ -52,6 +52,7 @@ const routeMeta: Record<string, { title: string; description: string }> = {
 
 const filteredRoutes = new Set(["/meeting-materials", "/department-reports", "/client-reports"]);
 const emptyFilterOptions: HeaderFilterOptions = { departments: [], clients: [], assignedClientIds: [] };
+const filterCacheTtlMs = 5 * 60 * 1000;
 
 function hasFilterOptions(options: HeaderFilterOptions) {
   return options.departments.length > 0 || options.clients.length > 0;
@@ -63,6 +64,64 @@ function sortHeaderFilterOptions(options: HeaderFilterOptions): HeaderFilterOpti
     clients: [...options.clients].sort((left, right) => left.client_name.localeCompare(right.client_name, "ko")),
     assignedClientIds: options.assignedClientIds
   };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isCachedFilterOptions(value: unknown): value is HeaderFilterOptions {
+  if (!isPlainObject(value) || !Array.isArray(value.departments) || !Array.isArray(value.clients) || !Array.isArray(value.assignedClientIds)) {
+    return false;
+  }
+
+  return (
+    value.departments.every(
+      (department) =>
+        isPlainObject(department) &&
+        typeof department.id === "string" &&
+        typeof department.department_name === "string"
+    ) &&
+    value.clients.every(
+      (client) =>
+        isPlainObject(client) &&
+        typeof client.id === "string" &&
+        typeof client.client_name === "string" &&
+        typeof client.department_id === "string"
+    ) &&
+    value.assignedClientIds.every((clientId) => typeof clientId === "string")
+  );
+}
+
+function readCachedFilterOptions(profileId: string) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const rawValue = window.sessionStorage.getItem(`tpl-header-filters:${profileId}`);
+    if (!rawValue) {
+      return null;
+    }
+    const parsed = JSON.parse(rawValue) as { savedAt?: unknown; options?: unknown };
+    if (typeof parsed.savedAt !== "number" || Date.now() - parsed.savedAt > filterCacheTtlMs) {
+      return null;
+    }
+    return isCachedFilterOptions(parsed.options) ? sortHeaderFilterOptions(parsed.options) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedFilterOptions(profileId: string, options: HeaderFilterOptions) {
+  try {
+    window.sessionStorage.setItem(
+      `tpl-header-filters:${profileId}`,
+      JSON.stringify({ savedAt: Date.now(), options })
+    );
+  } catch {
+    // Browser storage can be unavailable in private or restricted contexts.
+  }
 }
 
 function getRouteMeta(pathname: string) {
@@ -90,10 +149,13 @@ function HeaderScopeFilter({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
-  const [loadedOptions, setLoadedOptions] = useState<HeaderFilterOptions>(() =>
-    hasFilterOptions(options) ? sortHeaderFilterOptions(options) : emptyFilterOptions
-  );
-  const [isLoadingOptions, setIsLoadingOptions] = useState(() => !hasFilterOptions(options));
+  const [loadedOptions, setLoadedOptions] = useState<HeaderFilterOptions>(() => {
+    if (hasFilterOptions(options)) {
+      return sortHeaderFilterOptions(options);
+    }
+    return readCachedFilterOptions(profile.id) ?? emptyFilterOptions;
+  });
+  const [isLoadingOptions, setIsLoadingOptions] = useState(() => !hasFilterOptions(options) && !readCachedFilterOptions(profile.id));
   const hasLoadedOptions = hasFilterOptions(loadedOptions);
   const activeOptions = hasLoadedOptions ? loadedOptions : emptyFilterOptions;
   const selectedDepartmentId = searchParams.get("department_id") ?? "";
@@ -164,7 +226,9 @@ function HeaderScopeFilter({
         return response.json() as Promise<HeaderFilterOptions>;
       })
       .then((nextOptions) => {
-        setLoadedOptions(sortHeaderFilterOptions(nextOptions));
+        const sortedOptions = sortHeaderFilterOptions(nextOptions);
+        writeCachedFilterOptions(profile.id, sortedOptions);
+        setLoadedOptions(sortedOptions);
       })
       .catch(() => {
         if (!controller.signal.aborted) {

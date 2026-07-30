@@ -13,6 +13,7 @@ type NoticeRow = {
   is_pinned: boolean;
   view_count: number;
   comment_count: number;
+  created_by: string | null;
   created_at: string;
 };
 
@@ -52,7 +53,7 @@ export default async function NoticesPage({
   if (supabase) {
     let query = supabase
       .from("notices")
-      .select("id,notice_type,title,content,is_pinned,view_count,created_at")
+      .select("id,notice_type,title,content,is_pinned,view_count,created_by,created_at")
       .is("deleted_at", null)
       .eq("is_active", true)
       .order("is_pinned", { ascending: false })
@@ -66,7 +67,7 @@ export default async function NoticesPage({
     }
     const importantNoticeQuery = supabase
       .from("notices")
-      .select("id,notice_type,title,content,is_pinned,view_count,created_at")
+      .select("id,notice_type,title,content,is_pinned,view_count,created_by,created_at")
       .is("deleted_at", null)
       .eq("is_active", true)
       .eq("is_pinned", true)

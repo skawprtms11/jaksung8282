@@ -3,11 +3,51 @@ import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { isAdmin } from "@/lib/auth/permissions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { HeaderFilterOptions } from "@/components/layout/Header";
+import type { Json } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 
 type ClientLinkRow = { department_id: string; clients: { id: string; client_name: string } | null };
 type ClientAssignmentRow = { client_id: string };
+
+const cacheHeaders = {
+  "Cache-Control": "private, max-age=60, stale-while-revalidate=300"
+};
+
+function isRecord(value: Json | undefined): value is Record<string, Json | undefined> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readString(value: Json | undefined) {
+  return typeof value === "string" ? value : "";
+}
+
+function normalizeHeaderFilterOptions(value: Json | null): HeaderFilterOptions | null {
+  const source = value ?? undefined;
+  if (!isRecord(source)) {
+    return null;
+  }
+
+  const departmentsValue = source.departments;
+  const clientsValue = source.clients;
+  const assignedClientIdsValue = source.assignedClientIds;
+  if (!Array.isArray(departmentsValue) || !Array.isArray(clientsValue) || !Array.isArray(assignedClientIdsValue)) {
+    return null;
+  }
+
+  return {
+    departments: departmentsValue.filter(isRecord).map((department) => ({
+      id: readString(department.id),
+      department_name: readString(department.department_name)
+    })).filter((department) => department.id && department.department_name),
+    clients: clientsValue.filter(isRecord).map((client) => ({
+      id: readString(client.id),
+      client_name: readString(client.client_name),
+      department_id: readString(client.department_id)
+    })).filter((client) => client.id && client.client_name && client.department_id),
+    assignedClientIds: assignedClientIdsValue.map(readString).filter(Boolean)
+  };
+}
 
 export async function GET() {
   const { profile } = await getCurrentUserProfile();
@@ -20,7 +60,15 @@ export async function GET() {
 
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
-    return NextResponse.json({ departments: [], clients: [], assignedClientIds: [] } satisfies HeaderFilterOptions);
+    return NextResponse.json({ departments: [], clients: [], assignedClientIds: [] } satisfies HeaderFilterOptions, {
+      headers: cacheHeaders
+    });
+  }
+
+  const { data: rpcData, error: rpcError } = await supabase.rpc("get_header_filter_options");
+  const rpcOptions = rpcError ? null : normalizeHeaderFilterOptions(rpcData);
+  if (rpcOptions) {
+    return NextResponse.json(rpcOptions, { headers: cacheHeaders });
   }
 
   const departmentFilter = isAdmin(profile) ? undefined : profile.department_id;
@@ -75,5 +123,5 @@ export async function GET() {
     assignedClientIds: ((assignmentResult.data ?? []) as ClientAssignmentRow[]).map((assignment) => assignment.client_id)
   };
 
-  return NextResponse.json(response);
+  return NextResponse.json(response, { headers: cacheHeaders });
 }

@@ -1,4 +1,8 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   Bell,
   Building2,
@@ -41,11 +45,24 @@ export function Sidebar({
   isHidden: boolean;
   onToggleHidden: () => void;
 }) {
-  const menus = [
-    ...baseMenus,
-    ...(canViewDepartmentMaster(profile) ? [departmentMasterMenu] : []),
-    ...(canManageMasters(profile) ? adminMenus : [])
-  ];
+  const router = useRouter();
+  const menus = useMemo(
+    () => [
+      ...baseMenus,
+      ...(canViewDepartmentMaster(profile) ? [departmentMasterMenu] : []),
+      ...(canManageMasters(profile) ? adminMenus : [])
+    ],
+    [profile]
+  );
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      menus.forEach((menu) => router.prefetch(menu.href));
+    }, 150);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [menus, router]);
+
   return (
     <aside
       className={`fixed inset-y-0 left-0 z-20 hidden w-72 p-4 transition-transform duration-300 ease-out lg:block ${

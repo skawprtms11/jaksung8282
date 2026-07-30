@@ -51,26 +51,69 @@ export async function saveNoticeAction(_: ActionResult | null, formData: FormDat
 
 export async function deleteNoticeAction(_: ActionResult | null, formData: FormData): Promise<ActionResult> {
   const { profile } = await getCurrentUserProfile();
-  if (!isAdmin(profile)) {
-    return { ok: false, message: "공지사항 삭제는 관리자만 가능합니다." };
-  }
   if (!profile) {
     return { ok: false, message: "로그인이 필요합니다." };
   }
-  const id = String(formData.get("id") ?? "");
+  if (!profile.is_active) {
+    return { ok: false, message: "비활성 사용자는 게시글을 삭제할 수 없습니다." };
+  }
+  const noticeIds = Array.from(new Set(formData.getAll("id").map((value) => String(value)).filter(Boolean)));
+  if (noticeIds.length === 0) {
+    return { ok: false, message: "삭제할 게시글을 선택하세요." };
+  }
+  const parsedIds = noticeIds.map((noticeId) => idSchema.safeParse(noticeId));
+  if (parsedIds.some((result) => !result.success)) {
+    return { ok: false, message: "삭제할 게시글을 확인하세요." };
+  }
+  const ids = parsedIds.map((result) => (result.success ? result.data : ""));
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
     return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요." };
   }
-  const { error } = await supabase
-    .from("notices")
-    .update({ deleted_at: new Date().toISOString(), deleted_by: profile.id, is_active: false })
-    .eq("id", id);
-  if (error) {
-    return { ok: false, message: safeErrorMessage(error.message) };
+
+  const { error: rpcError } = await supabase.rpc("soft_delete_notices_atomic", { p_notice_ids: ids });
+  if (rpcError) {
+    if (!rpcError.message.includes("soft_delete_notices_atomic") && !rpcError.message.includes("schema cache")) {
+      return { ok: false, message: safeErrorMessage(rpcError.message) };
+    }
+
+    const { data: targets, error: targetError } = await supabase
+      .from("notices")
+      .select("id,created_by")
+      .in("id", ids)
+      .is("deleted_at", null);
+    if (targetError) {
+      return { ok: false, message: safeErrorMessage(targetError.message) };
+    }
+    if ((targets ?? []).length !== ids.length) {
+      return { ok: false, message: "선택한 게시글 중 삭제할 수 없는 게시글이 있습니다." };
+    }
+    const unauthorizedTarget = (targets ?? []).find((target) => !isAdmin(profile) && target.created_by !== profile.id);
+    if (unauthorizedTarget) {
+      return { ok: false, message: "본인이 작성한 게시글만 삭제할 수 있습니다." };
+    }
+
+    try {
+      const adminClient = createSupabaseAdminClient();
+      const { error } = await adminClient
+        .from("notices")
+        .update({
+          deleted_at: new Date().toISOString(),
+          deleted_by: profile.id,
+          is_active: false,
+          updated_by: profile.id
+        })
+        .in("id", ids)
+        .is("deleted_at", null);
+      if (error) {
+        return { ok: false, message: safeErrorMessage(error.message) };
+      }
+    } catch {
+      return { ok: false, message: "Supabase SQL 028번을 실행하거나 관리자 환경변수를 확인하세요." };
+    }
   }
   revalidatePath("/notices");
-  return { ok: true, message: "공지사항을 삭제했습니다." };
+  return { ok: true, message: "게시글을 삭제했습니다." };
 }
 
 export async function incrementNoticeView(id: string) {

@@ -505,6 +505,16 @@ export type Database = {
         Args: { notice_id: string };
         Returns: void;
       };
+      get_header_filter_options: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      soft_delete_notices_atomic: {
+        Args: {
+          p_notice_ids: string[];
+        };
+        Returns: Json;
+      };
     } extends infer F
       ? { [K in keyof F]: F[K] extends { Args: object; Returns: unknown } ? NormalizeFunction<F[K]> : never }
       : never;

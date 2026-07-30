@@ -20,6 +20,7 @@ import {
   X
 } from "lucide-react";
 import {
+  deleteNoticeAction,
   deleteNoticeCommentAction,
   incrementNoticeView,
   saveNoticeAction,
@@ -45,6 +46,7 @@ type NoticeBoardRow = {
   is_pinned: boolean;
   view_count: number;
   comment_count: number;
+  created_by: string | null;
   created_at: string;
 };
 
@@ -176,6 +178,9 @@ export function NoticeBoard({
   const [visibleNotices, setVisibleNotices] = useState(notices);
   const [visibleImportantNotices, setVisibleImportantNotices] = useState(importantNotices);
   const [visibleComments, setVisibleComments] = useState(comments);
+  const [selectedNoticeIds, setSelectedNoticeIds] = useState<string[]>([]);
+  const [deleteState, setDeleteState] = useState<Awaited<ReturnType<typeof deleteNoticeAction>> | null>(null);
+  const [isDeleting, startDeleteTransition] = useTransition();
   const [saveState, saveAction, isNoticeSaving] = useActionState(
     async (previousState: Awaited<ReturnType<typeof saveNoticeAction>> | null, formData: FormData) => {
       const result = await saveNoticeAction(previousState, formData);
@@ -187,6 +192,12 @@ export function NoticeBoard({
     },
     null
   );
+  const selectedNoticeIdSet = useMemo(() => new Set(selectedNoticeIds), [selectedNoticeIds]);
+  const selectedDeletableCount = selectedNoticeIds.length;
+
+  function canDeleteNotice(notice: NoticeBoardRow) {
+    return Boolean(currentUser && (currentUser.app_role === "admin" || notice.created_by === currentUser.id));
+  }
 
   function openNoticeDetail(notice: NoticeBoardRow) {
     setDetailNotice({ ...notice, view_count: notice.view_count + 1 });
@@ -219,6 +230,51 @@ export function NoticeBoard({
   function removeVisibleComment(comment: NoticeCommentRow) {
     setVisibleComments((rows) => rows.filter((row) => row.id !== comment.id));
     updateNoticeCommentCount(comment.notice_id, -1);
+  }
+
+  function toggleNoticeSelection(noticeId: string, checked: boolean) {
+    setDeleteState(null);
+    setSelectedNoticeIds((ids) => {
+      if (checked) {
+        return ids.includes(noticeId) ? ids : [...ids, noticeId];
+      }
+      return ids.filter((id) => id !== noticeId);
+    });
+  }
+
+  function deleteSelectedNotices() {
+    if (selectedNoticeIds.length === 0) {
+      setDeleteState({ ok: false, message: "삭제할 게시글을 선택하세요." });
+      return;
+    }
+    if (!window.confirm(`선택한 게시글 ${selectedNoticeIds.length}건을 삭제하시겠습니까?`)) {
+      return;
+    }
+
+    const idsToDelete = selectedNoticeIds;
+    setDeleteState(null);
+    startDeleteTransition(() => {
+      const formData = new FormData();
+      idsToDelete.forEach((id) => formData.append("id", id));
+      void deleteNoticeAction(null, formData)
+        .then((result) => {
+          setDeleteState(result);
+          if (!result.ok) {
+            return;
+          }
+          setVisibleNotices((rows) => rows.filter((row) => !idsToDelete.includes(row.id)));
+          setVisibleImportantNotices((rows) => rows.filter((row) => !idsToDelete.includes(row.id)));
+          setSelectedNoticeIds([]);
+          if (detailNotice && idsToDelete.includes(detailNotice.id)) {
+            setDetailNotice(null);
+          }
+          if (collectionNotice && idsToDelete.includes(collectionNotice.id)) {
+            setCollectionNotice(null);
+          }
+          router.refresh();
+        })
+        .catch(() => setDeleteState({ ok: false, message: "게시글을 삭제하지 못했습니다." }));
+    });
   }
 
   function updateNoticeCollectionStatus(noticeId: string, status: NoticeCollectionStatus) {
@@ -285,8 +341,21 @@ export function NoticeBoard({
               등록
             </button>
           ) : null}
+          {currentUser ? (
+            <button
+              type="button"
+              onClick={deleteSelectedNotices}
+              disabled={selectedDeletableCount === 0 || isDeleting}
+              className="tool-button min-h-9 py-1.5 text-rose-600 disabled:cursor-not-allowed disabled:opacity-45"
+              title={selectedDeletableCount === 0 ? "삭제할 게시글을 선택하세요." : "선택한 게시글 삭제"}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              {isDeleting ? "삭제 중" : "삭제"}
+            </button>
+          ) : null}
         </div>
       </div>
+      <ActionMessage state={deleteState} />
 
       {visibleImportantNotices.length > 0 ? (
         <div className="mb-3 rounded-2xl border border-blue-100 bg-[#f5f9ff] p-3">
@@ -320,6 +389,7 @@ export function NoticeBoard({
             <col className="w-[16%]" />
             <col className="w-[6%]" />
             <col className="w-[6%]" />
+            <col className="w-[6%]" />
           </colgroup>
           <thead>
             <tr>
@@ -330,12 +400,13 @@ export function NoticeBoard({
               <th className="px-3 py-3">비고</th>
               <th className="px-3 py-3">조회수</th>
               <th className="px-3 py-3">댓글</th>
+              <th className="px-3 py-3 text-center">선택</th>
             </tr>
           </thead>
           <tbody>
             {visibleNotices.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-sm font-bold text-slate-400">
+                <td colSpan={8} className="px-4 py-10 text-center text-sm font-bold text-slate-400">
                   등록된 게시글이 없습니다.
                 </td>
               </tr>
@@ -365,6 +436,17 @@ export function NoticeBoard({
                         <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
                         {notice.comment_count}
                       </span>
+                    </td>
+                    <td className="px-3 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedNoticeIdSet.has(notice.id)}
+                        onChange={(event) => toggleNoticeSelection(notice.id, event.target.checked)}
+                        disabled={!canDeleteNotice(notice) || isDeleting}
+                        className="h-4 w-4 accent-[#075be8] disabled:cursor-not-allowed disabled:opacity-35"
+                        aria-label={`${notice.title} 삭제 선택`}
+                        title={canDeleteNotice(notice) ? "삭제 선택" : "작성자만 삭제할 수 있습니다."}
+                      />
                     </td>
                   </tr>
                 );
