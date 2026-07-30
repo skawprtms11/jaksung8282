@@ -1,10 +1,18 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useActionState, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Building2, CalendarDays, CheckCircle2, ClipboardList, Hammer, Pencil, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import { createPortal } from "react-dom";
-import { cancelDepartmentSubmissionAction, loadDepartmentSubmissionAction, saveDepartmentSubmissionAction } from "@/actions/reports";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  cancelDepartmentSubmissionAction,
+  deleteDepartmentVacancyRecordAction,
+  loadDepartmentSubmissionAction,
+  loadDepartmentVacancyDataAction,
+  saveDepartmentSubmissionAction,
+  saveDepartmentVacancyRecordAction
+} from "@/actions/reports";
 import { ActionMessage } from "@/components/common/ActionMessage";
 import { cn } from "@/lib/utils/cn";
 import { getCurrentWeekOption, type WeekOption } from "@/lib/dates/week";
@@ -13,6 +21,7 @@ import type { DepartmentSubmissionStatus, Importance } from "@/types/enums";
 
 type Department = { id: string; department_name: string };
 type Category = { id: string; category_name: string; icon_key: string };
+type CenterOption = { id: string; center_name: string };
 type HolidayClientOption = { id: string; client_name: string };
 type HolidayWorkerOption = { id: string; full_name: string };
 type SectionValue = (typeof sections)[number]["value"];
@@ -73,6 +82,33 @@ type HolidayWorkItem = {
   is_billed: boolean;
   note: string;
 };
+export type DepartmentVacancyRecordValue = {
+  id: string;
+  department_id: string;
+  center_master_id: string;
+  center_name: string;
+  week_start_date: string;
+  week_end_date: string;
+  report_year: number;
+  report_month: number;
+  week_of_month: number;
+  operating_area: number;
+  simple_storage_area: number;
+  vacancy_area: number;
+  total_area: number;
+  simple_storage_note: string | null;
+  vacancy_note: string | null;
+  updated_at: string;
+};
+export type DepartmentVacancyTrendPointValue = {
+  center_master_id: string;
+  center_name: string;
+  week_start_date: string;
+  label: string;
+  simple_storage_area: number;
+  vacancy_area: number;
+};
+type VacancyDialogState = { mode: "create" | "edit"; item?: DepartmentVacancyRecordValue } | null;
 const sections = [
   { value: "common", label: "공통사항", icon: ClipboardList },
   { value: "facility", label: "시설공사", icon: Hammer },
@@ -374,6 +410,9 @@ export function DepartmentSubmissionEditor({
   reviewSlot,
   holidayClientOptions = [],
   holidayWorkerOptions = [],
+  centerOptions = [],
+  initialVacancyRecords = [],
+  initialVacancyTrend = [],
   initialSubmission,
   initialLookupDepartmentId,
   initialLookupWeekStartDate,
@@ -387,6 +426,9 @@ export function DepartmentSubmissionEditor({
   reviewSlot?: ReactNode;
   holidayClientOptions?: HolidayClientOption[];
   holidayWorkerOptions?: HolidayWorkerOption[];
+  centerOptions?: CenterOption[];
+  initialVacancyRecords?: DepartmentVacancyRecordValue[];
+  initialVacancyTrend?: DepartmentVacancyTrendPointValue[];
   initialSubmission?: DepartmentSubmissionEditorInitialSubmission | null;
   initialLookupDepartmentId?: string | null;
   initialLookupWeekStartDate?: string;
@@ -398,10 +440,16 @@ export function DepartmentSubmissionEditor({
   const [facilityEditingItem, setFacilityEditingItem] = useState<FacilityConstructionItem | null>(null);
   const [holidayWorkDialogOpen, setHolidayWorkDialogOpen] = useState(false);
   const [holidayWorkEditingItem, setHolidayWorkEditingItem] = useState<HolidayWorkItem | null>(null);
+  const [vacancyDialog, setVacancyDialog] = useState<VacancyDialogState>(null);
   const firstCategoryId = categories[0]?.id ?? "";
   const currentWeek = getCurrentWeekOption();
   const departmentId = defaultDepartmentId ?? (requireExplicitDepartmentSelection ? "" : departments[0]?.id ?? "");
+  const [selectedWeekOption, setSelectedWeekOption] = useState<WeekOption>(currentWeek);
   const [weekStartDate, setWeekStartDate] = useState(currentWeek.weekStartDate);
+  const [vacancyRecords, setVacancyRecords] = useState<DepartmentVacancyRecordValue[]>(initialVacancyRecords);
+  const [vacancyTrend, setVacancyTrend] = useState<DepartmentVacancyTrendPointValue[]>(initialVacancyTrend);
+  const [vacancyState, setVacancyState] = useState<{ ok: boolean; message: string } | null>(null);
+  const [isLoadingVacancy, startVacancyTransition] = useTransition();
   const [submissionId, setSubmissionId] = useState(initialSubmission?.id ?? "");
   const [loadedStatus, setLoadedStatus] = useState<DepartmentSubmissionStatus | null>(initialSubmission?.status ?? null);
   const [loadedFinalizedAt, setLoadedFinalizedAt] = useState<string | null>(initialSubmission?.finalized_at ?? null);
@@ -451,7 +499,7 @@ export function DepartmentSubmissionEditor({
   const isSubmittedToDivision = effectiveStatus === "submitted_to_division";
   const isCancelWindowExpired = isSubmittedToDivision && isPastConfirmationCancelWindow(loadedFinalizedAt);
   const isSubmissionBusy = isLoadingSubmission || isSavingSubmission || isCancellingSubmission;
-  const showOverviewAndReview = active !== "facility" && active !== "holiday_work";
+  const showOverviewAndReview = active === "common";
   const facilityContentValue = contents.find((content) => content.section_type === "facility")?.current_week_content ?? "";
   const holidayWorkContentValue = contents.find((content) => content.section_type === "holiday_work")?.current_week_content ?? "";
   const facilityItems = useMemo(
@@ -461,6 +509,38 @@ export function DepartmentSubmissionEditor({
   const holidayWorkItems = useMemo(
     () => (active === "holiday_work" || holidayWorkDialogOpen ? parseHolidayWorkItems(holidayWorkContentValue) : []),
     [active, holidayWorkContentValue, holidayWorkDialogOpen]
+  );
+
+  const refreshVacancyData = useCallback(
+    (successMessage?: string) => {
+      if (!departmentId) {
+        return;
+      }
+      startVacancyTransition(() => {
+        loadDepartmentVacancyDataAction({
+          department_id: departmentId,
+          report_year: selectedWeekOption.year,
+          report_month: selectedWeekOption.month
+        })
+          .then((result) => {
+            if (!result.ok) {
+              setVacancyRecords([]);
+              setVacancyTrend([]);
+              setVacancyState({ ok: false, message: result.message ?? "공실현황을 불러오지 못했습니다." });
+              return;
+            }
+            setVacancyRecords(result.records);
+            setVacancyTrend(result.trend);
+            setVacancyState(successMessage ? { ok: true, message: successMessage } : null);
+          })
+          .catch(() => {
+            setVacancyRecords([]);
+            setVacancyTrend([]);
+            setVacancyState({ ok: false, message: "공실현황을 불러오지 못했습니다." });
+          });
+      });
+    },
+    [departmentId, selectedWeekOption.month, selectedWeekOption.year]
   );
 
   useEffect(() => {
@@ -524,7 +604,15 @@ export function DepartmentSubmissionEditor({
     };
   }, [departmentId, firstCategoryId, initialLookupDepartmentId, initialLookupWeekStartDate, weekStartDate]);
 
+  useEffect(() => {
+    if (!departmentId || active !== "vacancy") {
+      return;
+    }
+    refreshVacancyData();
+  }, [active, departmentId, refreshVacancyData]);
+
   function handleWeekSelectionChange(week: WeekOption) {
+    setSelectedWeekOption(week);
     setWeekStartDate((current) => {
       if (current !== week.weekStartDate) {
         setSubmissionId("");
@@ -678,7 +766,7 @@ export function DepartmentSubmissionEditor({
       ) : null}
 
       <section className="rounded-2xl border border-[#d9e7f7] bg-white/86 p-3 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
-        {active === "holiday_work" ? null : (
+        {active === "holiday_work" || active === "vacancy" ? null : (
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="section-doodle-title">{active === "common" ? "부서 공통사항" : activeSectionLabel}</h2>
             {active === "facility" ? (
@@ -740,6 +828,19 @@ export function DepartmentSubmissionEditor({
               setHolidayWorkDialogOpen(true);
             }}
           />
+        ) : active === "vacancy" ? (
+          <VacancyStatusBoard
+            centerOptions={centerOptions}
+            selectedWeek={selectedWeekOption}
+            records={vacancyRecords}
+            trend={vacancyTrend}
+            disabled={!canEditSubmission || isSubmissionBusy}
+            isLoading={isLoadingVacancy}
+            onCreate={() => setVacancyDialog({ mode: "create" })}
+            onEdit={(item) => setVacancyDialog({ mode: "edit", item })}
+            onRecordsChange={setVacancyRecords}
+            onRefresh={refreshVacancyData}
+          />
         ) : activeContent ? (
           <div className="grid gap-3 md:grid-cols-2">
             <PreviewBlock
@@ -775,6 +876,7 @@ export function DepartmentSubmissionEditor({
       <ActionMessage state={state} />
       <ActionMessage state={cancelState} />
       <ActionMessage state={loadState} />
+      <ActionMessage state={vacancyState} />
       {reviewSlot && showOverviewAndReview ? (
         <div>
           {reviewSlot}
@@ -833,7 +935,598 @@ export function DepartmentSubmissionEditor({
           }}
         />
       ) : null}
+      {vacancyDialog ? (
+        <VacancyRecordDialog
+          key={vacancyDialog.item?.id ?? "new-vacancy"}
+          departmentId={departmentId}
+          selectedWeek={selectedWeekOption}
+          centerOptions={centerOptions}
+          initialItem={vacancyDialog.item}
+          onClose={() => setVacancyDialog(null)}
+          onSave={(item) => {
+            setVacancyRecords((current) => {
+              const exists = current.some((row) => row.id === item.id);
+              const nextRows = exists ? current.map((row) => (row.id === item.id ? item : row)) : [...current, item];
+              return nextRows.sort((left, right) => left.week_of_month - right.week_of_month || left.center_name.localeCompare(right.center_name, "ko"));
+            });
+            setVacancyDialog(null);
+            setVacancyState({ ok: true, message: "공실현황을 저장했습니다." });
+            refreshVacancyData("공실현황을 저장했습니다.");
+          }}
+        />
+      ) : null}
     </form>
+  );
+}
+
+function formatArea(value: number) {
+  return Number(value || 0).toLocaleString("ko-KR", { maximumFractionDigits: 2 });
+}
+
+function toVacancyFormValue(value: number) {
+  return Number.isFinite(value) ? String(value) : "0";
+}
+
+function formatPercent(value: number) {
+  return `${Number(value || 0).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}%`;
+}
+
+function VacancyStatusBoard({
+  centerOptions,
+  selectedWeek,
+  records,
+  trend,
+  disabled,
+  isLoading,
+  onCreate,
+  onEdit,
+  onRecordsChange,
+  onRefresh
+}: {
+  centerOptions: CenterOption[];
+  selectedWeek: WeekOption;
+  records: DepartmentVacancyRecordValue[];
+  trend: DepartmentVacancyTrendPointValue[];
+  disabled?: boolean;
+  isLoading?: boolean;
+  onCreate: () => void;
+  onEdit: (item: DepartmentVacancyRecordValue) => void;
+  onRecordsChange: (items: DepartmentVacancyRecordValue[]) => void;
+  onRefresh: (successMessage?: string) => void;
+}) {
+  const [showSimpleStorage, setShowSimpleStorage] = useState(true);
+  const [showVacancy, setShowVacancy] = useState(true);
+  const [selectedCenterIds, setSelectedCenterIds] = useState<string[] | null>(null);
+  const [message, setMessage] = useState("");
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const registeredCenters = useMemo(() => {
+    const centerMap = new Map<string, string>();
+    records.forEach((record) => {
+      centerMap.set(record.center_master_id, record.center_name);
+    });
+    return Array.from(centerMap.entries())
+      .map(([id, centerName]) => ({ id, centerName }))
+      .sort((left, right) => left.centerName.localeCompare(right.centerName, "ko"));
+  }, [records]);
+  const allRegisteredCenterIds = useMemo(() => registeredCenters.map((center) => center.id), [registeredCenters]);
+  const effectiveSelectedCenterIds = selectedCenterIds ?? allRegisteredCenterIds;
+  const allCentersSelected = registeredCenters.length > 0 && effectiveSelectedCenterIds.length === registeredCenters.length;
+  const filteredRecords = useMemo(() => {
+    if (registeredCenters.length === 0) {
+      return records;
+    }
+    const selectedSet = new Set(effectiveSelectedCenterIds);
+    return records.filter((record) => selectedSet.has(record.center_master_id));
+  }, [effectiveSelectedCenterIds, records, registeredCenters.length]);
+  const trendData = useMemo(() => {
+    const selectedSet = new Set(effectiveSelectedCenterIds);
+    const weeklyPointMap = new Map<string, DepartmentVacancyTrendPointValue>();
+    trend
+      .filter((point) => selectedSet.size === 0 || selectedSet.has(point.center_master_id))
+      .forEach((point) => {
+        const current = weeklyPointMap.get(point.week_start_date) ?? {
+          center_master_id: "selected",
+          center_name: "선택 센터",
+          week_start_date: point.week_start_date,
+          label: point.label,
+          simple_storage_area: 0,
+          vacancy_area: 0
+        };
+        current.simple_storage_area += point.simple_storage_area;
+        current.vacancy_area += point.vacancy_area;
+        weeklyPointMap.set(point.week_start_date, current);
+      });
+    const visibleWeekStartDates = new Set(filteredRecords.map((record) => record.week_start_date));
+    visibleWeekStartDates.forEach((weekStartDate) => {
+      weeklyPointMap.set(weekStartDate, {
+        center_master_id: "selected",
+        center_name: "선택 센터",
+        week_start_date: weekStartDate,
+        label: weekStartDate.slice(5).replace("-", "/"),
+        simple_storage_area: 0,
+        vacancy_area: 0
+      });
+    });
+    filteredRecords.forEach((record) => {
+      const current = weeklyPointMap.get(record.week_start_date) ?? {
+        center_master_id: "selected",
+        center_name: "선택 센터",
+        week_start_date: record.week_start_date,
+        label: record.week_start_date.slice(5).replace("-", "/"),
+        simple_storage_area: 0,
+        vacancy_area: 0
+      };
+      current.simple_storage_area += record.simple_storage_area;
+      current.vacancy_area += record.vacancy_area;
+      weeklyPointMap.set(record.week_start_date, current);
+    });
+    const monthlyMap = Array.from(weeklyPointMap.values()).reduce((map, point) => {
+      const monthKey = point.week_start_date.slice(0, 7);
+      const current = map.get(monthKey) ?? {
+        monthKey,
+        label: `${monthKey.slice(2, 4)}/${monthKey.slice(5, 7)}`,
+        simple_storage_area: 0,
+        vacancy_area: 0,
+        count: 0
+      };
+      current.simple_storage_area += point.simple_storage_area;
+      current.vacancy_area += point.vacancy_area;
+      current.count += 1;
+      map.set(monthKey, current);
+      return map;
+    }, new Map<string, { monthKey: string; label: string; simple_storage_area: number; vacancy_area: number; count: number }>());
+    return Array.from(monthlyMap.values())
+      .map((point) => ({
+        monthKey: point.monthKey,
+        label: point.label,
+        simple_storage_area: point.count > 0 ? point.simple_storage_area / point.count : 0,
+        vacancy_area: point.count > 0 ? point.vacancy_area / point.count : 0
+      }))
+      .sort((left, right) => left.monthKey.localeCompare(right.monthKey));
+  }, [effectiveSelectedCenterIds, filteredRecords, trend]);
+  const vacancySummaryRows = useMemo(() => {
+    const valuesByWeek = Array.from({ length: 5 }, (_, index) => {
+      const weekOfMonth = index + 1;
+      const weekRecords = filteredRecords.filter((record) => record.week_of_month === weekOfMonth);
+      return {
+        weekOfMonth,
+        total_area: weekRecords.reduce((sum, record) => sum + record.total_area, 0),
+        operating_area: weekRecords.reduce((sum, record) => sum + record.operating_area, 0),
+        simple_storage_area: weekRecords.reduce((sum, record) => sum + record.simple_storage_area, 0),
+        vacancy_area: weekRecords.reduce((sum, record) => sum + record.vacancy_area, 0),
+        hasData: weekRecords.length > 0
+      };
+    });
+    const dataWeeks = valuesByWeek.filter((week) => week.hasData);
+    const average = (key: "total_area" | "operating_area" | "simple_storage_area" | "vacancy_area") =>
+      dataWeeks.length > 0 ? dataWeeks.reduce((sum, week) => sum + week[key], 0) / dataWeeks.length : 0;
+    const averageTotalArea = average("total_area");
+    const averageVacancyArea = average("vacancy_area");
+    const makeRow = (label: string, key: "total_area" | "operating_area" | "simple_storage_area" | "vacancy_area") => ({
+      label,
+      values: valuesByWeek.map((week) => formatArea(week[key])),
+      average: formatArea(average(key))
+    });
+    return [
+      makeRow("전체면적", "total_area"),
+      makeRow("운영면적", "operating_area"),
+      makeRow("단순보관", "simple_storage_area"),
+      makeRow("공실", "vacancy_area"),
+      {
+        label: "공실율%",
+        values: valuesByWeek.map((week) => formatPercent(week.total_area > 0 ? (week.vacancy_area / week.total_area) * 100 : 0)),
+        average: formatPercent(averageTotalArea > 0 ? (averageVacancyArea / averageTotalArea) * 100 : 0)
+      }
+    ];
+  }, [filteredRecords]);
+
+  const toggleCenter = (centerId: string) => {
+    setSelectedCenterIds((current) => {
+      const baseIds = current ?? allRegisteredCenterIds;
+      if (baseIds.includes(centerId)) {
+        return baseIds.filter((id) => id !== centerId);
+      }
+      return [...baseIds, centerId];
+    });
+  };
+
+  const deleteRecord = (record: DepartmentVacancyRecordValue) => {
+    if (disabled || isPending) {
+      return;
+    }
+    if (!window.confirm(`${record.center_name} ${record.week_of_month}주차 공실현황을 삭제할까요?`)) {
+      return;
+    }
+    setMessage("");
+    setPendingDeleteId(record.id);
+    const formData = new FormData();
+    formData.set("id", record.id);
+    startTransition(() => {
+      deleteDepartmentVacancyRecordAction(formData)
+        .then((result) => {
+          if (!result.ok) {
+            setMessage(result.message ?? "공실현황을 삭제하지 못했습니다.");
+            return;
+          }
+          onRecordsChange(records.filter((item) => item.id !== record.id));
+          onRefresh("공실현황을 삭제했습니다.");
+          setMessage("공실현황을 삭제했습니다.");
+        })
+        .catch(() => setMessage("공실현황을 삭제하지 못했습니다."))
+        .finally(() => setPendingDeleteId(null));
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-2xl border border-[#d9e7f7] bg-white/88 p-3 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="section-doodle-title">공실현황 최근 1년간 추이</h2>
+            <p className="mt-1 text-xs font-bold text-slate-500">단순보관과 공실면적의 월평균 흐름을 확인합니다.</p>
+          </div>
+          <div className="flex max-w-[58rem] flex-wrap items-center justify-end gap-1.5">
+            {registeredCenters.length > 1 ? (
+              <label className="section-chip cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={allCentersSelected}
+                  onChange={() => setSelectedCenterIds(allCentersSelected ? [] : null)}
+                  className="h-4 w-4 accent-[#075be8]"
+                />
+                전체센터
+              </label>
+            ) : null}
+            {registeredCenters.map((center) => (
+              <label key={center.id} className="section-chip cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={effectiveSelectedCenterIds.includes(center.id)}
+                  onChange={() => toggleCenter(center.id)}
+                  className="h-4 w-4 accent-[#075be8]"
+                />
+                {center.centerName}
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(440px,0.9fr)]">
+          <div className="relative h-[224px] rounded-2xl border border-[#d9e7f7] bg-[#f8fbff] p-3">
+            <div className="absolute right-3 top-3 z-10 flex flex-wrap items-center justify-end gap-1.5 rounded-full border border-[#d9e7f7] bg-white/92 px-2 py-1 shadow-[0_8px_18px_rgba(16,34,61,0.06)]">
+              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-black text-[#10223d]">
+                <input
+                  type="checkbox"
+                  checked={showSimpleStorage}
+                  onChange={(event) => setShowSimpleStorage(event.target.checked)}
+                  className="h-3.5 w-3.5 accent-[#075be8]"
+                />
+                단순보관
+              </label>
+              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-black text-[#10223d]">
+                <input
+                  type="checkbox"
+                  checked={showVacancy}
+                  onChange={(event) => setShowVacancy(event.target.checked)}
+                  className="h-3.5 w-3.5 accent-[#075be8]"
+                />
+                공실면적
+              </label>
+            </div>
+            {isLoading ? (
+              <div className="flex h-full items-center justify-center text-sm font-bold text-slate-400">공실현황을 불러오는 중입니다.</div>
+            ) : trendData.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-sm font-bold text-slate-400">최근 1년 공실현황 데이터가 없습니다.</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={trendData} margin={{ top: 30, right: 18, left: 0, bottom: 4 }}>
+                  <CartesianGrid stroke="#dbe8fb" strokeDasharray="4 4" />
+                  <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 11, fontWeight: 700 }} axisLine={false} tickLine={false} minTickGap={16} />
+                  <YAxis tick={{ fill: "#64748b", fontSize: 11, fontWeight: 700 }} axisLine={false} tickLine={false} width={58} />
+                  <Tooltip
+                    formatter={(value, name) => [formatArea(Number(value)), name === "simple_storage_area" ? "단순보관" : "공실면적"]}
+                    labelFormatter={(label) => `${label} 월평균`}
+                    contentStyle={{ borderRadius: 16, border: "1px solid #d9e7f7", fontWeight: 800 }}
+                  />
+                  {showSimpleStorage ? (
+                    <Line type="monotone" dataKey="simple_storage_area" name="단순보관" stroke="#0ea5e9" strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
+                  ) : null}
+                  {showVacancy ? (
+                    <Line type="monotone" dataKey="vacancy_area" name="공실면적" stroke="#f97316" strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
+                  ) : null}
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+          <div className="h-[224px] rounded-2xl border border-[#d9e7f7] bg-[#f8fbff] p-3">
+            <div className="h-full overflow-x-hidden rounded-xl border border-[#d9e7f7] bg-white">
+              <table className="w-full table-fixed text-left text-[11px]">
+                <colgroup>
+                  <col className="w-[18%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[22%]" />
+                </colgroup>
+                <thead className="bg-[#f1f6fd] text-[#10223d]">
+                  <tr>
+                    <th className="px-2 py-2">구분</th>
+                    <th className="px-1.5 py-2 text-right">1주차</th>
+                    <th className="px-1.5 py-2 text-right">2주차</th>
+                    <th className="px-1.5 py-2 text-right">3주차</th>
+                    <th className="px-1.5 py-2 text-right">4주차</th>
+                    <th className="px-1.5 py-2 text-right">5주차</th>
+                    <th className="px-2 py-2 text-right">평균</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vacancySummaryRows.map((row) => (
+                    <tr key={row.label} className="border-t border-slate-100">
+                      <td className="px-2 py-2 font-black text-[#10223d]">{row.label}</td>
+                      {row.values.map((value, index) => (
+                        <td key={`${row.label}-${index}`} className="px-1.5 py-2 text-right font-bold text-slate-600">
+                          {value}
+                        </td>
+                      ))}
+                      <td className="px-2 py-2 text-right font-black text-[#075be8]">{row.average}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-[#d9e7f7] bg-white/88 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e5eef9] px-3 py-3">
+          <div>
+            <h2 className="section-doodle-title">주차별 공실현황</h2>
+            <p className="mt-1 text-xs font-bold text-slate-500">
+              {selectedWeek.year}년 {selectedWeek.month}월 기준
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {message ? <p className="text-xs font-black text-[#075be8]">{message}</p> : null}
+            <button type="button" onClick={onCreate} disabled={disabled || centerOptions.length === 0} className="tool-button tool-button-primary min-h-10 py-2 disabled:opacity-50">
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              등록
+            </button>
+          </div>
+        </div>
+        <div className="overflow-x-hidden">
+          <table className="table-sticky w-full table-fixed text-left text-xs">
+            <colgroup>
+              <col className="w-[7%]" />
+              <col className="w-[17%]" />
+              <col className="w-[11%]" />
+              <col className="w-[11%]" />
+              <col className="w-[11%]" />
+              <col className="w-[11%]" />
+              <col className="w-[24%]" />
+              <col className="w-[8%]" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th className="px-2 py-2.5">주차</th>
+                <th className="px-2 py-2.5">센터</th>
+                <th className="px-2 py-2.5 text-right">운영면적</th>
+                <th className="px-2 py-2.5 text-right">단순보관</th>
+                <th className="px-2 py-2.5 text-right">공실</th>
+                <th className="px-2 py-2.5 text-right">전체면적</th>
+                <th className="px-2 py-2.5">비고</th>
+                <th className="px-2 py-2.5 text-center">관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              {records.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-10 text-center text-sm font-bold text-slate-400">
+                    등록된 공실현황이 없습니다.
+                  </td>
+                </tr>
+              ) : (
+                records.map((record) => {
+                  const notes = [
+                    record.simple_storage_note?.trim() ? `단순보관 - ${record.simple_storage_note.trim()}` : "",
+                    record.vacancy_note?.trim() ? `공실 - ${record.vacancy_note.trim()}` : ""
+                  ].filter(Boolean);
+                  return (
+                    <tr key={record.id} className="border-t border-slate-100 align-top">
+                      <td className="px-2 py-2.5 font-black text-[#10223d]">{record.week_of_month}주차</td>
+                      <td className="break-words px-2 py-2.5 font-black text-[#10223d]">{record.center_name}</td>
+                      <td className="px-2 py-2.5 text-right font-bold">{formatArea(record.operating_area)}</td>
+                      <td className="px-2 py-2.5 text-right font-bold text-sky-700">{formatArea(record.simple_storage_area)}</td>
+                      <td className="px-2 py-2.5 text-right font-bold text-orange-600">{formatArea(record.vacancy_area)}</td>
+                      <td className="px-2 py-2.5 text-right font-bold">{formatArea(record.total_area)}</td>
+                      <td className="whitespace-pre-wrap break-words px-2 py-2.5 leading-5 text-slate-600">
+                        {notes.length > 0 ? notes.join("\n") : "-"}
+                      </td>
+                      <td className="px-2 py-2.5">
+                        <div className="flex items-center justify-center gap-1">
+                          <button type="button" onClick={() => onEdit(record)} disabled={disabled} className="icon-tool-button h-8 w-8 disabled:opacity-50" aria-label={`${record.center_name} 공실현황 수정`}>
+                            <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteRecord(record)}
+                            disabled={disabled || pendingDeleteId === record.id}
+                            className="icon-tool-button h-8 w-8 text-rose-600 disabled:opacity-50"
+                            aria-label={`${record.center_name} 공실현황 삭제`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VacancyRecordDialog({
+  departmentId,
+  selectedWeek,
+  centerOptions,
+  initialItem,
+  onClose,
+  onSave
+}: {
+  departmentId: string;
+  selectedWeek: WeekOption;
+  centerOptions: CenterOption[];
+  initialItem?: DepartmentVacancyRecordValue;
+  onClose: () => void;
+  onSave: (item: DepartmentVacancyRecordValue) => void;
+}) {
+  const [centerMasterId, setCenterMasterId] = useState(initialItem?.center_master_id ?? centerOptions[0]?.id ?? "");
+  const [operatingArea, setOperatingArea] = useState(toVacancyFormValue(initialItem?.operating_area ?? 0));
+  const [simpleStorageArea, setSimpleStorageArea] = useState(toVacancyFormValue(initialItem?.simple_storage_area ?? 0));
+  const [vacancyArea, setVacancyArea] = useState(toVacancyFormValue(initialItem?.vacancy_area ?? 0));
+  const [totalArea, setTotalArea] = useState(toVacancyFormValue(initialItem?.total_area ?? 0));
+  const [simpleStorageNote, setSimpleStorageNote] = useState(initialItem?.simple_storage_note ?? "");
+  const [vacancyNote, setVacancyNote] = useState(initialItem?.vacancy_note ?? "");
+  const [message, setMessage] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  const saveRecord = () => {
+    setMessage("");
+    if (!centerMasterId) {
+      setMessage("센터를 선택하세요.");
+      return;
+    }
+    const formData = new FormData();
+    if (initialItem?.id) {
+      formData.set("id", initialItem.id);
+    }
+    formData.set("department_id", departmentId);
+    formData.set("center_master_id", centerMasterId);
+    formData.set("week_start_date", selectedWeek.weekStartDate);
+    formData.set("week_end_date", selectedWeek.weekEndDate);
+    formData.set("report_year", String(selectedWeek.year));
+    formData.set("report_month", String(selectedWeek.month));
+    formData.set("week_of_month", String(selectedWeek.weekOfMonth));
+    formData.set("operating_area", operatingArea || "0");
+    formData.set("simple_storage_area", simpleStorageArea || "0");
+    formData.set("vacancy_area", vacancyArea || "0");
+    formData.set("total_area", totalArea || "0");
+    formData.set("simple_storage_note", simpleStorageNote);
+    formData.set("vacancy_note", vacancyNote);
+    startTransition(() => {
+      saveDepartmentVacancyRecordAction(formData)
+        .then((result) => {
+          if (!result.ok || !result.data) {
+            setMessage(result.message ?? "공실현황을 저장하지 못했습니다.");
+            return;
+          }
+          onSave(result.data);
+        })
+        .catch(() => setMessage("공실현황을 저장하지 못했습니다."));
+    });
+  };
+
+  return (
+    <ModalPortal>
+      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/72 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="vacancy-dialog-title">
+        <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-[1.5rem] border border-white/80 bg-white/95 shadow-[0_28px_80px_rgba(16,34,61,0.24)] backdrop-blur-2xl">
+          <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+            <div>
+              <h2 id="vacancy-dialog-title" className="text-lg font-black text-slate-900">
+                {initialItem ? "공실현황 수정" : "공실현황 등록"}
+              </h2>
+              <p className="mt-1 text-sm font-semibold text-slate-500">
+                {selectedWeek.year}년 {selectedWeek.month}월 {selectedWeek.weekOfMonth}주차 기준으로 센터별 면적을 입력합니다.
+              </p>
+            </div>
+            <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="max-h-[64vh] overflow-y-auto bg-[#f5f9ff] px-5 py-4">
+            <div className="glass-row grid gap-3 p-3 md:grid-cols-2">
+              <label className="text-xs font-black text-slate-600 md:col-span-2">
+                센터
+                <select
+                  value={centerMasterId}
+                  onChange={(event) => setCenterMasterId(event.target.value)}
+                  className="mt-1 h-10 w-full rounded-md border border-slate-300 px-3 text-sm font-normal"
+                >
+                  {centerOptions.length === 0 ? <option value="">등록된 센터가 없습니다</option> : null}
+                  {centerOptions.map((center) => (
+                    <option key={center.id} value={center.id}>
+                      {center.center_name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <NumberField label="운영면적" value={operatingArea} onChange={setOperatingArea} />
+              <NumberField label="전체면적" value={totalArea} onChange={setTotalArea} />
+              <NumberField label="단순보관" value={simpleStorageArea} onChange={setSimpleStorageArea} />
+              <NumberField label="공실" value={vacancyArea} onChange={setVacancyArea} />
+              <label className="text-xs font-black text-slate-600">
+                단순보관 비고
+                <textarea
+                  value={simpleStorageNote}
+                  rows={4}
+                  onChange={(event) => setSimpleStorageNote(event.target.value)}
+                  className="mt-1 min-h-[100px] w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-normal"
+                  placeholder="단순보관 내용을 입력하세요."
+                />
+              </label>
+              <label className="text-xs font-black text-slate-600">
+                공실 비고
+                <textarea
+                  value={vacancyNote}
+                  rows={4}
+                  onChange={(event) => setVacancyNote(event.target.value)}
+                  className="mt-1 min-h-[100px] w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-normal"
+                  placeholder="공실 내용을 입력하세요."
+                />
+              </label>
+              {message ? (
+                <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700 md:col-span-2">
+                  {message}
+                </p>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+            <button type="button" onClick={onClose} className="tool-button" disabled={isPending}>
+              취소
+            </button>
+            <button type="button" onClick={saveRecord} className="tool-button tool-button-primary" disabled={isPending}>
+              <Save className="h-4 w-4" aria-hidden="true" />
+              {isPending ? "저장 중" : initialItem ? "수정 완료" : "등록"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
+
+function NumberField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="text-xs font-black text-slate-600">
+      {label}
+      <input
+        type="number"
+        min="0"
+        step="0.01"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 h-10 w-full rounded-md border border-slate-300 px-3 text-sm font-normal"
+        placeholder="0"
+      />
+    </label>
   );
 }
 

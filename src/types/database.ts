@@ -36,6 +36,41 @@ export type Tables = {
     };
     Update: Partial<Tables["center_masters"]["Row"]>;
   };
+  department_vacancy_records: {
+    Row: {
+      id: string;
+      department_id: string;
+      center_master_id: string;
+      week_start_date: string;
+      week_end_date: string;
+      report_year: number;
+      report_month: number;
+      week_of_month: number;
+      operating_area: number;
+      simple_storage_area: number;
+      vacancy_area: number;
+      total_area: number;
+      simple_storage_note: string | null;
+      vacancy_note: string | null;
+      is_active: boolean;
+      created_at: string;
+      created_by: string | null;
+      updated_at: string;
+      updated_by: string | null;
+      deleted_at: string | null;
+      deleted_by: string | null;
+    };
+    Insert: Partial<Tables["department_vacancy_records"]["Row"]> & {
+      department_id: string;
+      center_master_id: string;
+      week_start_date: string;
+      week_end_date: string;
+      report_year: number;
+      report_month: number;
+      week_of_month: number;
+    };
+    Update: Partial<Tables["department_vacancy_records"]["Row"]>;
+  };
   departments: {
     Row: {
       id: string;

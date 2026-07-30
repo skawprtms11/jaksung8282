@@ -173,12 +173,12 @@ export function NoticeBoard({
 }) {
   const router = useRouter();
   const [writeOpen, setWriteOpen] = useState(false);
+  const [editingNotice, setEditingNotice] = useState<NoticeBoardRow | null>(null);
   const [detailNotice, setDetailNotice] = useState<NoticeBoardRow | null>(null);
   const [collectionNotice, setCollectionNotice] = useState<NoticeBoardRow | null>(null);
   const [visibleNotices, setVisibleNotices] = useState(notices);
   const [visibleImportantNotices, setVisibleImportantNotices] = useState(importantNotices);
   const [visibleComments, setVisibleComments] = useState(comments);
-  const [selectedNoticeIds, setSelectedNoticeIds] = useState<string[]>([]);
   const [deleteState, setDeleteState] = useState<Awaited<ReturnType<typeof deleteNoticeAction>> | null>(null);
   const [isDeleting, startDeleteTransition] = useTransition();
   const [saveState, saveAction, isNoticeSaving] = useActionState(
@@ -186,16 +186,14 @@ export function NoticeBoard({
       const result = await saveNoticeAction(previousState, formData);
       if (result.ok) {
         setWriteOpen(false);
+        setEditingNotice(null);
         router.refresh();
       }
       return result;
     },
     null
   );
-  const selectedNoticeIdSet = useMemo(() => new Set(selectedNoticeIds), [selectedNoticeIds]);
-  const selectedDeletableCount = selectedNoticeIds.length;
-
-  function canDeleteNotice(notice: NoticeBoardRow) {
+  function canManageNotice(notice: NoticeBoardRow) {
     return Boolean(currentUser && (currentUser.app_role === "admin" || notice.created_by === currentUser.id));
   }
 
@@ -232,43 +230,31 @@ export function NoticeBoard({
     updateNoticeCommentCount(comment.notice_id, -1);
   }
 
-  function toggleNoticeSelection(noticeId: string, checked: boolean) {
-    setDeleteState(null);
-    setSelectedNoticeIds((ids) => {
-      if (checked) {
-        return ids.includes(noticeId) ? ids : [...ids, noticeId];
-      }
-      return ids.filter((id) => id !== noticeId);
-    });
-  }
-
-  function deleteSelectedNotices() {
-    if (selectedNoticeIds.length === 0) {
-      setDeleteState({ ok: false, message: "삭제할 게시글을 선택하세요." });
+  function deleteNotice(notice: NoticeBoardRow) {
+    if (!canManageNotice(notice)) {
+      setDeleteState({ ok: false, message: "본인이 작성한 게시글만 삭제할 수 있습니다." });
       return;
     }
-    if (!window.confirm(`선택한 게시글 ${selectedNoticeIds.length}건을 삭제하시겠습니까?`)) {
+    if (!window.confirm(`'${notice.title}' 게시글을 삭제하시겠습니까?`)) {
       return;
     }
 
-    const idsToDelete = selectedNoticeIds;
     setDeleteState(null);
     startDeleteTransition(() => {
       const formData = new FormData();
-      idsToDelete.forEach((id) => formData.append("id", id));
+      formData.append("id", notice.id);
       void deleteNoticeAction(null, formData)
         .then((result) => {
           setDeleteState(result);
           if (!result.ok) {
             return;
           }
-          setVisibleNotices((rows) => rows.filter((row) => !idsToDelete.includes(row.id)));
-          setVisibleImportantNotices((rows) => rows.filter((row) => !idsToDelete.includes(row.id)));
-          setSelectedNoticeIds([]);
-          if (detailNotice && idsToDelete.includes(detailNotice.id)) {
+          setVisibleNotices((rows) => rows.filter((row) => row.id !== notice.id));
+          setVisibleImportantNotices((rows) => rows.filter((row) => row.id !== notice.id));
+          if (detailNotice?.id === notice.id) {
             setDetailNotice(null);
           }
-          if (collectionNotice && idsToDelete.includes(collectionNotice.id)) {
+          if (collectionNotice?.id === notice.id) {
             setCollectionNotice(null);
           }
           router.refresh();
@@ -341,18 +327,6 @@ export function NoticeBoard({
               등록
             </button>
           ) : null}
-          {currentUser ? (
-            <button
-              type="button"
-              onClick={deleteSelectedNotices}
-              disabled={selectedDeletableCount === 0 || isDeleting}
-              className="tool-button min-h-9 py-1.5 text-rose-600 disabled:cursor-not-allowed disabled:opacity-45"
-              title={selectedDeletableCount === 0 ? "삭제할 게시글을 선택하세요." : "선택한 게시글 삭제"}
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-              {isDeleting ? "삭제 중" : "삭제"}
-            </button>
-          ) : null}
         </div>
       </div>
       <ActionMessage state={deleteState} />
@@ -385,11 +359,11 @@ export function NoticeBoard({
             <col className="w-[7%]" />
             <col className="w-[13%]" />
             <col className="w-[14%]" />
-            <col className="w-[38%]" />
-            <col className="w-[16%]" />
+            <col className="w-[36%]" />
+            <col className="w-[15%]" />
             <col className="w-[6%]" />
             <col className="w-[6%]" />
-            <col className="w-[6%]" />
+            <col className="w-[9%]" />
           </colgroup>
           <thead>
             <tr>
@@ -400,7 +374,7 @@ export function NoticeBoard({
               <th className="px-3 py-3">비고</th>
               <th className="px-3 py-3">조회수</th>
               <th className="px-3 py-3">댓글</th>
-              <th className="px-3 py-3 text-center">선택</th>
+              <th className="px-3 py-3 text-center">관리</th>
             </tr>
           </thead>
           <tbody>
@@ -438,15 +412,28 @@ export function NoticeBoard({
                       </span>
                     </td>
                     <td className="px-3 py-3 text-center">
-                      <input
-                        type="checkbox"
-                        checked={selectedNoticeIdSet.has(notice.id)}
-                        onChange={(event) => toggleNoticeSelection(notice.id, event.target.checked)}
-                        disabled={!canDeleteNotice(notice) || isDeleting}
-                        className="h-4 w-4 accent-[#075be8] disabled:cursor-not-allowed disabled:opacity-35"
-                        aria-label={`${notice.title} 삭제 선택`}
-                        title={canDeleteNotice(notice) ? "삭제 선택" : "작성자만 삭제할 수 있습니다."}
-                      />
+                      <div className="inline-flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditingNotice(notice)}
+                          disabled={!canManageNotice(notice)}
+                          className="icon-tool-button h-8 w-8 disabled:cursor-not-allowed disabled:opacity-35"
+                          aria-label={`${notice.title} 수정`}
+                          title={canManageNotice(notice) ? "게시글 수정" : "작성자만 수정할 수 있습니다."}
+                        >
+                          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteNotice(notice)}
+                          disabled={!canManageNotice(notice) || isDeleting}
+                          className="icon-tool-button h-8 w-8 text-rose-600 disabled:cursor-not-allowed disabled:opacity-35"
+                          aria-label={`${notice.title} 삭제`}
+                          title={canManageNotice(notice) ? "게시글 삭제" : "작성자만 삭제할 수 있습니다."}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -459,6 +446,16 @@ export function NoticeBoard({
       {writeOpen ? (
         <NoticeWriteDialog
           onClose={() => setWriteOpen(false)}
+          action={saveAction}
+          state={saveState}
+          isSaving={isNoticeSaving}
+          departments={departments}
+        />
+      ) : null}
+      {editingNotice ? (
+        <NoticeWriteDialog
+          notice={editingNotice}
+          onClose={() => setEditingNotice(null)}
           action={saveAction}
           state={saveState}
           isSaving={isNoticeSaving}
@@ -493,32 +490,38 @@ export function NoticeBoard({
 }
 
 function NoticeWriteDialog({
+  notice,
   onClose,
   action,
   state,
   isSaving,
   departments
 }: {
+  notice?: NoticeBoardRow;
   onClose: () => void;
   action: (payload: FormData) => void;
   state: Awaited<ReturnType<typeof saveNoticeAction>> | null;
   isSaving: boolean;
   departments: DepartmentRow[];
 }) {
-  const [noticeType, setNoticeType] = useState<NoticeType>("general");
-  const [detail, setDetail] = useState("");
-  const [note, setNote] = useState("");
+  const parsedNoticeContent = notice ? parseNoticeContent(notice.content) : null;
+  const [noticeType, setNoticeType] = useState<NoticeType>(notice?.notice_type ?? "general");
+  const [detail, setDetail] = useState(parsedNoticeContent?.detail ?? "");
+  const [note, setNote] = useState(parsedNoticeContent?.note ?? "");
   const contentRef = useRef<HTMLInputElement>(null);
+  const isEdit = Boolean(notice);
 
   const handleSubmit = () => {
     const collectionStatuses =
       noticeType === "urgent"
-        ? departments.map((department) => ({
-            department_id: department.id,
-            department_name: department.department_name,
-            is_completed: false,
-            confirmer_name: ""
-          }))
+        ? parsedNoticeContent?.collectionStatuses.length
+          ? parsedNoticeContent.collectionStatuses
+          : departments.map((department) => ({
+              department_id: department.id,
+              department_name: department.department_name,
+              is_completed: false,
+              confirmer_name: ""
+            }))
         : [];
     if (contentRef.current) {
       contentRef.current.value = serializeNoticeContent({ detail, note, collectionStatuses });
@@ -533,13 +536,13 @@ function NoticeWriteDialog({
         onSubmit={handleSubmit}
         className="my-auto max-h-[calc(100vh-3rem)] w-full max-w-4xl overflow-hidden rounded-[1.5rem] border border-white/80 bg-white/95 shadow-[0_28px_80px_rgba(16,34,61,0.24)]"
       >
-        <input type="hidden" name="id" value="" />
+        <input type="hidden" name="id" value={notice?.id ?? ""} />
         <input type="hidden" name="content" ref={contentRef} />
         <input type="hidden" name="is_active" value="true" />
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div>
-            <h2 id="notice-write-title" className="text-xl font-black text-[#10223d]">게시글 작성</h2>
-            <p className="mt-1 text-sm font-bold text-slate-500">요청 항목만 입력하여 게시글을 등록합니다.</p>
+            <h2 id="notice-write-title" className="text-xl font-black text-[#10223d]">{isEdit ? "게시글 수정" : "게시글 작성"}</h2>
+            <p className="mt-1 text-sm font-bold text-slate-500">{isEdit ? "게시글 내용을 수정합니다." : "요청 항목만 입력하여 게시글을 등록합니다."}</p>
           </div>
           <button type="button" onClick={onClose} className="icon-tool-button" aria-label="게시글 작성 팝업 닫기">
             <X className="h-4 w-4" aria-hidden="true" />
@@ -561,7 +564,7 @@ function NoticeWriteDialog({
               </select>
             </label>
             <label className="mt-5 inline-flex h-10 items-center gap-2 rounded-2xl border border-[#d9e7f7] bg-white px-4 text-sm font-black text-[#10223d]">
-              <input type="checkbox" name="is_pinned" value="true" className="h-4 w-4 accent-[#075be8]" />
+              <input type="checkbox" name="is_pinned" value="true" defaultChecked={notice?.is_pinned ?? false} className="h-4 w-4 accent-[#075be8]" />
               중요여부
             </label>
             <label className="text-xs font-black text-slate-600 md:col-span-2">
@@ -570,6 +573,7 @@ function NoticeWriteDialog({
                 name="title"
                 required
                 maxLength={200}
+                defaultValue={notice?.title ?? ""}
                 className="mt-1 h-10 w-full rounded-md border border-slate-300 px-3 text-sm font-normal"
                 placeholder="제목을 입력하세요."
               />
@@ -604,7 +608,7 @@ function NoticeWriteDialog({
           <button type="button" onClick={onClose} disabled={isSaving} className="tool-button disabled:opacity-50">취소</button>
           <button type="submit" disabled={isSaving} className="tool-button tool-button-primary disabled:opacity-50">
             <ClipboardList className="h-4 w-4" aria-hidden="true" />
-            {isSaving ? "등록 중" : "등록"}
+            {isSaving ? "저장 중" : isEdit ? "수정" : "등록"}
           </button>
         </div>
       </form>
@@ -1037,15 +1041,16 @@ function NoticeCollectionDialog({
             return;
           }
           if (result.data) {
-            onStatusSaved(result.data);
+            const savedStatus = result.data;
+            onStatusSaved(savedStatus);
             setCurrentRows((rows) =>
               rows.map((row) =>
-                row.department_id === result.data?.department_id
+                row.department_id === savedStatus.department_id
                   ? {
                       ...row,
-                      is_completed: result.data.is_completed,
-                      confirmer_name: result.data.confirmer_name,
-                      updated_at: result.data.updated_at
+                      is_completed: savedStatus.is_completed,
+                      confirmer_name: savedStatus.confirmer_name,
+                      updated_at: savedStatus.updated_at
                     }
                   : row
               )

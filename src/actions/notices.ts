@@ -23,11 +23,11 @@ export type NoticeCommentActionRow = {
 
 export async function saveNoticeAction(_: ActionResult | null, formData: FormData): Promise<ActionResult> {
   const { profile } = await getCurrentUserProfile();
-  if (!isAdmin(profile)) {
-    return { ok: false, message: "공지사항 등록·수정은 관리자만 가능합니다." };
-  }
   if (!profile) {
     return { ok: false, message: "로그인이 필요합니다." };
+  }
+  if (!profile.is_active) {
+    return { ok: false, message: "비활성 사용자는 게시글을 저장할 수 없습니다." };
   }
   const parsed = noticeSchema.safeParse(formDataToObject(formData));
   if (!parsed.success) {
@@ -38,9 +38,42 @@ export async function saveNoticeAction(_: ActionResult | null, formData: FormDat
     return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요." };
   }
   const { id, ...payload } = parsed.data;
-  const request = id
-    ? supabase.from("notices").update({ ...payload, updated_by: profile.id }).eq("id", id)
-    : supabase.from("notices").insert({ ...payload, created_by: profile.id, updated_by: profile.id });
+  if (!id && !isAdmin(profile)) {
+    return { ok: false, message: "공지사항 등록은 관리자만 가능합니다." };
+  }
+  if (id) {
+    const { data: target, error: targetError } = await supabase
+      .from("notices")
+      .select("id,created_by")
+      .eq("id", id)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (targetError) {
+      return { ok: false, message: safeErrorMessage(targetError.message) };
+    }
+    if (!target) {
+      return { ok: false, message: "수정할 게시글을 찾을 수 없습니다." };
+    }
+    if (!isAdmin(profile) && target.created_by !== profile.id) {
+      return { ok: false, message: "본인이 작성한 게시글만 수정할 수 있습니다." };
+    }
+  }
+  let request;
+  if (id && !isAdmin(profile)) {
+    try {
+      request = createSupabaseAdminClient()
+        .from("notices")
+        .update({ ...payload, updated_by: profile.id })
+        .eq("id", id)
+        .is("deleted_at", null);
+    } catch {
+      return { ok: false, message: "Supabase 관리자 환경변수를 확인하세요." };
+    }
+  } else {
+    request = id
+      ? supabase.from("notices").update({ ...payload, updated_by: profile.id }).eq("id", id)
+      : supabase.from("notices").insert({ ...payload, created_by: profile.id, updated_by: profile.id });
+  }
   const { error } = await request;
   if (error) {
     return { ok: false, message: safeErrorMessage(error.message) };

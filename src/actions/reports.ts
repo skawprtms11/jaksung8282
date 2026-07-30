@@ -1,5 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import {
   canSubmitDepartment,
@@ -20,6 +21,34 @@ import {
 import { formDataToObject, safeErrorMessage, type ActionResult } from "@/lib/utils/form";
 import type { Json } from "@/types/database";
 import type { ClientReportStatus, DepartmentSubmissionStatus, VolumeType, VolumeUnit } from "@/types/enums";
+
+type DepartmentVacancyRecord = {
+  id: string;
+  department_id: string;
+  center_master_id: string;
+  center_name: string;
+  week_start_date: string;
+  week_end_date: string;
+  report_year: number;
+  report_month: number;
+  week_of_month: number;
+  operating_area: number;
+  simple_storage_area: number;
+  vacancy_area: number;
+  total_area: number;
+  simple_storage_note: string | null;
+  vacancy_note: string | null;
+  updated_at: string;
+};
+
+type DepartmentVacancyTrendPoint = {
+  center_master_id: string;
+  center_name: string;
+  week_start_date: string;
+  label: string;
+  simple_storage_area: number;
+  vacancy_area: number;
+};
 
 type DepartmentSubmissionContentPayload = {
   section_type: "common" | "facility" | "vacancy" | "holiday_work";
@@ -109,6 +138,23 @@ type ReportItemRequestTarget = {
   item_period?: "current" | "next" | null;
   item_sort_order?: number | null;
 };
+
+const vacancyRecordSchema = z.object({
+  id: z.string().uuid().optional(),
+  department_id: idSchema,
+  center_master_id: idSchema,
+  week_start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  week_end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  report_year: z.coerce.number().int().min(2020).max(2100),
+  report_month: z.coerce.number().int().min(1).max(12),
+  week_of_month: z.coerce.number().int().min(1).max(6),
+  operating_area: z.coerce.number().min(0, "운영면적은 0 이상이어야 합니다."),
+  simple_storage_area: z.coerce.number().min(0, "단순보관은 0 이상이어야 합니다."),
+  vacancy_area: z.coerce.number().min(0, "공실은 0 이상이어야 합니다."),
+  total_area: z.coerce.number().min(0, "전체면적은 0 이상이어야 합니다."),
+  simple_storage_note: z.string().trim().optional().nullable(),
+  vacancy_note: z.string().trim().optional().nullable()
+});
 
 export type ReportItemRequestActionRow = {
   id: string;
@@ -728,6 +774,320 @@ export async function loadDepartmentSubmissionAction({
   }
 
   return { ok: true, submission: data ? (data as unknown as DepartmentSubmissionLoadRow) : null };
+}
+
+function canManageDepartmentData(profile: NonNullable<Awaited<ReturnType<typeof getCurrentUserProfile>>["profile"]>, departmentId: string) {
+  return (
+    isAdmin(profile) ||
+    ((profile.app_role === "department_head" || profile.app_role === "manager") && profile.department_id === departmentId)
+  );
+}
+
+async function ensureEditableDepartmentVacancySubmission(
+  supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
+  departmentId: string,
+  weekStartDate: string
+): Promise<ActionResult> {
+  const { data: submission, error } = await supabase
+    .from("department_weekly_submissions")
+    .select("id,status")
+    .eq("department_id", departmentId)
+    .eq("week_start_date", weekStartDate)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (error) {
+    return { ok: false, message: safeErrorMessage(error.message) };
+  }
+  if (submission && submission.status !== "draft" && submission.status !== "division_rejected") {
+    return { ok: false, message: "확정 또는 승인된 부서자료는 공실현황을 수정할 수 없습니다. 확정취소 후 다시 수정하세요." };
+  }
+  return { ok: true, message: "" };
+}
+
+function toVacancyRecord(row: unknown): DepartmentVacancyRecord {
+  const value = row as {
+    id: string;
+    department_id: string;
+    center_master_id: string;
+    week_start_date: string;
+    week_end_date: string;
+    report_year: number;
+    report_month: number;
+    week_of_month: number;
+    operating_area: number | string;
+    simple_storage_area: number | string;
+    vacancy_area: number | string;
+    total_area: number | string;
+    simple_storage_note: string | null;
+    vacancy_note: string | null;
+    updated_at: string;
+    center_masters?: { center_name?: string | null } | null;
+  };
+  return {
+    id: value.id,
+    department_id: value.department_id,
+    center_master_id: value.center_master_id,
+    center_name: value.center_masters?.center_name ?? "-",
+    week_start_date: value.week_start_date,
+    week_end_date: value.week_end_date,
+    report_year: value.report_year,
+    report_month: value.report_month,
+    week_of_month: value.week_of_month,
+    operating_area: Number(value.operating_area),
+    simple_storage_area: Number(value.simple_storage_area),
+    vacancy_area: Number(value.vacancy_area),
+    total_area: Number(value.total_area),
+    simple_storage_note: value.simple_storage_note,
+    vacancy_note: value.vacancy_note,
+    updated_at: value.updated_at
+  };
+}
+
+function buildVacancyTrend(rows: DepartmentVacancyRecord[]): DepartmentVacancyTrendPoint[] {
+  const weeklyMap = rows.reduce((map, row) => {
+    const key = `${row.center_master_id}:${row.week_start_date}`;
+    const current = map.get(key) ?? {
+      center_master_id: row.center_master_id,
+      center_name: row.center_name,
+      week_start_date: row.week_start_date,
+      label: row.week_start_date.slice(5).replace("-", "/"),
+      simple_storage_area: 0,
+      vacancy_area: 0
+    };
+    current.simple_storage_area += row.simple_storage_area;
+    current.vacancy_area += row.vacancy_area;
+    map.set(key, current);
+    return map;
+  }, new Map<string, DepartmentVacancyTrendPoint>());
+  return Array.from(weeklyMap.values()).sort((left, right) => left.week_start_date.localeCompare(right.week_start_date));
+}
+
+export async function loadDepartmentVacancyDataAction({
+  department_id,
+  report_year,
+  report_month
+}: {
+  department_id: string;
+  report_year: number;
+  report_month: number;
+}): Promise<{
+  ok: boolean;
+  message?: string;
+  records: DepartmentVacancyRecord[];
+  trend: DepartmentVacancyTrendPoint[];
+}> {
+  const parsedDepartmentId = idSchema.safeParse(department_id);
+  const parsedYear = z.coerce.number().int().min(2020).max(2100).safeParse(report_year);
+  const parsedMonth = z.coerce.number().int().min(1).max(12).safeParse(report_month);
+  if (!parsedDepartmentId.success || !parsedYear.success || !parsedMonth.success) {
+    return { ok: false, message: "조회 조건을 확인하세요.", records: [], trend: [] };
+  }
+
+  const { profile } = await getCurrentUserProfile();
+  if (!profile?.is_active) {
+    return { ok: false, message: "사용자 정보가 없거나 비활성화 상태입니다.", records: [], trend: [] };
+  }
+  if (!isAdmin(profile) && profile.department_id !== department_id) {
+    return { ok: false, message: "소속 부서 자료만 조회할 수 있습니다.", records: [], trend: [] };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요.", records: [], trend: [] };
+  }
+
+  const monthQuery = supabase
+    .from("department_vacancy_records")
+    .select("id,department_id,center_master_id,week_start_date,week_end_date,report_year,report_month,week_of_month,operating_area,simple_storage_area,vacancy_area,total_area,simple_storage_note,vacancy_note,updated_at,center_masters(center_name)")
+    .eq("department_id", department_id)
+    .eq("report_year", parsedYear.data)
+    .eq("report_month", parsedMonth.data)
+    .eq("is_active", true)
+    .is("deleted_at", null)
+    .order("week_of_month")
+    .order("center_master_id");
+
+  const trendStart = new Date(Date.UTC(parsedYear.data, parsedMonth.data - 13, 1)).toISOString().slice(0, 10);
+  const trendEnd = new Date(Date.UTC(parsedYear.data, parsedMonth.data, 0)).toISOString().slice(0, 10);
+  const trendQuery = supabase
+    .from("department_vacancy_records")
+    .select("id,department_id,center_master_id,week_start_date,week_end_date,report_year,report_month,week_of_month,operating_area,simple_storage_area,vacancy_area,total_area,simple_storage_note,vacancy_note,updated_at,center_masters(center_name)")
+    .eq("department_id", department_id)
+    .eq("is_active", true)
+    .is("deleted_at", null)
+    .gte("week_start_date", trendStart)
+    .lte("week_start_date", trendEnd)
+    .order("week_start_date");
+
+  const [{ data: monthData, error: monthError }, { data: trendData, error: trendError }] = await Promise.all([
+    monthQuery,
+    trendQuery
+  ]);
+  const error = monthError ?? trendError;
+  if (error) {
+    const message = error.message.includes("department_vacancy_records")
+      ? "공실현황 테이블이 없습니다. Supabase SQL 031_department_vacancy_records.sql을 먼저 실행하세요."
+      : safeErrorMessage(error.message);
+    return { ok: false, message, records: [], trend: [] };
+  }
+
+  const records = (monthData ?? []).map(toVacancyRecord);
+  const trend = buildVacancyTrend((trendData ?? []).map(toVacancyRecord));
+  return { ok: true, records, trend };
+}
+
+export async function saveDepartmentVacancyRecordAction(formData: FormData): Promise<ActionResult<DepartmentVacancyRecord>> {
+  const parsed = vacancyRecordSchema.safeParse(formDataToObject(formData));
+  if (!parsed.success) {
+    return { ok: false, message: "공실현황 입력값을 확인하세요.", fieldErrors: parsed.error.flatten().fieldErrors };
+  }
+
+  const { profile } = await getCurrentUserProfile();
+  if (!profile?.is_active) {
+    return { ok: false, message: "사용자 정보가 없거나 비활성화 상태입니다." };
+  }
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요." };
+  }
+
+  let adminClient: ReturnType<typeof createSupabaseAdminClient>;
+  try {
+    adminClient = createSupabaseAdminClient();
+  } catch {
+    return { ok: false, message: "Supabase 관리자 환경변수를 확인하세요." };
+  }
+
+  const { id, ...payload } = parsed.data;
+  if (id) {
+    const { data: target, error: targetError } = await adminClient
+      .from("department_vacancy_records")
+      .select("id,department_id,week_start_date")
+      .eq("id", id)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (targetError) {
+      return { ok: false, message: safeErrorMessage(targetError.message) };
+    }
+    if (!target) {
+      return { ok: false, message: "수정할 공실현황을 찾을 수 없습니다." };
+    }
+    if (target.department_id !== payload.department_id || target.week_start_date !== payload.week_start_date) {
+      return { ok: false, message: "기존 공실현황의 부서와 주차는 변경할 수 없습니다." };
+    }
+  }
+  if (!canManageDepartmentData(profile, payload.department_id)) {
+    return { ok: false, message: "소속 부서 공실현황만 저장할 수 있습니다." };
+  }
+  const editableResult = await ensureEditableDepartmentVacancySubmission(supabase, payload.department_id, payload.week_start_date);
+  if (!editableResult.ok) {
+    return editableResult;
+  }
+
+  const requestPayload = {
+    ...payload,
+    simple_storage_note: payload.simple_storage_note?.trim() || null,
+    vacancy_note: payload.vacancy_note?.trim() || null,
+    is_active: true,
+    updated_by: profile.id
+  };
+  let targetId = id;
+  if (!targetId) {
+    const { data: existing, error: existingError } = await adminClient
+      .from("department_vacancy_records")
+      .select("id")
+      .eq("department_id", payload.department_id)
+      .eq("center_master_id", payload.center_master_id)
+      .eq("week_start_date", payload.week_start_date)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (existingError) {
+      const message = existingError.message.includes("department_vacancy_records")
+        ? "공실현황 테이블이 없습니다. Supabase SQL 031_department_vacancy_records.sql을 먼저 실행하세요."
+        : safeErrorMessage(existingError.message);
+      return { ok: false, message };
+    }
+    targetId = existing?.id;
+  }
+
+  const query = targetId
+    ? adminClient
+        .from("department_vacancy_records")
+        .update(requestPayload)
+        .eq("id", targetId)
+        .eq("department_id", parsed.data.department_id)
+        .is("deleted_at", null)
+    : adminClient.from("department_vacancy_records").insert({ ...requestPayload, created_by: profile.id });
+
+  const { data, error } = await query
+    .select("id,department_id,center_master_id,week_start_date,week_end_date,report_year,report_month,week_of_month,operating_area,simple_storage_area,vacancy_area,total_area,simple_storage_note,vacancy_note,updated_at,center_masters(center_name)")
+    .single();
+
+  if (error) {
+    const message = error.message.includes("department_vacancy_records")
+      ? "공실현황 테이블이 없습니다. Supabase SQL 031_department_vacancy_records.sql을 먼저 실행하세요."
+      : safeErrorMessage(error.message);
+    return { ok: false, message };
+  }
+
+  return { ok: true, message: "공실현황을 저장했습니다.", data: toVacancyRecord(data) };
+}
+
+export async function deleteDepartmentVacancyRecordAction(formData: FormData): Promise<ActionResult<{ id: string }>> {
+  const parsedId = idSchema.safeParse(String(formData.get("id") ?? ""));
+  if (!parsedId.success) {
+    return { ok: false, message: "삭제할 공실현황을 확인하세요." };
+  }
+
+  const { profile } = await getCurrentUserProfile();
+  if (!profile?.is_active) {
+    return { ok: false, message: "사용자 정보가 없거나 비활성화 상태입니다." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요." };
+  }
+  const { data: target, error: targetError } = await supabase
+    .from("department_vacancy_records")
+    .select("id,department_id,week_start_date")
+    .eq("id", parsedId.data)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (targetError) {
+    return { ok: false, message: safeErrorMessage(targetError.message) };
+  }
+  if (!target) {
+    return { ok: false, message: "삭제할 공실현황을 찾을 수 없습니다." };
+  }
+  if (!canManageDepartmentData(profile, target.department_id)) {
+    return { ok: false, message: "소속 부서 공실현황만 삭제할 수 있습니다." };
+  }
+  const editableResult = await ensureEditableDepartmentVacancySubmission(supabase, target.department_id, target.week_start_date);
+  if (!editableResult.ok) {
+    return editableResult;
+  }
+
+  try {
+    const adminClient = createSupabaseAdminClient();
+    const { error } = await adminClient
+      .from("department_vacancy_records")
+      .update({
+        deleted_at: new Date().toISOString(),
+        deleted_by: profile.id,
+        is_active: false,
+        updated_by: profile.id
+      })
+      .eq("id", parsedId.data);
+    if (error) {
+      return { ok: false, message: safeErrorMessage(error.message) };
+    }
+  } catch {
+    return { ok: false, message: "Supabase 관리자 환경변수를 확인하세요." };
+  }
+
+  return { ok: true, message: "공실현황을 삭제했습니다.", data: { id: parsedId.data } };
 }
 
 export async function loadClientHistoricalVolumesAction({

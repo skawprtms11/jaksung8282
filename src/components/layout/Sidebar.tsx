@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bell,
@@ -57,14 +57,6 @@ export function Sidebar({
     [profile]
   );
 
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      menus.forEach((menu) => router.prefetch(menu.href));
-    }, 150);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [menus, router]);
-
   return (
     <aside
       className={`fixed inset-y-0 left-0 z-20 hidden w-72 p-4 transition-transform duration-300 ease-out lg:block ${
@@ -99,7 +91,10 @@ export function Sidebar({
             <Link
               key={menu.href}
               href={menu.href}
-              prefetch
+              prefetch={false}
+              onFocus={() => router.prefetch(menu.href)}
+              onMouseEnter={() => router.prefetch(menu.href)}
+              onTouchStart={() => router.prefetch(menu.href)}
               className="focus-ring group flex min-w-0 items-center gap-3 rounded-2xl border border-transparent px-3 py-2.5 text-sm font-bold text-[#203653] transition hover:-translate-y-0.5 hover:border-[#dbe8fb] hover:bg-[#eaf3ff] hover:text-[#075be8] hover:shadow-[0_16px_30px_rgba(7,91,232,0.12)]"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#f2f7ff] text-[#0b2d5f] transition group-hover:bg-[#075be8] group-hover:text-white">

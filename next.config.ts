@@ -5,8 +5,8 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@supabase/supabase-js"],
   experimental: {
     staleTimes: {
-      dynamic: 45,
-      static: 180
+      dynamic: 300,
+      static: 1800
     }
   }
 };

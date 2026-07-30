@@ -52,7 +52,7 @@ const routeMeta: Record<string, { title: string; description: string }> = {
 
 const filteredRoutes = new Set(["/meeting-materials", "/department-reports", "/client-reports"]);
 const emptyFilterOptions: HeaderFilterOptions = { departments: [], clients: [], assignedClientIds: [] };
-const filterCacheTtlMs = 5 * 60 * 1000;
+const filterCacheTtlMs = 10 * 60 * 1000;
 
 function hasFilterOptions(options: HeaderFilterOptions) {
   return options.departments.length > 0 || options.clients.length > 0;

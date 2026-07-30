@@ -1,6 +1,8 @@
 import {
   DepartmentSubmissionEditor,
-  type DepartmentSubmissionEditorInitialSubmission
+  type DepartmentSubmissionEditorInitialSubmission,
+  type DepartmentVacancyRecordValue,
+  type DepartmentVacancyTrendPointValue
 } from "@/components/reports/DepartmentSubmissionEditor";
 import { EmptyState } from "@/components/common/EmptyState";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -15,6 +17,7 @@ import type { ClientReportStatus, Importance, VolumeType, VolumeUnit } from "@/t
 
 type DepartmentOption = { id: string; department_name: string };
 type CategoryOption = { id: string; category_name: string; icon_key: string };
+type CenterOption = { id: string; center_name: string };
 type HolidayClientOption = { id: string; client_name: string };
 type HolidayClientLinkRow = { clients: { id: string; client_name: string } | null };
 type HolidayWorkerOption = { id: string; full_name: string };
@@ -43,6 +46,9 @@ type DepartmentSubmissionInitialRow = {
   status: "draft" | "submitted_to_division" | "division_approved" | "division_rejected";
   finalized_at: string | null;
   department_weekly_contents: DepartmentSubmissionEditorInitialSubmission["department_weekly_contents"];
+};
+type DepartmentVacancyDbRow = Omit<DepartmentVacancyRecordValue, "center_name"> & {
+  center_masters: { center_name: string } | null;
 };
 
 const CLIENT_REVIEW_LIMIT = 100;
@@ -145,6 +151,46 @@ function getImportanceStats(reports: ClientReviewRow[]) {
   return { total, rows };
 }
 
+function mapVacancyRow(row: DepartmentVacancyDbRow): DepartmentVacancyRecordValue {
+  return {
+    id: row.id,
+    department_id: row.department_id,
+    center_master_id: row.center_master_id,
+    center_name: row.center_masters?.center_name ?? "-",
+    week_start_date: row.week_start_date,
+    week_end_date: row.week_end_date,
+    report_year: row.report_year,
+    report_month: row.report_month,
+    week_of_month: row.week_of_month,
+    operating_area: Number(row.operating_area),
+    simple_storage_area: Number(row.simple_storage_area),
+    vacancy_area: Number(row.vacancy_area),
+    total_area: Number(row.total_area),
+    simple_storage_note: row.simple_storage_note,
+    vacancy_note: row.vacancy_note,
+    updated_at: row.updated_at
+  };
+}
+
+function buildVacancyTrend(rows: DepartmentVacancyRecordValue[]): DepartmentVacancyTrendPointValue[] {
+  const pointMap = rows.reduce((map, row) => {
+    const key = `${row.center_master_id}:${row.week_start_date}`;
+    const current = map.get(key) ?? {
+      center_master_id: row.center_master_id,
+      center_name: row.center_name,
+      week_start_date: row.week_start_date,
+      label: row.week_start_date.slice(5).replace("-", "/"),
+      simple_storage_area: 0,
+      vacancy_area: 0
+    };
+    current.simple_storage_area += row.simple_storage_area;
+    current.vacancy_area += row.vacancy_area;
+    map.set(key, current);
+    return map;
+  }, new Map<string, DepartmentVacancyTrendPointValue>());
+  return Array.from(pointMap.values()).sort((left, right) => left.week_start_date.localeCompare(right.week_start_date));
+}
+
 export default async function DepartmentReportsPage({
   searchParams
 }: {
@@ -158,6 +204,9 @@ export default async function DepartmentReportsPage({
   let reports: ClientReviewRow[] = [];
   let holidayClientOptions: HolidayClientOption[] = [];
   let holidayWorkerOptions: HolidayWorkerOption[] = [];
+  let centerOptions: CenterOption[] = [];
+  let initialVacancyRecords: DepartmentVacancyRecordValue[] = [];
+  let initialVacancyTrend: DepartmentVacancyTrendPointValue[] = [];
   let clientCount = 0;
   let initialSubmission: DepartmentSubmissionEditorInitialSubmission | null = null;
   let initialLookupDepartmentId: string | null = null;
@@ -186,7 +235,10 @@ export default async function DepartmentReportsPage({
       { count },
       { data: submissionData },
       { data: holidayClientData },
-      { data: holidayWorkerData }
+      { data: holidayWorkerData },
+      { data: centerData },
+      { data: vacancyMonthData },
+      { data: vacancyTrendData }
     ] = await Promise.all([
       (() => {
         let query = supabase.from("departments").select("id,department_name").eq("is_active", true).order("sort_order");
@@ -257,10 +309,14 @@ export default async function DepartmentReportsPage({
             .eq("department_id", selectedDepartmentFilter)
             .eq("is_active", true)
             .order("full_name", { ascending: true })
-        : Promise.resolve({ data: [] })
+        : Promise.resolve({ data: [] }),
+      supabase.from("center_masters").select("id,center_name").eq("is_active", true).order("center_name", { ascending: true }),
+      Promise.resolve({ data: [] }),
+      Promise.resolve({ data: [] })
     ]);
     departments = (departmentData ?? []) as DepartmentOption[];
     categories = (categoryData ?? []) as CategoryOption[];
+    centerOptions = (centerData ?? []) as CenterOption[];
     holidayClientOptions = ((holidayClientData ?? []) as unknown as HolidayClientLinkRow[])
       .filter((link) => link.clients)
       .map((link) => ({
@@ -281,6 +337,8 @@ export default async function DepartmentReportsPage({
     }
     clientCount = count ?? 0;
     initialSubmission = submissionData ? (submissionData as unknown as DepartmentSubmissionInitialRow) : null;
+    initialVacancyRecords = ((vacancyMonthData ?? []) as unknown as DepartmentVacancyDbRow[]).map(mapVacancyRow);
+    initialVacancyTrend = buildVacancyTrend(((vacancyTrendData ?? []) as unknown as DepartmentVacancyDbRow[]).map(mapVacancyRow));
   }
   const missingCount = Math.max(clientCount - reports.length, 0);
   const inboundVolumeSummary = summarizeVolumeByUnit(reports, "inbound");
@@ -296,6 +354,9 @@ export default async function DepartmentReportsPage({
         canSubmit={canSubmitDepartment(profile)}
         holidayClientOptions={holidayClientOptions}
         holidayWorkerOptions={holidayWorkerOptions}
+        centerOptions={centerOptions}
+        initialVacancyRecords={initialVacancyRecords}
+        initialVacancyTrend={initialVacancyTrend}
         initialSubmission={initialSubmission}
         initialLookupDepartmentId={initialLookupDepartmentId}
         initialLookupWeekStartDate={currentWeek.weekStartDate}

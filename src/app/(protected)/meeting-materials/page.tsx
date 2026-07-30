@@ -4,7 +4,7 @@ import { TableShell } from "@/components/common/TableShell";
 import { MeetingFacilityConstructionBoard } from "@/components/reports/MeetingFacilityConstructionBoard";
 import { MeetingMaterialsTable } from "@/components/reports/MeetingMaterialsTable";
 import { MeetingMaterialsTabNav } from "@/components/reports/MeetingMaterialsTabNav";
-import { MeetingPriorityPanel, type MeetingPriorityItem } from "@/components/reports/MeetingPriorityPanel";
+import { MeetingPriorityPanel, type MeetingOpenRequestItem, type MeetingPriorityItem } from "@/components/reports/MeetingPriorityPanel";
 import { MeetingHolidayWorkBoard } from "@/components/reports/MeetingHolidayWorkBoard";
 import { MeetingMaterialsWeekFilter } from "@/components/reports/MeetingMaterialsWeekFilter";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
@@ -133,6 +133,36 @@ type PriorityItemQueryRow = {
     client_id: string;
     departments: { department_name: string } | null;
     clients: { client_name: string } | null;
+  } | null;
+};
+
+type OpenRequestQueryRow = ReportItemRequestRow & {
+  weekly_client_report_items?: {
+    id: string;
+    item_period: ItemPeriod;
+    title: string | null;
+    content: string;
+    importance: Importance;
+    work_categories: { category_name: string } | null;
+    weekly_client_reports: {
+      department_id: string;
+      week_start_date: string;
+      report_year: number;
+      report_month: number;
+      week_of_month: number;
+      departments: { department_name: string } | null;
+      clients: { client_name: string } | null;
+    } | null;
+  } | null;
+  department_weekly_submissions?: {
+    id: string;
+    department_id: string;
+    week_start_date: string;
+    report_year: number;
+    report_month: number;
+    week_of_month: number;
+    departments: { department_name: string } | null;
+    department_weekly_contents: DepartmentContentRow[];
   } | null;
 };
 
@@ -284,6 +314,83 @@ function makePriorityItems(rows: PriorityItemQueryRow[]): MeetingPriorityItem[] 
       }
       return left.departmentName.localeCompare(right.departmentName, "ko");
     });
+}
+
+function makeOpenRequestItems(
+  rows: OpenRequestQueryRow[],
+  categories: WorkCategoryRow[],
+  departmentFilter?: string
+): MeetingOpenRequestItem[] {
+  const categoryNameMap = new Map(categories.map((category) => [category.id, category.category_name]));
+  return rows
+    .map((request) => {
+      if (request.target_type === "client_item" && request.weekly_client_report_items?.weekly_client_reports) {
+        const item = request.weekly_client_report_items;
+        const report = item.weekly_client_reports;
+        if (!report) {
+          return null;
+        }
+        return {
+          id: request.id,
+          departmentId: report.department_id,
+          requestDate: request.created_at,
+          monthLabel: `${String(report.report_year).slice(2)}/${String(report.report_month).padStart(2, "0")}`,
+          weekLabel: `${report.week_of_month}주차`,
+          departmentName: report.departments?.department_name ?? "-",
+          clientName: report.clients?.client_name ?? "-",
+          categoryName: item.work_categories?.category_name ?? "기타",
+          title: item.title?.trim() || item.content.split("\n")[0]?.trim() || "제목 없음",
+          content: item.content,
+          requestContent: request.request_content,
+          resultContent: request.result_content
+        };
+      }
+
+      const submission = request.department_weekly_submissions;
+      if (request.target_type !== "department_common" || !submission || !request.item_period || typeof request.item_sort_order !== "number") {
+        return null;
+      }
+      const commonContent = submission.department_weekly_contents.find((content) => content.section_type === "common");
+      if (!commonContent) {
+        return null;
+      }
+      const commonItems = parseDepartmentCommonItems(
+        request.item_period === "current" ? commonContent.current_week_content : commonContent.next_week_content,
+        request.item_period === "current" ? commonContent.current_importance : commonContent.next_importance,
+        request.item_period === "current" ? commonContent.current_work_category_id : commonContent.next_work_category_id
+      );
+      const commonItem = commonItems.find((item) => item.sort_order === request.item_sort_order) ?? commonItems[0];
+      return {
+        id: request.id,
+        departmentId: submission.department_id,
+        requestDate: request.created_at,
+        monthLabel: `${String(submission.report_year).slice(2)}/${String(submission.report_month).padStart(2, "0")}`,
+        weekLabel: `${submission.week_of_month}주차`,
+        departmentName: submission.departments?.department_name ?? "-",
+        clientName: "공통사항",
+        categoryName: commonItem?.work_category_id ? categoryNameMap.get(commonItem.work_category_id) ?? "기타" : "기타",
+        title: commonItem?.title?.trim() || commonItem?.content.split("\n")[0]?.trim() || "제목 없음",
+        content: commonItem?.content ?? "-",
+        requestContent: request.request_content,
+        resultContent: request.result_content
+      };
+    })
+    .filter((item): item is MeetingOpenRequestItem & { departmentId: string } => Boolean(item))
+    .filter((item) => !departmentFilter || item.departmentId === departmentFilter)
+    .sort((left, right) => right.requestDate.localeCompare(left.requestDate))
+    .map((item) => ({
+      id: item.id,
+      requestDate: item.requestDate,
+      monthLabel: item.monthLabel,
+      weekLabel: item.weekLabel,
+      departmentName: item.departmentName,
+      clientName: item.clientName,
+      categoryName: item.categoryName,
+      title: item.title,
+      content: item.content,
+      requestContent: item.requestContent,
+      resultContent: item.resultContent
+    }));
 }
 
 function countByDepartment(clients: ClientSummaryRow[], reports: MeetingReportRow[]) {
@@ -447,6 +554,7 @@ export default async function MeetingMaterialsPage({
   let clients: ClientSummaryRow[] = [];
   let reports: MeetingReportRow[] = [];
   let priorityItemRows: PriorityItemQueryRow[] = [];
+  let openRequestItems: MeetingOpenRequestItem[] = [];
   let submissions: SubmissionRow[] = [];
   let workCategories: WorkCategoryRow[] = [];
   let commonReports: MeetingReportRow[] = [];
@@ -477,7 +585,7 @@ export default async function MeetingMaterialsPage({
     const needsSubmissions = activeTab === "collection" || activeTab === "materials" || activeTab === "holiday" || activeTab === "facility";
     const contentSectionFilter = getDepartmentContentSection(activeTab);
 
-    const [departmentResult, clientResult, reportResult, priorityItemResult, submissionResult, categoryResult] = await Promise.all([
+    const [departmentResult, clientResult, reportResult, priorityItemResult, openRequestResult, submissionResult, categoryResult] = await Promise.all([
       needsDepartments
         ? (() => {
             let query = dataClient
@@ -545,6 +653,17 @@ export default async function MeetingMaterialsPage({
             return query;
           })()
         : Promise.resolve({ data: [] }),
+      activeTab === "collection"
+        ? dataClient
+            .from("weekly_report_item_requests")
+            .select(
+              "id,target_type,target_key,report_item_id,department_submission_id,section_type,item_period,item_sort_order,request_content,request_author_name,request_author_department_name,result_content,result_author_name,result_author_department_name,result_created_by,result_created_at,result_updated_at,closed_by,closed_author_name,closed_author_department_name,closed_at,created_by,created_at,updated_at,deleted_at,weekly_client_report_items(id,item_period,title,content,importance,work_categories(category_name),weekly_client_reports(department_id,week_start_date,report_year,report_month,week_of_month,departments(department_name),clients(client_name))),department_weekly_submissions(id,department_id,week_start_date,report_year,report_month,week_of_month,departments(department_name),department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content))"
+            )
+            .is("deleted_at", null)
+            .is("closed_at", null)
+            .order("created_at", { ascending: false })
+            .limit(MEETING_REPORT_LIMIT)
+        : Promise.resolve({ data: [] }),
       needsSubmissions
         ? (() => {
             let query = dataClient
@@ -562,7 +681,7 @@ export default async function MeetingMaterialsPage({
             return query;
           })()
         : Promise.resolve({ data: [] }),
-      activeTab === "materials"
+      activeTab === "materials" || activeTab === "collection"
         ? dataClient.from("work_categories").select("id,category_name").eq("is_active", true).order("sort_order", { ascending: true })
         : Promise.resolve({ data: [] })
     ]);
@@ -587,6 +706,11 @@ export default async function MeetingMaterialsPage({
       weekly_volumes: report.weekly_volumes ?? []
     }));
     priorityItemRows = (priorityItemResult.data ?? []) as unknown as PriorityItemQueryRow[];
+    openRequestItems = makeOpenRequestItems(
+      (openRequestResult.data ?? []) as unknown as OpenRequestQueryRow[],
+      (categoryResult.data ?? []) as WorkCategoryRow[],
+      departmentFilter ?? undefined
+    );
     submissions = ((submissionResult.data ?? []) as unknown as SubmissionRow[]).map((submission) => ({
       ...submission,
       department_weekly_contents: submission.department_weekly_contents ?? []
@@ -649,9 +773,9 @@ export default async function MeetingMaterialsPage({
       {activeTab === "collection" ? (
         <CollectionView
           departments={departments}
-          reports={reports}
           submissions={submissions}
           priorityItems={priorityItems}
+          openRequestItems={openRequestItems}
           clientCountMap={clientCountMap}
           writtenClientMap={writtenClientMap}
         />
@@ -675,29 +799,56 @@ export default async function MeetingMaterialsPage({
 
 function CollectionView({
   departments,
-  reports,
   submissions,
   priorityItems,
+  openRequestItems,
   clientCountMap,
   writtenClientMap
 }: {
   departments: DepartmentRow[];
-  reports: MeetingReportRow[];
   submissions: SubmissionRow[];
   priorityItems: MeetingPriorityItem[];
+  openRequestItems: MeetingOpenRequestItem[];
   clientCountMap: Map<string, number>;
   writtenClientMap: Map<string, Set<string>>;
 }) {
+  const totalClientCount = departments.reduce((sum, department) => sum + (clientCountMap.get(department.id) ?? 0), 0);
+  const completedClientCount = departments.reduce((sum, department) => sum + (writtenClientMap.get(department.id)?.size ?? 0), 0);
+  const completionRate = totalClientCount > 0 ? Math.round((completedClientCount / totalClientCount) * 100) : 0;
   return (
     <div className="grid w-full gap-3 xl:grid-cols-2">
-      <MeetingPriorityPanel items={priorityItems} />
+      <MeetingPriorityPanel items={priorityItems} openRequests={openRequestItems} />
       <section className="sketch-panel p-3">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
+        <div className="mb-3 flex min-h-[54px] items-center justify-between gap-3">
+          <div className="min-w-0">
             <p className="text-sm font-black text-[#10223d]">부서별 작성 모니터링</p>
             <p className="text-xs font-bold text-slate-500">작성완료 여부를 빠르게 확인합니다.</p>
           </div>
-          <span className="section-chip">자료 {reports.length}건</span>
+          <div className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-[#d9e7f7] bg-[#f8fbff] px-2.5 py-1.5 shadow-[0_10px_22px_rgba(16,34,61,0.04)]">
+            <div className="w-24 shrink-0">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="text-[10px] font-black text-slate-500">작성진행률</span>
+                <span className="text-[11px] font-black text-[#075be8]">{completionRate}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-[#e8f1ff]">
+                <span className="block h-full rounded-full bg-gradient-to-r from-[#0ea5e9] to-[#075be8]" style={{ width: `${completionRate}%` }} />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-1 text-center">
+              <div className="min-w-[52px] rounded-xl bg-white px-1.5 py-1">
+                <span className="block text-[10px] font-black text-slate-400">총건수</span>
+                <span className="block text-xs font-black text-[#10223d]">{totalClientCount}</span>
+              </div>
+              <div className="min-w-[58px] rounded-xl bg-white px-1.5 py-1">
+                <span className="block text-[10px] font-black text-slate-400">완료건수</span>
+                <span className="block text-xs font-black text-[#075be8]">{completedClientCount}</span>
+              </div>
+              <div className="min-w-[52px] rounded-xl bg-white px-1.5 py-1">
+                <span className="block text-[10px] font-black text-slate-400">완료율</span>
+                <span className="block text-xs font-black text-emerald-600">{completionRate}%</span>
+              </div>
+            </div>
+          </div>
         </div>
         <TableShell>
           <table className="table-sticky w-full table-fixed text-left text-[13px]">
@@ -712,7 +863,7 @@ function CollectionView({
               <tr>
                 <th className="px-2 py-2.5">부서</th>
                 <th className="px-2 py-2.5">화주</th>
-                <th className="px-2 py-2.5">미작성</th>
+                <th className="px-2 py-2.5">완료율</th>
                 <th className="px-2 py-2.5">상태</th>
                 <th className="px-2 py-2.5">확정일</th>
               </tr>
@@ -721,7 +872,7 @@ function CollectionView({
               {departments.map((department) => {
                 const totalClients = clientCountMap.get(department.id) ?? 0;
                 const writtenClients = writtenClientMap.get(department.id)?.size ?? 0;
-                const missingClients = Math.max(totalClients - writtenClients, 0);
+                const departmentCompletionRate = totalClients > 0 ? Math.round((writtenClients / totalClients) * 100) : 0;
                 const submission = submissions.find((row) => row.department_id === department.id);
                 const status = compactDepartmentStatus(submission?.status ?? null);
                 return (
@@ -733,7 +884,16 @@ function CollectionView({
                       <span className="font-black text-[#075be8]">{writtenClients}</span>
                       <span className="text-slate-400"> / {totalClients}</span>
                     </td>
-                    <td className="px-2 py-2.5">{missingClients}</td>
+                    <td className="px-2 py-2.5">
+                      <span
+                        className={cn(
+                          "font-black",
+                          departmentCompletionRate === 100 ? "text-emerald-600" : "text-slate-600"
+                        )}
+                      >
+                        {departmentCompletionRate}%
+                      </span>
+                    </td>
                     <td className="px-2 py-2.5">
                       <span className={cn("inline-flex rounded-full border px-2 py-0.5 font-black", status.className)}>
                         {status.label}
