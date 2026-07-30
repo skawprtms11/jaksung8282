@@ -13,6 +13,29 @@ import type {
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type Tables = {
+  center_masters: {
+    Row: {
+      id: string;
+      source_center_id: string;
+      center_name: string;
+      address: string | null;
+      notes: string | null;
+      source_status: string | null;
+      latitude: number | null;
+      longitude: number | null;
+      is_active: boolean;
+      last_synced_at: string;
+      created_at: string;
+      created_by: string | null;
+      updated_at: string;
+      updated_by: string | null;
+    };
+    Insert: Partial<Tables["center_masters"]["Row"]> & {
+      source_center_id: string;
+      center_name: string;
+    };
+    Update: Partial<Tables["center_masters"]["Row"]>;
+  };
   departments: {
     Row: {
       id: string;

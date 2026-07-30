@@ -3253,3 +3253,191 @@ for update using (
     or result_created_by = auth.uid()
   )
 );
+
+-- 029_simplify_permission_helpers.sql
+-- Simplify hot permission helpers used by RLS.
+-- This keeps the same access rules but avoids nested profile lookups such as
+-- can_access_department -> is_admin -> current_app_role.
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.is_active = true
+      and p.app_role = 'admin'
+  );
+$$;
+
+create or replace function public.can_access_department(target_department_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.is_active = true
+      and (
+        p.app_role = 'admin'
+        or p.department_id = target_department_id
+      )
+  );
+$$;
+
+create or replace function public.is_assigned_department_client(target_department_id uuid, target_client_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    join public.client_assignments ca
+      on ca.user_id = p.id
+     and ca.department_id = target_department_id
+     and ca.client_id = target_client_id
+     and ca.is_active = true
+    where p.id = auth.uid()
+      and p.department_id = target_department_id
+      and p.is_active = true
+  );
+$$;
+
+create or replace function public.is_assigned_client(target_client_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    join public.client_assignments ca
+      on ca.user_id = p.id
+     and ca.department_id = p.department_id
+     and ca.client_id = target_client_id
+     and ca.is_active = true
+    where p.id = auth.uid()
+      and p.is_active = true
+  );
+$$;
+
+create or replace function public.can_write_client_report(
+  target_department_id uuid,
+  target_client_id uuid,
+  target_status public.client_report_status
+)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  actor_role public.app_role;
+  actor_department_id uuid;
+begin
+  select p.app_role, p.department_id
+    into actor_role, actor_department_id
+  from public.profiles p
+  where p.id = auth.uid()
+    and p.is_active = true;
+
+  if actor_role is null then
+    return false;
+  end if;
+
+  if not public.is_department_client(target_department_id, target_client_id) then
+    return false;
+  end if;
+
+  if target_status not in ('draft', 'rejected') then
+    return false;
+  end if;
+
+  if actor_role = 'admin' then
+    return true;
+  end if;
+
+  if actor_department_id is distinct from target_department_id then
+    return false;
+  end if;
+
+  if actor_role in ('department_head', 'manager') then
+    return true;
+  end if;
+
+  if actor_role = 'client_owner' then
+    return public.is_assigned_department_client(target_department_id, target_client_id);
+  end if;
+
+  return false;
+end;
+$$;
+
+-- 030_center_masters.sql
+create table if not exists public.center_masters (
+  id uuid primary key default gen_random_uuid(),
+  source_center_id uuid not null unique,
+  center_name text not null,
+  address text,
+  notes text,
+  source_status text,
+  latitude numeric(10, 7),
+  longitude numeric(10, 7),
+  is_active boolean not null default true,
+  last_synced_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id)
+);
+
+drop trigger if exists center_masters_set_updated_at on public.center_masters;
+create trigger center_masters_set_updated_at
+before update on public.center_masters
+for each row execute function public.set_updated_at();
+
+alter table public.center_masters enable row level security;
+
+drop policy if exists "center_masters_select_master_viewers" on public.center_masters;
+create policy "center_masters_select_master_viewers" on public.center_masters
+  for select to authenticated
+  using (
+    is_active = true
+    and exists (
+      select 1
+      from public.profiles p
+      where p.id = auth.uid()
+        and p.is_active = true
+        and p.app_role in ('admin', 'department_head', 'manager')
+    )
+  );
+
+drop policy if exists "center_masters_admin_insert" on public.center_masters;
+create policy "center_masters_admin_insert" on public.center_masters
+  for insert to authenticated
+  with check (public.is_admin());
+
+drop policy if exists "center_masters_admin_update" on public.center_masters;
+create policy "center_masters_admin_update" on public.center_masters
+  for update to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+create index if not exists center_masters_active_name_idx
+  on public.center_masters(center_name)
+  where is_active = true;

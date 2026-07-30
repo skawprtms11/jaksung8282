@@ -8,6 +8,7 @@ import {
   deleteClientsAction,
   deleteDepartmentsAction,
   deleteUsersAction,
+  importLaborCentersAction,
   rejectUserRegistrationRequestAction,
   saveClientAction,
   saveClientAssignmentsAction,
@@ -82,6 +83,72 @@ type DepartmentClientValue = {
 };
 type DepartmentClientLinkValue = { department_id: string; client_id: string; is_active: boolean };
 type DepartmentAssignmentValue = AssignmentValue & { department_id: string | null; client_id: string; is_active: boolean };
+type CenterMasterValue = {
+  id: string;
+  source_center_id: string;
+  center_name: string;
+  address: string | null;
+  notes: string | null;
+  is_active: boolean;
+  updated_at: string;
+};
+
+export function CenterMasterControls({
+  centers,
+  canImport
+}: {
+  centers: CenterMasterValue[];
+  canImport: boolean;
+}) {
+  const [state, action] = useActionState(importLaborCentersAction, null);
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-end gap-2 rounded-[1.25rem] border border-[#d9e7f7] bg-white/82 px-3 py-2 shadow-[0_10px_26px_rgba(16,34,61,0.05)]">
+        {canImport ? (
+          <form action={action}>
+            <SubmitButton variant="primary">
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+              불러오기
+            </SubmitButton>
+          </form>
+        ) : (
+          <p className="text-sm font-bold text-slate-500">센터 정보는 읽기 전용입니다.</p>
+        )}
+      </div>
+      <ActionMessage state={state} />
+      {centers.length === 0 ? (
+        <EmptyState title="센터 정보가 없습니다." description="관리자가 불러오기를 실행하면 노임마감시스템의 센터 목록이 표시됩니다." />
+      ) : (
+        <TableShell>
+          <table className="table-sticky w-full min-w-[760px] text-left text-sm">
+            <thead>
+              <tr>
+                <th className="px-3 py-3">센터명</th>
+                <th className="px-3 py-3">주소</th>
+                <th className="px-3 py-3">비고</th>
+              </tr>
+            </thead>
+            <tbody>
+              {centers.map((center) => (
+                <tr key={center.id} className="border-t border-slate-100">
+                  <td className="px-3 py-3">
+                    <span className="inline-flex items-center gap-2 font-black text-[#10223d]">
+                      <Building2 className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
+                      {center.center_name}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3 text-slate-600">{center.address?.trim() || "-"}</td>
+                  <td className="px-3 py-3 text-slate-500">{center.notes?.trim() || "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableShell>
+      )}
+    </section>
+  );
+}
 
 export function DepartmentMasterTable({
   departments,

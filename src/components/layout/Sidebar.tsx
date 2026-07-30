@@ -30,6 +30,7 @@ const baseMenus = [
 ];
 
 const departmentMasterMenu = { href: "/admin/departments", label: "부서마스터", icon: Building2 };
+const centerMasterMenu = { href: "/admin/centers", label: "센터마스터", icon: PackageSearch };
 
 const adminMenus = [
   { href: "/admin/clients", label: "화주마스터", icon: Warehouse },
@@ -50,6 +51,7 @@ export function Sidebar({
     () => [
       ...baseMenus,
       ...(canViewDepartmentMaster(profile) ? [departmentMasterMenu] : []),
+      ...(canViewDepartmentMaster(profile) ? [centerMasterMenu] : []),
       ...(canManageMasters(profile) ? adminMenus : [])
     ],
     [profile]

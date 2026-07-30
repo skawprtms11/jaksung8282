@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { canRegisterDepartmentClients, isAdmin } from "@/lib/auth/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createLaborSupabaseClient } from "@/lib/supabase/labor";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { clientSchema, departmentClientSchema, departmentSchema, idSchema, userSchema } from "@/lib/validations/common";
 import { formDataToObject, safeErrorMessage, type ActionResult } from "@/lib/utils/form";
@@ -23,6 +24,67 @@ async function requireAdmin() {
     return { profile: null, error: "관리자만 처리할 수 있습니다." };
   }
   return { profile, error: null };
+}
+
+export async function importLaborCentersAction(state: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  void state;
+  void formData;
+  const { profile, error: authError } = await requireAdmin();
+  if (authError || !profile) {
+    return { ok: false, message: authError ?? "권한이 없습니다." };
+  }
+
+  let labor;
+  let admin: ReturnType<typeof createSupabaseAdminClient>;
+  try {
+    labor = createLaborSupabaseClient();
+    admin = createSupabaseAdminClient();
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : "Supabase 환경변수를 확인하세요." };
+  }
+
+  const { data: centers, error } = await labor
+    .from("centers")
+    .select("id,name,code,address,memo,status,latitude,longitude")
+    .eq("status", "active")
+    .order("name");
+
+  if (error) {
+    return { ok: false, message: safeErrorMessage(error.message) };
+  }
+
+  const payload = (centers ?? [])
+    .filter((center) => center.id && center.name?.trim())
+    .map((center) => ({
+      source_center_id: center.id,
+      center_name: center.name.trim(),
+      address: center.address?.trim() || null,
+      notes: center.memo?.trim() || null,
+      source_status: center.status ?? null,
+      latitude: center.latitude,
+      longitude: center.longitude,
+      is_active: center.status === "active",
+      last_synced_at: new Date().toISOString(),
+      updated_by: profile.id
+    }));
+
+  if (payload.length === 0) {
+    return { ok: false, message: "불러올 활성 센터 데이터가 없습니다." };
+  }
+
+  const { error: upsertError } = await admin
+    .from("center_masters")
+    .upsert(payload, { onConflict: "source_center_id" });
+
+  if (upsertError?.message.includes("center_masters")) {
+    return { ok: false, message: "센터마스터 테이블이 없습니다. Supabase SQL 030_center_masters.sql을 먼저 실행하세요." };
+  }
+  if (upsertError) {
+    return { ok: false, message: safeErrorMessage(upsertError.message) };
+  }
+
+  revalidateMasterPath("/admin/centers");
+  return { ok: true, message: `센터 ${payload.length}건을 불러왔습니다.` };
 }
 
 async function resolveDefaultClientDepartmentId(
