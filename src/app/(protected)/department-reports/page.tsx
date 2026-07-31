@@ -1,14 +1,15 @@
-import {
-  DepartmentSubmissionEditor,
-  type DepartmentSubmissionEditorInitialSubmission,
-  type DepartmentVacancyRecordValue,
-  type DepartmentVacancyTrendPointValue
+import dynamic from "next/dynamic";
+import type {
+  DepartmentSubmissionEditorInitialSubmission,
+  DepartmentVacancyRecordValue,
+  DepartmentVacancyTrendPointValue
 } from "@/components/reports/DepartmentSubmissionEditor";
 import { EmptyState } from "@/components/common/EmptyState";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { TableShell } from "@/components/common/TableShell";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { canSubmitDepartment, isAdmin } from "@/lib/auth/permissions";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils/cn";
 import { getCurrentWeekOption } from "@/lib/dates/week";
@@ -52,6 +53,16 @@ type DepartmentVacancyDbRow = Omit<DepartmentVacancyRecordValue, "center_name"> 
 };
 
 const CLIENT_REVIEW_LIMIT = 100;
+const DepartmentSubmissionEditor = dynamic(
+  () => import("@/components/reports/DepartmentSubmissionEditor").then((mod) => mod.DepartmentSubmissionEditor),
+  {
+    loading: () => (
+      <div className="sketch-panel flex min-h-64 items-center justify-center p-4 text-sm font-black text-slate-500">
+        부서자료 화면을 불러오는 중입니다.
+      </div>
+    )
+  }
+);
 
 function importanceIconClassName(importance: Importance) {
   if (importance === "very_high") {
@@ -212,9 +223,15 @@ export default async function DepartmentReportsPage({
   let initialLookupDepartmentId: string | null = null;
   const currentWeek = getCurrentWeekOption();
   if (supabase && profile) {
+    let dataClient = supabase;
+    try {
+      dataClient = createSupabaseAdminClient();
+    } catch {
+      dataClient = supabase;
+    }
     let adminDefaultDepartmentId: string | undefined;
     if (isAdmin(profile) && !params.department_id) {
-      const { data: firstDepartment } = await supabase
+      const { data: firstDepartment } = await dataClient
         .from("departments")
         .select("id")
         .eq("is_active", true)
@@ -241,15 +258,15 @@ export default async function DepartmentReportsPage({
       { data: vacancyTrendData }
     ] = await Promise.all([
       (() => {
-        let query = supabase.from("departments").select("id,department_name").eq("is_active", true).order("sort_order");
+        let query = dataClient.from("departments").select("id,department_name").eq("is_active", true).order("sort_order");
         if (!isAdmin(profile) && departmentFilter) {
           query = query.eq("id", departmentFilter);
         }
         return query;
       })(),
-      supabase.from("work_categories").select("id,category_name,icon_key").eq("is_active", true).order("sort_order"),
+      dataClient.from("work_categories").select("id,category_name,icon_key").eq("is_active", true).order("sort_order"),
       (() => {
-        let query = supabase
+        let query = dataClient
           .from("weekly_client_reports")
           .select("id,created_by,status,updated_at,clients(client_name),weekly_client_report_items(item_period,importance,title,content,sort_order,work_categories(category_name,icon_key)),weekly_volumes(volume_type,quantity,unit)")
           .eq("week_start_date", currentWeek.weekStartDate)
@@ -268,7 +285,7 @@ export default async function DepartmentReportsPage({
         return query;
       })(),
       (() => {
-        let query = supabase
+        let query = dataClient
           .from("department_client_links")
           .select("client_id", { count: "exact", head: true })
           .eq("is_active", true);
@@ -284,7 +301,7 @@ export default async function DepartmentReportsPage({
         return query;
       })(),
       selectedDepartmentFilter
-        ? supabase
+          ? dataClient
             .from("department_weekly_submissions")
             .select(
               "id,department_id,week_start_date,status,finalized_at,department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content)"
@@ -295,7 +312,7 @@ export default async function DepartmentReportsPage({
             .maybeSingle()
         : Promise.resolve({ data: null }),
       selectedDepartmentFilter
-        ? supabase
+          ? dataClient
             .from("department_client_links")
             .select("clients(id,client_name)")
             .eq("department_id", selectedDepartmentFilter)
@@ -303,14 +320,14 @@ export default async function DepartmentReportsPage({
             .order("client_id", { ascending: true })
         : Promise.resolve({ data: [] }),
       selectedDepartmentFilter
-        ? supabase
+          ? dataClient
             .from("profiles")
             .select("id,full_name")
             .eq("department_id", selectedDepartmentFilter)
             .eq("is_active", true)
             .order("full_name", { ascending: true })
         : Promise.resolve({ data: [] }),
-      supabase.from("center_masters").select("id,center_name").eq("is_active", true).order("center_name", { ascending: true }),
+      dataClient.from("center_masters").select("id,center_name").eq("is_active", true).order("center_name", { ascending: true }),
       Promise.resolve({ data: [] }),
       Promise.resolve({ data: [] })
     ]);
@@ -328,7 +345,7 @@ export default async function DepartmentReportsPage({
     const reportRows = reportError ? [] : ((reportData ?? []) as unknown as ClientReviewRow[]);
     if (reportRows.length > 0) {
       const creatorIds = Array.from(new Set(reportRows.map((report) => report.created_by)));
-      const { data: creatorData } = await supabase.from("profiles").select("id,full_name").in("id", creatorIds);
+      const { data: creatorData } = await dataClient.from("profiles").select("id,full_name").in("id", creatorIds);
       const creatorNameMap = new Map((creatorData ?? []).map((creator) => [creator.id, creator.full_name]));
       reports = reportRows.map((report) => ({
         ...report,

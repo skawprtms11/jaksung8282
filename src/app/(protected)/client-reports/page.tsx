@@ -1,5 +1,5 @@
+import dynamic from "next/dynamic";
 import { type ClientReportTableRow } from "@/components/reports/ClientReportsTable";
-import { ClientReportsWorkspace } from "@/components/reports/ClientReportsWorkspace";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { isAdmin } from "@/lib/auth/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -49,6 +49,16 @@ type ReportRow = {
 const REPORT_LIST_LIMIT = 100;
 const CLIENT_REPORT_SELECT =
   "id,created_by,department_id,client_id,report_year,report_month,week_of_month,week_start_date,week_end_date,status,submitted_at,updated_at,departments(department_name),clients(client_name),weekly_client_report_items(item_period,importance,work_category_id,title,content,sort_order,work_categories(category_name,icon_key)),weekly_volumes(volume_type,quantity,unit,custom_unit,note,sort_order)";
+const ClientReportsWorkspace = dynamic(
+  () => import("@/components/reports/ClientReportsWorkspace").then((mod) => mod.ClientReportsWorkspace),
+  {
+    loading: () => (
+      <div className="sketch-panel flex min-h-64 items-center justify-center p-4 text-sm font-black text-slate-500">
+        화주자료 화면을 불러오는 중입니다.
+      </div>
+    )
+  }
+);
 
 export default async function ClientReportsPage({
   searchParams

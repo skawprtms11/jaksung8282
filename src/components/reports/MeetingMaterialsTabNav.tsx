@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { BarChart3, CalendarDays, ClipboardCheck, FileText, Hammer } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -30,6 +31,20 @@ export function MeetingMaterialsTabNav({
 }) {
   const router = useRouter();
 
+  useEffect(() => {
+    const prefetchTabs = () => {
+      tabs.forEach((tab) => router.prefetch(tab.href));
+    };
+
+    if (typeof window.requestIdleCallback === "function") {
+      const idleId = window.requestIdleCallback(prefetchTabs, { timeout: 1200 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+
+    const timeoutId = window.setTimeout(prefetchTabs, 250);
+    return () => window.clearTimeout(timeoutId);
+  }, [router, tabs]);
+
   return (
     <nav className="grid min-w-0 flex-1 grid-cols-2 gap-1 rounded-[1rem] bg-[#f5f9ff] p-1 lg:grid-cols-5" aria-label="회의자료 화면 탭">
       {tabs.map((tab) => {
@@ -39,7 +54,7 @@ export function MeetingMaterialsTabNav({
           <Link
             key={tab.value}
             href={tab.href}
-            prefetch={false}
+            prefetch
             scroll={false}
             onFocus={() => router.prefetch(tab.href)}
             onMouseEnter={() => router.prefetch(tab.href)}

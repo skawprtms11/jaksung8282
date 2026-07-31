@@ -1,11 +1,9 @@
-import { VolumeComparisonChart, type VolumeChartRow } from "@/components/charts/VolumeComparisonChart";
+import dynamic from "next/dynamic";
+import type { VolumeChartRow } from "@/components/charts/VolumeComparisonChart";
 import { EmptyState } from "@/components/common/EmptyState";
 import { TableShell } from "@/components/common/TableShell";
-import { MeetingFacilityConstructionBoard } from "@/components/reports/MeetingFacilityConstructionBoard";
-import { MeetingMaterialsTable } from "@/components/reports/MeetingMaterialsTable";
 import { MeetingMaterialsTabNav } from "@/components/reports/MeetingMaterialsTabNav";
-import { MeetingPriorityPanel, type MeetingOpenRequestItem, type MeetingPriorityItem } from "@/components/reports/MeetingPriorityPanel";
-import { MeetingHolidayWorkBoard } from "@/components/reports/MeetingHolidayWorkBoard";
+import type { MeetingOpenRequestItem, MeetingPriorityItem } from "@/components/reports/MeetingPriorityPanel";
 import { MeetingMaterialsWeekFilter } from "@/components/reports/MeetingMaterialsWeekFilter";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { isAdmin } from "@/lib/auth/permissions";
@@ -178,6 +176,23 @@ type MeetingSearchParams = {
 
 const MEETING_REPORT_LIMIT = 500;
 const COMMON_CONTENT_FORMAT = "department-common-items/v1";
+const MeetingPriorityPanel = dynamic(() => import("@/components/reports/MeetingPriorityPanel").then((mod) => mod.MeetingPriorityPanel), {
+  loading: () => <PanelLoading label="핵심 이슈를 불러오는 중입니다." />
+});
+const MeetingMaterialsTable = dynamic(() => import("@/components/reports/MeetingMaterialsTable").then((mod) => mod.MeetingMaterialsTable), {
+  loading: () => <PanelLoading label="회의자료를 불러오는 중입니다." />
+});
+const MeetingHolidayWorkBoard = dynamic(() => import("@/components/reports/MeetingHolidayWorkBoard").then((mod) => mod.MeetingHolidayWorkBoard), {
+  loading: () => <PanelLoading label="공휴일 근무현황을 불러오는 중입니다." />
+});
+const MeetingFacilityConstructionBoard = dynamic(
+  () => import("@/components/reports/MeetingFacilityConstructionBoard").then((mod) => mod.MeetingFacilityConstructionBoard),
+  { loading: () => <PanelLoading label="시설공사 자료를 불러오는 중입니다." /> }
+);
+const VolumeComparisonChart = dynamic(() => import("@/components/charts/VolumeComparisonChart").then((mod) => mod.VolumeComparisonChart), {
+  loading: () => <PanelLoading label="물동량 그래프를 불러오는 중입니다." />
+});
+
 const tabs: { value: MeetingTab; label: string }[] = [
   { value: "collection", label: "취합현황" },
   { value: "materials", label: "회의자료" },
@@ -185,6 +200,14 @@ const tabs: { value: MeetingTab; label: string }[] = [
   { value: "holiday", label: "공휴일" },
   { value: "facility", label: "시설공사" }
 ];
+
+function PanelLoading({ label }: { label: string }) {
+  return (
+    <div className="sketch-panel flex min-h-44 items-center justify-center p-4 text-sm font-black text-slate-500">
+      {label}
+    </div>
+  );
+}
 
 function getActiveTab(value?: string): MeetingTab {
   return tabs.some((tab) => tab.value === value) ? (value as MeetingTab) : "collection";

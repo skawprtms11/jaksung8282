@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bell,
@@ -57,6 +57,20 @@ export function Sidebar({
     [profile]
   );
 
+  useEffect(() => {
+    const prefetchMenus = () => {
+      menus.forEach((menu) => router.prefetch(menu.href));
+    };
+
+    if (typeof window.requestIdleCallback === "function") {
+      const idleId = window.requestIdleCallback(prefetchMenus, { timeout: 1500 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+
+    const timeoutId = window.setTimeout(prefetchMenus, 350);
+    return () => window.clearTimeout(timeoutId);
+  }, [menus, router]);
+
   return (
     <aside
       className={`fixed inset-y-0 left-0 z-20 hidden w-72 p-4 transition-transform duration-300 ease-out lg:block ${
@@ -91,7 +105,7 @@ export function Sidebar({
             <Link
               key={menu.href}
               href={menu.href}
-              prefetch={false}
+              prefetch
               onFocus={() => router.prefetch(menu.href)}
               onMouseEnter={() => router.prefetch(menu.href)}
               onTouchStart={() => router.prefetch(menu.href)}
