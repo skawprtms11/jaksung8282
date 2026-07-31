@@ -145,7 +145,6 @@ export async function deleteNoticeAction(_: ActionResult | null, formData: FormD
       return { ok: false, message: "Supabase SQL 028번을 실행하거나 관리자 환경변수를 확인하세요." };
     }
   }
-  revalidatePath("/notices");
   return { ok: true, message: "게시글을 삭제했습니다." };
 }
 

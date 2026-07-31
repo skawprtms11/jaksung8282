@@ -257,7 +257,6 @@ export function NoticeBoard({
           if (collectionNotice?.id === notice.id) {
             setCollectionNotice(null);
           }
-          router.refresh();
         })
         .catch(() => setDeleteState({ ok: false, message: "게시글을 삭제하지 못했습니다." }));
     });

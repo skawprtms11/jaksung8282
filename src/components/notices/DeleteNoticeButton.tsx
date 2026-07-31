@@ -1,13 +1,22 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { deleteNoticeAction } from "@/actions/notices";
 import { ActionMessage } from "@/components/common/ActionMessage";
 import { SubmitButton } from "@/components/common/SubmitButton";
 
 export function DeleteNoticeButton({ id }: { id: string }) {
+  const router = useRouter();
   const [state, action] = useActionState(deleteNoticeAction, null);
+  useEffect(() => {
+    if (state?.ok) {
+      router.replace("/notices");
+      router.refresh();
+    }
+  }, [router, state]);
+
   return (
     <form
       action={action}

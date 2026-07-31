@@ -1,5 +1,4 @@
 "use server";
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import {
@@ -1263,7 +1262,6 @@ export async function saveReportItemRequestAction(formData: FormData): Promise<A
     if (error) {
       return { ok: false, message: safeErrorMessage(error.message) };
     }
-    revalidatePath("/meeting-materials");
     return { ok: true, message: "요청사항을 수정했습니다.", data: data as ReportItemRequestActionRow };
   }
 
@@ -1288,7 +1286,6 @@ export async function saveReportItemRequestAction(formData: FormData): Promise<A
     return { ok: false, message: safeErrorMessage(error.message) };
   }
 
-  revalidatePath("/meeting-materials");
   return { ok: true, message: "요청사항을 등록했습니다.", data: data as ReportItemRequestActionRow };
 }
 
@@ -1342,7 +1339,6 @@ export async function deleteReportItemRequestAction(formData: FormData): Promise
     return { ok: false, message: safeErrorMessage(error.message) };
   }
 
-  revalidatePath("/meeting-materials");
   return { ok: true, message: "요청사항을 삭제했습니다.", data: { id: parsed.data } };
 }
 
@@ -1414,7 +1410,6 @@ export async function saveReportItemRequestResultAction(formData: FormData): Pro
     return { ok: false, message: safeErrorMessage(error.message) };
   }
 
-  revalidatePath("/meeting-materials");
   return { ok: true, message: "처리결과를 저장했습니다.", data: data as ReportItemRequestActionRow };
 }
 
@@ -1477,7 +1472,6 @@ export async function deleteReportItemRequestResultAction(formData: FormData): P
     return { ok: false, message: safeErrorMessage(error.message) };
   }
 
-  revalidatePath("/meeting-materials");
   return { ok: true, message: "처리결과를 삭제했습니다.", data: data as ReportItemRequestActionRow };
 }
 
@@ -1543,6 +1537,5 @@ export async function closeReportItemRequestAction(formData: FormData): Promise<
     return { ok: false, message: safeErrorMessage(error.message) };
   }
 
-  revalidatePath("/meeting-materials");
   return { ok: true, message: "요청사항을 종결했습니다.", data: data as ReportItemRequestActionRow };
 }
