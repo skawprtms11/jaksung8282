@@ -4,10 +4,14 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   serverExternalPackages: ["@supabase/supabase-js"],
   experimental: {
+    dynamicOnHover: true,
+    optimizePackageImports: ["lucide-react", "recharts"],
+    prefetchInlining: true,
     staleTimes: {
-      dynamic: 300,
-      static: 1800
-    }
+      dynamic: 900,
+      static: 3600
+    },
+    turbopackFileSystemCacheForDev: true
   }
 };
 

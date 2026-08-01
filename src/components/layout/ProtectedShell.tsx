@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import type { HeaderFilterOptions } from "./Header";
@@ -18,12 +18,14 @@ export function ProtectedShell({
   filterOptions?: HeaderFilterOptions;
   children: React.ReactNode;
 }) {
-  const [isSidebarHidden, setIsSidebarHidden] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-    return window.localStorage.getItem("tpl-sidebar-hidden") === "true";
-  });
+  const [isSidebarHidden, setIsSidebarHidden] = useState(false);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setIsSidebarHidden(window.localStorage.getItem("tpl-sidebar-hidden") === "true");
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   function toggleSidebar() {
     setIsSidebarHidden((current) => {

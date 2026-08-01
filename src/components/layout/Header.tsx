@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { Building2, LogOut, PackageSearch, PanelLeftOpen, ShieldCheck } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { signOutAction } from "@/actions/auth";
+import { pickDefaultClientId, pickDefaultDepartmentId } from "@/lib/auth/default-scope";
 import type { ProfileSummary } from "@/lib/auth/permissions";
-import { roleLabel } from "@/lib/auth/permissions";
+import { canViewMeetingMaterials, roleLabel } from "@/lib/auth/permissions";
 
 export type HeaderDepartmentFilterOption = { id: string; department_name: string };
 export type HeaderClientFilterOption = { id: string; client_name: string; department_id: string };
@@ -153,9 +154,9 @@ function HeaderScopeFilter({
     if (hasFilterOptions(options)) {
       return sortHeaderFilterOptions(options);
     }
-    return readCachedFilterOptions(profile.id) ?? emptyFilterOptions;
+    return emptyFilterOptions;
   });
-  const [isLoadingOptions, setIsLoadingOptions] = useState(() => !hasFilterOptions(options) && !readCachedFilterOptions(profile.id));
+  const [isLoadingOptions, setIsLoadingOptions] = useState(() => !hasFilterOptions(options));
   const hasLoadedOptions = hasFilterOptions(loadedOptions);
   const activeOptions = hasLoadedOptions ? loadedOptions : emptyFilterOptions;
   const selectedDepartmentId = searchParams.get("department_id") ?? "";
@@ -169,8 +170,9 @@ function HeaderScopeFilter({
     pathname === "/meeting-materials" && activeMeetingTab === "materials" && !selectedClientId;
   const restrictClientReportsAll = isClientWritePage && !selectedDepartmentId;
   const restrictDepartmentReportsAll = isDepartmentReportPage && !selectedDepartmentId;
+  const preferredDepartmentId = pickDefaultDepartmentId(activeOptions.departments, profile.app_role);
   const fallbackDepartmentId =
-    restrictMeetingMaterialsAll || restrictClientReportsAll || restrictDepartmentReportsAll ? activeOptions.departments[0]?.id ?? "" : "";
+    restrictMeetingMaterialsAll || restrictClientReportsAll || restrictDepartmentReportsAll ? preferredDepartmentId : "";
   const effectiveDepartmentId = selectedDepartmentId || fallbackDepartmentId;
   const effectiveDepartmentIndex = activeOptions.departments.findIndex((department) => department.id === effectiveDepartmentId);
   const previousDepartment = isMeetingMaterialsTab && effectiveDepartmentIndex > 0 ? activeOptions.departments[effectiveDepartmentIndex - 1] : null;
@@ -192,7 +194,9 @@ function HeaderScopeFilter({
       }),
     [activeOptions.clients, assignedClientIdSet, effectiveDepartmentId, isClientWritePage, profile.app_role]
   );
-  const effectiveClientId = selectedClientId;
+  const requiresClientSelection = isClientWritePage || isDepartmentReportPage;
+  const fallbackClientId = requiresClientSelection && effectiveDepartmentId ? pickDefaultClientId(departmentScopedClients, profile.app_role) : "";
+  const effectiveClientId = selectedClientId || fallbackClientId;
 
   const adjacentDepartmentHrefs = useMemo(() => {
     if (!isMeetingMaterialsTab) {
@@ -215,6 +219,15 @@ function HeaderScopeFilter({
   useEffect(() => {
     if (hasLoadedOptions) {
       return;
+    }
+
+    const cachedOptions = readCachedFilterOptions(profile.id);
+    if (cachedOptions) {
+      const timeoutId = window.setTimeout(() => {
+        setLoadedOptions(cachedOptions);
+        setIsLoadingOptions(false);
+      }, 0);
+      return () => window.clearTimeout(timeoutId);
     }
 
     const controller = new AbortController();
@@ -244,19 +257,7 @@ function HeaderScopeFilter({
     return () => controller.abort();
   }, [hasLoadedOptions, profile.id]);
 
-  useEffect(() => {
-    if (!isMeetingMaterialsTab) {
-      return;
-    }
-    if (adjacentDepartmentHrefs.previous) {
-      router.prefetch(adjacentDepartmentHrefs.previous);
-    }
-    if (adjacentDepartmentHrefs.next) {
-      router.prefetch(adjacentDepartmentHrefs.next);
-    }
-  }, [adjacentDepartmentHrefs.next, adjacentDepartmentHrefs.previous, isMeetingMaterialsTab, router]);
-
-  function updateFilter(nextDepartmentId: string, nextClientId: string) {
+  const updateFilter = useCallback((nextDepartmentId: string, nextClientId: string) => {
     const nextParams = new URLSearchParams(searchParams.toString());
     if (nextDepartmentId) {
       nextParams.set("department_id", nextDepartmentId);
@@ -275,7 +276,52 @@ function HeaderScopeFilter({
     startTransition(() => {
       router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     });
-  }
+  }, [pathname, router, searchParams]);
+
+  const replaceDefaultFilterInHistory = useCallback((nextDepartmentId: string, nextClientId: string) => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set("department_id", nextDepartmentId);
+    if (nextClientId) {
+      nextParams.set("client_id", nextClientId);
+    } else {
+      nextParams.delete("client_id");
+    }
+    const query = nextParams.toString();
+    if (query !== searchParams.toString()) {
+      window.history.replaceState(null, "", query ? `${pathname}?${query}` : pathname);
+    }
+  }, [pathname, searchParams]);
+
+  useEffect(() => {
+    if (!hasLoadedOptions || isLoadingOptions || isPending) {
+      return;
+    }
+    if (!requiresDepartmentSelection && !restrictMeetingMaterialsAll) {
+      return;
+    }
+    if (!effectiveDepartmentId) {
+      return;
+    }
+    const shouldApplyDepartment = !selectedDepartmentId;
+    const shouldApplyClient = requiresClientSelection && !selectedClientId && Boolean(fallbackClientId);
+    if (!shouldApplyDepartment && !shouldApplyClient) {
+      return;
+    }
+
+    replaceDefaultFilterInHistory(effectiveDepartmentId, shouldApplyClient ? fallbackClientId : selectedClientId);
+  }, [
+    effectiveDepartmentId,
+    fallbackClientId,
+    hasLoadedOptions,
+    isLoadingOptions,
+    isPending,
+    requiresClientSelection,
+    requiresDepartmentSelection,
+    restrictMeetingMaterialsAll,
+    selectedClientId,
+    selectedDepartmentId,
+    replaceDefaultFilterInHistory
+  ]);
 
   function handleDepartmentChange(nextDepartmentId: string) {
     const nextClientStillVisible = activeOptions.clients.some(
@@ -325,7 +371,9 @@ function HeaderScopeFilter({
           aria-label="화주 필터"
         >
           {isLoadingOptions ? <option value="">화주 불러오는 중</option> : null}
-          <option value="">전체 화주</option>
+          <option value="" disabled={requiresClientSelection}>
+            {requiresClientSelection ? "화주 선택" : "전체 화주"}
+          </option>
           {departmentScopedClients.map((client) => (
             <option key={client.id} value={client.id}>
               {client.client_name}
@@ -338,6 +386,9 @@ function HeaderScopeFilter({
           <button
             type="button"
             onClick={() => (previousDepartment ? handleDepartmentPager(previousDepartment.id) : undefined)}
+            onFocus={() => (adjacentDepartmentHrefs.previous ? router.prefetch(adjacentDepartmentHrefs.previous) : undefined)}
+            onMouseEnter={() => (adjacentDepartmentHrefs.previous ? router.prefetch(adjacentDepartmentHrefs.previous) : undefined)}
+            onTouchStart={() => (adjacentDepartmentHrefs.previous ? router.prefetch(adjacentDepartmentHrefs.previous) : undefined)}
             disabled={!previousDepartment || isPending || isLoadingOptions}
             className="focus-ring flex h-9 w-9 items-center justify-center rounded-full border border-[#dbe8fb] bg-white text-[#075be8] shadow-[0_8px_18px_rgba(7,91,232,0.08)] transition hover:-translate-x-0.5 hover:border-[#9fc2f6] hover:bg-[#eaf3ff] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-x-0"
             aria-label={previousDepartment ? `이전 부서 ${previousDepartment.department_name} 조회` : "이전 부서 없음"}
@@ -350,6 +401,9 @@ function HeaderScopeFilter({
           <button
             type="button"
             onClick={() => (nextDepartment ? handleDepartmentPager(nextDepartment.id) : undefined)}
+            onFocus={() => (adjacentDepartmentHrefs.next ? router.prefetch(adjacentDepartmentHrefs.next) : undefined)}
+            onMouseEnter={() => (adjacentDepartmentHrefs.next ? router.prefetch(adjacentDepartmentHrefs.next) : undefined)}
+            onTouchStart={() => (adjacentDepartmentHrefs.next ? router.prefetch(adjacentDepartmentHrefs.next) : undefined)}
             disabled={!nextDepartment || isPending || isLoadingOptions}
             className="focus-ring flex h-9 w-9 items-center justify-center rounded-full border border-[#dbe8fb] bg-white text-[#075be8] shadow-[0_8px_18px_rgba(7,91,232,0.08)] transition hover:translate-x-0.5 hover:border-[#9fc2f6] hover:bg-[#eaf3ff] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-x-0"
             aria-label={nextDepartment ? `다음 부서 ${nextDepartment.department_name} 조회` : "다음 부서 없음"}
@@ -378,7 +432,7 @@ export function Header({
 }) {
   const pathname = usePathname();
   const meta = getRouteMeta(pathname);
-  const shouldShowFilters = filteredRoutes.has(pathname);
+  const shouldShowFilters = filteredRoutes.has(pathname) && (pathname !== "/meeting-materials" || canViewMeetingMaterials(profile));
 
   return (
     <header className="sticky top-0 z-10 px-4 py-4 backdrop-blur-xl lg:px-6">

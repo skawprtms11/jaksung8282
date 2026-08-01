@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bell,
@@ -19,11 +19,11 @@ import {
   Warehouse
 } from "lucide-react";
 import type { ProfileSummary } from "@/lib/auth/permissions";
-import { canManageMasters, canViewDepartmentMaster } from "@/lib/auth/permissions";
+import { canManageMasters, canViewDepartmentMaster, canViewMeetingMaterials } from "@/lib/auth/permissions";
 
+const noticeMenu = { href: "/notices", label: "공지사항", icon: Home };
+const meetingMaterialsMenu = { href: "/meeting-materials", label: "회의자료", icon: ChartNoAxesCombined };
 const baseMenus = [
-  { href: "/notices", label: "공지사항", icon: Home },
-  { href: "/meeting-materials", label: "회의자료", icon: ChartNoAxesCombined },
   { href: "/department-reports", label: "부서자료", icon: ClipboardCheck },
   { href: "/client-reports", label: "화주자료", icon: FilePenLine },
   { href: "/mini-game", label: "미니게임", icon: Gamepad2 }
@@ -49,6 +49,8 @@ export function Sidebar({
   const router = useRouter();
   const menus = useMemo(
     () => [
+      noticeMenu,
+      ...(canViewMeetingMaterials(profile) ? [meetingMaterialsMenu] : []),
       ...baseMenus,
       ...(canViewDepartmentMaster(profile) ? [departmentMasterMenu] : []),
       ...(canViewDepartmentMaster(profile) ? [centerMasterMenu] : []),
@@ -56,20 +58,6 @@ export function Sidebar({
     ],
     [profile]
   );
-
-  useEffect(() => {
-    const prefetchMenus = () => {
-      menus.forEach((menu) => router.prefetch(menu.href));
-    };
-
-    if (typeof window.requestIdleCallback === "function") {
-      const idleId = window.requestIdleCallback(prefetchMenus, { timeout: 1500 });
-      return () => window.cancelIdleCallback(idleId);
-    }
-
-    const timeoutId = window.setTimeout(prefetchMenus, 350);
-    return () => window.clearTimeout(timeoutId);
-  }, [menus, router]);
 
   return (
     <aside
@@ -105,7 +93,7 @@ export function Sidebar({
             <Link
               key={menu.href}
               href={menu.href}
-              prefetch
+              prefetch={false}
               onFocus={() => router.prefetch(menu.href)}
               onMouseEnter={() => router.prefetch(menu.href)}
               onTouchStart={() => router.prefetch(menu.href)}

@@ -1,5 +1,6 @@
 import dynamic from "next/dynamic";
 import { type ClientReportTableRow } from "@/components/reports/ClientReportsTable";
+import { pickDefaultClientId, pickDefaultDepartmentId } from "@/lib/auth/default-scope";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { isAdmin } from "@/lib/auth/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -10,7 +11,9 @@ type DepartmentOption = { id: string; department_name: string };
 type ClientOption = { id: string; client_name: string; department_id: string };
 type ClientLinkRow = { department_id: string; clients: { id: string; client_name: string } | null };
 type ClientAssignmentRow = { client_id: string };
+type DefaultClientAssignmentRow = { client_id: string; clients: { id: string; client_name: string } | null };
 type CategoryOption = { id: string; category_name: string; icon_key: string };
+type ProfileNameRow = { id: string; full_name: string };
 type ReportRow = {
   id: string;
   created_by: string;
@@ -78,6 +81,7 @@ export default async function ClientReportsPage({
   let categories: CategoryOption[] = [];
   let reports: ReportRow[] = [];
   let defaultDepartmentId = params.department_id ?? null;
+  let defaultClientId: string | undefined;
 
   if (supabase && profile) {
     let dataClient = supabase;
@@ -88,19 +92,59 @@ export default async function ClientReportsPage({
     }
     let adminDefaultDepartmentId: string | undefined;
     if (isAdmin(profile) && !params.department_id) {
-      const { data: firstDepartment } = await dataClient
+      const { data: defaultDepartments } = await dataClient
         .from("departments")
-        .select("id")
+        .select("id,department_name")
         .eq("is_active", true)
         .order("sort_order", { ascending: true })
-        .order("department_name", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      adminDefaultDepartmentId = firstDepartment?.id;
+        .order("department_name", { ascending: true });
+      adminDefaultDepartmentId = pickDefaultDepartmentId((defaultDepartments ?? []) as DepartmentOption[], profile.app_role) || undefined;
     }
     const departmentFilter = isAdmin(profile) ? params.department_id ?? adminDefaultDepartmentId : profile.department_id;
     defaultDepartmentId = departmentFilter ?? null;
-    const [{ data: departmentData }, { data: categoryData }, { data: clientData }, { data: assignmentData }, { data: reportData, error: reportError }] = await Promise.all([
+    if (!params.client_id && departmentFilter) {
+      if (profile.app_role === "client_owner") {
+        const { data: defaultAssignments } = await dataClient
+          .from("client_assignments")
+          .select("client_id,clients(id,client_name)")
+          .eq("user_id", profile.id)
+          .eq("is_active", true);
+        const assignedClients = ((defaultAssignments ?? []) as unknown as DefaultClientAssignmentRow[])
+          .filter((assignment) => assignment.clients)
+          .map((assignment) => ({
+            id: assignment.clients?.id ?? assignment.client_id,
+            client_name: assignment.clients?.client_name ?? ""
+          }))
+          .filter((client) => client.id && client.client_name)
+          .sort((left, right) => left.client_name.localeCompare(right.client_name, "ko"));
+        defaultClientId = pickDefaultClientId(assignedClients, profile.app_role) || undefined;
+      } else {
+        const { data: defaultClientLinks } = await dataClient
+          .from("department_client_links")
+          .select("clients(id,client_name)")
+          .eq("department_id", departmentFilter)
+          .eq("is_active", true)
+          .order("client_id", { ascending: true });
+        const defaultClients = ((defaultClientLinks ?? []) as unknown as ClientLinkRow[])
+          .filter((link) => link.clients)
+          .map((link) => ({
+            id: link.clients?.id ?? "",
+            client_name: link.clients?.client_name ?? ""
+          }))
+          .filter((client) => client.id && client.client_name)
+          .sort((left, right) => left.client_name.localeCompare(right.client_name, "ko"));
+        defaultClientId = pickDefaultClientId(defaultClients, profile.app_role) || undefined;
+      }
+    }
+    const selectedClientFilter = params.client_id ?? defaultClientId;
+    const [
+      { data: departmentData },
+      { data: categoryData },
+      { data: clientData },
+      { data: assignmentData },
+      { data: profileData },
+      { data: reportData, error: reportError }
+    ] = await Promise.all([
       (() => {
         let query = dataClient.from("departments").select("id,department_name").eq("is_active", true).order("sort_order");
         if (!isAdmin(profile) && departmentFilter) {
@@ -124,6 +168,13 @@ export default async function ClientReportsPage({
         ? dataClient.from("client_assignments").select("client_id").eq("user_id", profile.id).eq("is_active", true)
         : Promise.resolve({ data: [] }),
       (() => {
+        let query = dataClient.from("profiles").select("id,full_name");
+        if (departmentFilter) {
+          query = query.eq("department_id", departmentFilter);
+        }
+        return query;
+      })(),
+      (() => {
         let query = dataClient
           .from("weekly_client_reports")
           .select(CLIENT_REPORT_SELECT)
@@ -135,8 +186,8 @@ export default async function ClientReportsPage({
         } else if (departmentFilter) {
           query = query.eq("department_id", departmentFilter);
         }
-        if (params.client_id) {
-          query = query.eq("client_id", params.client_id);
+        if (selectedClientFilter) {
+          query = query.eq("client_id", selectedClientFilter);
         }
         if (params.status) {
           query = query.eq("status", params.status);
@@ -156,15 +207,11 @@ export default async function ClientReportsPage({
     const assignedClientIds = new Set(((assignmentData ?? []) as ClientAssignmentRow[]).map((assignment) => assignment.client_id));
     editorClients = profile.app_role === "client_owner" ? clients.filter((client) => assignedClientIds.has(client.id)) : clients;
     const reportRows = reportError ? [] : ((reportData ?? []) as unknown as ReportRow[]);
-    if (reportRows.length > 0) {
-      const creatorIds = Array.from(new Set(reportRows.map((report) => report.created_by)));
-      const { data: creatorData } = await dataClient.from("profiles").select("id,full_name").in("id", creatorIds);
-      const creatorNameMap = new Map((creatorData ?? []).map((creator) => [creator.id, creator.full_name]));
-      reports = reportRows.map((report) => ({
-        ...report,
-        profiles: { full_name: creatorNameMap.get(report.created_by) ?? "-" }
-      }));
-    }
+    const creatorNameMap = new Map(((profileData ?? []) as ProfileNameRow[]).map((creator) => [creator.id, creator.full_name]));
+    reports = reportRows.map((report) => ({
+      ...report,
+      profiles: { full_name: creatorNameMap.get(report.created_by) ?? "-" }
+    }));
   }
   const tableRows: ClientReportTableRow[] = reports.map((report) => ({
     id: report.id,
@@ -239,7 +286,7 @@ export default async function ClientReportsPage({
         clients={editorClients}
         categories={categories}
         defaultDepartmentId={defaultDepartmentId}
-        defaultClientId={params.client_id}
+        defaultClientId={params.client_id ?? defaultClientId}
         reports={tableRows}
       />
     </>

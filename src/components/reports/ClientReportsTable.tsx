@@ -2,10 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { CheckCircle2, Eye, Loader2, PackageCheck, Pencil, RotateCcw, Save, Trash2, X } from "lucide-react";
+import { CheckCircle2, Eye, Loader2, PackageCheck, Pencil, RotateCcw, Save, X } from "lucide-react";
 import {
   cancelSubmittedClientReportsAction,
-  deleteSelectedClientReportsAction,
   loadClientHistoricalVolumesAction,
   submitSelectedClientReportsAction
 } from "@/actions/reports";
@@ -110,18 +109,17 @@ function ModalPortal({ children }: { children: React.ReactNode }) {
 export function ClientReportsTable({
   reports,
   activeEditingReportId,
-  onStartEdit,
   onCancelEdit,
-  onOpenEditDialog
+  onOpenEditDialog,
+  onReportStatusChange
 }: {
   reports: ClientReportTableRow[];
   activeEditingReportId?: string | null;
-  onStartEdit: (report: ClientReportEditorInitialReport) => void;
   onCancelEdit: () => void;
   onOpenEditDialog: (report: ClientReportEditorInitialReport, period: ItemPeriod) => void;
+  onReportStatusChange?: (reportIds: string[], status: ClientReportStatus, submittedAt: string | null) => void;
 }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
   const [statusOverrides, setStatusOverrides] = useState<Map<string, ClientReportStatus>>(() => new Map());
   const [submittedAtOverrides, setSubmittedAtOverrides] = useState<Map<string, string | null>>(() => new Map());
   const [volumeDialogState, setVolumeDialogState] = useState<{
@@ -131,17 +129,16 @@ export function ClientReportsTable({
     message?: string;
   } | null>(null);
   const [localMessage, setLocalMessage] = useState<{ ok: boolean; message: string } | null>(null);
-  const [pendingAction, setPendingAction] = useState<"delete" | "submit" | "cancel-submit" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"submit" | "cancel-submit" | null>(null);
   const displayedReports = useMemo(
     () =>
       reports
-        .filter((report) => !hiddenIds.has(report.id))
         .map((report) => ({
           ...report,
           status: statusOverrides.get(report.id) ?? report.status,
           submittedAt: submittedAtOverrides.has(report.id) ? submittedAtOverrides.get(report.id) ?? null : report.submittedAt
         })),
-    [hiddenIds, reports, statusOverrides, submittedAtOverrides]
+    [reports, statusOverrides, submittedAtOverrides]
   );
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const selectedReports = useMemo(
@@ -149,7 +146,6 @@ export function ClientReportsTable({
     [displayedReports, selectedIdSet]
   );
   const allSelected = displayedReports.length > 0 && selectedIds.length === displayedReports.length;
-  const singleSelectedReport = selectedReports.length === 1 ? selectedReports[0] : null;
   const hasExpiredCancelSelection = selectedReports.some((report) => isPastConfirmationCancelWindow(report.submittedAt));
   const canCancelSubmit =
     selectedReports.length > 0 &&
@@ -177,7 +173,7 @@ export function ClientReportsTable({
 
   async function runBatchAction(
     form: HTMLFormElement,
-    actionType: "delete" | "submit" | "cancel-submit",
+    actionType: "submit" | "cancel-submit",
     action: (state: null, formData: FormData) => Promise<{ ok: boolean; message: string }>
   ) {
     const ids = selectedIds.slice();
@@ -189,41 +185,30 @@ export function ClientReportsTable({
     if (!result.ok) {
       return;
     }
-    if (actionType === "delete") {
-      setHiddenIds((current) => new Set([...current, ...ids]));
-    } else {
-      setStatusOverrides((current) => {
-        const next = new Map(current);
-        ids.forEach((id) => next.set(id, actionType === "submit" ? "submitted" : "draft"));
-        return next;
-      });
-      setSubmittedAtOverrides((current) => {
-        const next = new Map(current);
-        const submittedAt = new Date().toISOString();
-        ids.forEach((id) => next.set(id, actionType === "submit" ? submittedAt : null));
-        return next;
-      });
-    }
+    const nextStatus: ClientReportStatus = actionType === "submit" ? "submitted" : "draft";
+    const nextSubmittedAt = actionType === "submit" ? new Date().toISOString() : null;
+    setStatusOverrides((current) => {
+      const next = new Map(current);
+      ids.forEach((id) => next.set(id, nextStatus));
+      return next;
+    });
+    setSubmittedAtOverrides((current) => {
+      const next = new Map(current);
+      ids.forEach((id) => next.set(id, nextSubmittedAt));
+      return next;
+    });
+    onReportStatusChange?.(ids, nextStatus, nextSubmittedAt);
     setSelectedIds([]);
   }
 
-  function activateEditMode() {
-    clearMessages();
-    if (!singleSelectedReport) {
-      setLocalMessage({ ok: false, message: "수정할 자료를 1건만 선택하세요." });
-      return;
-    }
-    if (!isEditableStatus(singleSelectedReport.status)) {
+  function openEditDialog(reportId: string, period: ItemPeriod) {
+    const report = displayedReports.find((row) => row.id === reportId);
+    if (report && !isEditableStatus(report.status)) {
       setLocalMessage({ ok: false, message: "확정 또는 승인된 자료는 수정할 수 없습니다." });
       return;
     }
-
-    onStartEdit(singleSelectedReport.editReport);
-  }
-
-  function openEditDialog(reportId: string, period: ItemPeriod) {
-    const report = reports.find((row) => row.id === reportId);
     if (report) {
+      clearMessages();
       onOpenEditDialog(report.editReport, period);
     }
   }
@@ -245,9 +230,27 @@ export function ClientReportsTable({
 
   function renderEditableCell(report: ClientReportTableRow, period: ItemPeriod, items: ClientReportItem[]) {
     const isEditing = activeEditingReportId === report.id && isEditableStatus(report.status);
+    const canShowHoverEdit = !activeEditingReportId && isEditableStatus(report.status);
     const content = <ReportItemList items={items} />;
-    if (!isEditing) {
+    if (!isEditing && !canShowHoverEdit) {
       return content;
+    }
+
+    if (canShowHoverEdit) {
+      return (
+        <div className="group relative -m-2 min-h-16 rounded-2xl p-2 transition hover:bg-[#f5f9ff] hover:shadow-[inset_0_0_0_1px_rgba(169,205,252,0.85)]">
+          {content}
+          <button
+            type="button"
+            onClick={() => openEditDialog(report.id, period)}
+            className="icon-tool-button absolute right-2 top-2 h-8 w-8 bg-white/95 text-[#075be8] opacity-0 shadow-[0_10px_22px_rgba(16,34,61,0.10)] transition group-hover:opacity-100 group-focus-within:opacity-100"
+            aria-label={`${report.clientName} ${period === "current" ? "금주 실시사항" : "차주 예정사항"} 수정`}
+            title="수정"
+          >
+            <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </div>
+      );
     }
 
     return (
@@ -292,44 +295,6 @@ export function ClientReportsTable({
               </button>
             </>
           ) : null}
-          <form
-            onSubmit={(event) => {
-              if (selectedIds.length === 0 || !window.confirm("선택한 화주별 자료를 삭제하시겠습니까?")) {
-                event.preventDefault();
-                return;
-              }
-              event.preventDefault();
-              runBatchAction(event.currentTarget, "delete", deleteSelectedClientReportsAction);
-            }}
-          >
-            {selectedIds.map((id) => (
-              <input key={id} type="hidden" name="report_ids" value={id} />
-            ))}
-            <BatchActionButton
-              variant="danger"
-              pending={pendingAction === "delete"}
-              disabledReason={selectedIds.length === 0 ? "삭제할 자료를 선택하세요." : undefined}
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-              삭제
-            </BatchActionButton>
-          </form>
-          <button
-            type="button"
-            onClick={activateEditMode}
-            disabled={!singleSelectedReport || !isEditableStatus(singleSelectedReport.status)}
-            title={
-              !singleSelectedReport
-                ? "수정할 자료를 1건만 선택하세요."
-                : !isEditableStatus(singleSelectedReport.status)
-                  ? "확정 또는 승인된 자료는 수정할 수 없습니다."
-                  : undefined
-            }
-            className="tool-button disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Pencil className="h-4 w-4" aria-hidden="true" />
-            수정
-          </button>
           <form
             onSubmit={(event) => {
               if (selectedIds.length === 0 || !window.confirm("선택한 화주별 자료를 확정하시겠습니까?")) {

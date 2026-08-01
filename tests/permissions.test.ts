@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   canEditClientReport,
   canEditDepartmentSubmission,
+  canViewMeetingMaterials,
   isAllowedClientTransition,
   isAllowedDepartmentTransition
 } from "@/lib/auth/permissions";
@@ -15,6 +16,13 @@ describe("permission helpers", () => {
   it("allows managers to edit department drafts but not final approved submissions", () => {
     expect(canEditDepartmentSubmission("manager", "draft")).toBe(true);
     expect(canEditDepartmentSubmission("manager", "division_approved")).toBe(false);
+  });
+
+  it("allows meeting materials only for admin, department heads, and managers", () => {
+    expect(canViewMeetingMaterials({ app_role: "admin" })).toBe(true);
+    expect(canViewMeetingMaterials({ app_role: "department_head" })).toBe(true);
+    expect(canViewMeetingMaterials({ app_role: "manager" })).toBe(true);
+    expect(canViewMeetingMaterials({ app_role: "client_owner" })).toBe(false);
   });
 
   it("validates client report transitions", () => {

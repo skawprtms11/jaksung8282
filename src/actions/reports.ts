@@ -1,4 +1,5 @@
 "use server";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import {
@@ -380,6 +381,7 @@ export async function saveClientReportAction(_: ActionResult<SavedClientReportRo
     return { ok: false, message: "화주자료 작성 화면에서는 저장 또는 확정만 처리할 수 있습니다." };
   }
   const reportId = id ?? "";
+  const profilePromise = getCurrentUserProfile();
 
   const { data: savedResult, error } = await supabase.rpc("save_client_report_atomic", {
     p_report_id: reportId || null,
@@ -399,6 +401,8 @@ export async function saveClientReportAction(_: ActionResult<SavedClientReportRo
     return { ok: false, message: safeErrorMessage(error.message) };
   }
 
+  revalidatePath("/department-reports");
+
   const savedId =
     savedResult && typeof savedResult === "object" && !Array.isArray(savedResult) && "id" in savedResult
       ? String(savedResult.id ?? "")
@@ -407,17 +411,19 @@ export async function saveClientReportAction(_: ActionResult<SavedClientReportRo
     return { ok: true, message: nextStatus === "submitted" ? "검토요청을 완료했습니다." : "화주별 자료를 저장했습니다." };
   }
 
-  const { data: savedReport } = await supabase
-    .from("weekly_client_reports")
-    .select(SAVED_CLIENT_REPORT_SELECT)
-    .eq("id", savedId)
-    .is("deleted_at", null)
-    .maybeSingle();
+  const [{ data: savedReport }, { profile }] = await Promise.all([
+    supabase
+      .from("weekly_client_reports")
+      .select(SAVED_CLIENT_REPORT_SELECT)
+      .eq("id", savedId)
+      .is("deleted_at", null)
+      .maybeSingle(),
+    profilePromise
+  ]);
   if (!savedReport) {
     return { ok: true, message: nextStatus === "submitted" ? "검토요청을 완료했습니다." : "화주별 자료를 저장했습니다." };
   }
 
-  const { profile } = await getCurrentUserProfile();
   const report = savedReport as unknown as SavedClientReportDbRow;
   const sortedItems = report.weekly_client_report_items.slice().sort((left, right) => left.sort_order - right.sort_order);
   const sortedVolumes = report.weekly_volumes.slice().sort((left, right) => left.sort_order - right.sort_order);

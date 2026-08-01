@@ -1,4 +1,6 @@
 import dynamic from "next/dynamic";
+import { Boxes, ClipboardCheck, ListChecks } from "lucide-react";
+import type { DepartmentVolumeReport } from "@/components/reports/DepartmentVolumeBoard";
 import type {
   DepartmentSubmissionEditorInitialSubmission,
   DepartmentVacancyRecordValue,
@@ -7,6 +9,7 @@ import type {
 import { EmptyState } from "@/components/common/EmptyState";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { TableShell } from "@/components/common/TableShell";
+import { pickDefaultClientId, pickDefaultDepartmentId } from "@/lib/auth/default-scope";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { canSubmitDepartment, isAdmin } from "@/lib/auth/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -22,6 +25,7 @@ type CenterOption = { id: string; center_name: string };
 type HolidayClientOption = { id: string; client_name: string };
 type HolidayClientLinkRow = { clients: { id: string; client_name: string } | null };
 type HolidayWorkerOption = { id: string; full_name: string };
+type ProfileNameRow = HolidayWorkerOption & { is_active: boolean };
 type ClientReviewItem = {
   item_period: "current" | "next";
   importance: Importance;
@@ -40,6 +44,8 @@ type ClientReviewRow = {
   weekly_client_report_items: ClientReviewItem[];
   weekly_volumes: { volume_type: VolumeType; quantity: number; unit: VolumeUnit }[];
 };
+type DepartmentDefaultRow = { id: string; department_name: string };
+type DefaultClientLinkRow = { clients: { id: string; client_name: string } | null };
 type DepartmentSubmissionInitialRow = {
   id: string;
   department_id: string;
@@ -59,6 +65,16 @@ const DepartmentSubmissionEditor = dynamic(
     loading: () => (
       <div className="sketch-panel flex min-h-64 items-center justify-center p-4 text-sm font-black text-slate-500">
         부서자료 화면을 불러오는 중입니다.
+      </div>
+    )
+  }
+);
+const DepartmentVolumeBoard = dynamic(
+  () => import("@/components/reports/DepartmentVolumeBoard").then((mod) => mod.DepartmentVolumeBoard),
+  {
+    loading: () => (
+      <div className="rounded-2xl border border-dashed border-[#b9cce6] px-4 py-6 text-center text-sm font-bold text-slate-500">
+        물동량 현황을 불러오는 중입니다.
       </div>
     )
   }
@@ -213,6 +229,7 @@ export default async function DepartmentReportsPage({
   let departments: DepartmentOption[] = [];
   let categories: CategoryOption[] = [];
   let reports: ClientReviewRow[] = [];
+  let volumeReports: DepartmentVolumeReport[] = [];
   let holidayClientOptions: HolidayClientOption[] = [];
   let holidayWorkerOptions: HolidayWorkerOption[] = [];
   let centerOptions: CenterOption[] = [];
@@ -231,19 +248,35 @@ export default async function DepartmentReportsPage({
     }
     let adminDefaultDepartmentId: string | undefined;
     if (isAdmin(profile) && !params.department_id) {
-      const { data: firstDepartment } = await dataClient
+      const { data: defaultDepartments } = await dataClient
         .from("departments")
-        .select("id")
+        .select("id,department_name")
         .eq("is_active", true)
         .order("sort_order", { ascending: true })
-        .order("department_name", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      adminDefaultDepartmentId = firstDepartment?.id;
+        .order("department_name", { ascending: true });
+      adminDefaultDepartmentId = pickDefaultDepartmentId((defaultDepartments ?? []) as DepartmentDefaultRow[], profile.app_role) || undefined;
     }
     const departmentFilter = isAdmin(profile) ? params.department_id ?? adminDefaultDepartmentId : profile.department_id;
     const selectedDepartmentFilter = departmentFilter ?? params.department_id;
-    const selectedClientFilter = params.client_id;
+    let defaultClientId: string | undefined;
+    if (!params.client_id && selectedDepartmentFilter) {
+      const { data: defaultClientLinks } = await dataClient
+        .from("department_client_links")
+        .select("clients(id,client_name)")
+        .eq("department_id", selectedDepartmentFilter)
+        .eq("is_active", true)
+        .order("client_id", { ascending: true });
+      const defaultClients = ((defaultClientLinks ?? []) as unknown as DefaultClientLinkRow[])
+        .filter((link) => link.clients)
+        .map((link) => ({
+          id: link.clients?.id ?? "",
+          client_name: link.clients?.client_name ?? ""
+        }))
+        .filter((client) => client.id && client.client_name)
+        .sort((left, right) => left.client_name.localeCompare(right.client_name, "ko"));
+      defaultClientId = pickDefaultClientId(defaultClients, profile.app_role) || undefined;
+    }
+    const selectedClientFilter = params.client_id ?? defaultClientId;
     initialLookupDepartmentId = selectedDepartmentFilter ?? null;
     const [
       { data: departmentData },
@@ -254,6 +287,7 @@ export default async function DepartmentReportsPage({
       { data: holidayClientData },
       { data: holidayWorkerData },
       { data: centerData },
+      { data: volumeReportData, error: volumeReportError },
       { data: vacancyMonthData },
       { data: vacancyTrendData }
     ] = await Promise.all([
@@ -322,12 +356,20 @@ export default async function DepartmentReportsPage({
       selectedDepartmentFilter
           ? dataClient
             .from("profiles")
-            .select("id,full_name")
+            .select("id,full_name,is_active")
             .eq("department_id", selectedDepartmentFilter)
-            .eq("is_active", true)
             .order("full_name", { ascending: true })
         : Promise.resolve({ data: [] }),
       dataClient.from("center_masters").select("id,center_name").eq("is_active", true).order("center_name", { ascending: true }),
+      selectedDepartmentFilter
+          ? dataClient
+            .from("weekly_client_reports")
+            .select("id,client_id,week_of_month,clients(client_name),weekly_volumes(volume_type,quantity,unit,note)")
+            .eq("department_id", selectedDepartmentFilter)
+            .eq("report_year", currentWeek.year)
+            .eq("report_month", currentWeek.month)
+            .is("deleted_at", null)
+        : Promise.resolve({ data: [], error: null }),
       Promise.resolve({ data: [] }),
       Promise.resolve({ data: [] })
     ]);
@@ -341,17 +383,15 @@ export default async function DepartmentReportsPage({
         client_name: link.clients?.client_name ?? ""
       }))
       .sort((left, right) => left.client_name.localeCompare(right.client_name, "ko"));
-    holidayWorkerOptions = (holidayWorkerData ?? []) as HolidayWorkerOption[];
+    const profileRows = (holidayWorkerData ?? []) as ProfileNameRow[];
+    holidayWorkerOptions = profileRows.filter((worker) => worker.is_active).map(({ id, full_name }) => ({ id, full_name }));
     const reportRows = reportError ? [] : ((reportData ?? []) as unknown as ClientReviewRow[]);
-    if (reportRows.length > 0) {
-      const creatorIds = Array.from(new Set(reportRows.map((report) => report.created_by)));
-      const { data: creatorData } = await dataClient.from("profiles").select("id,full_name").in("id", creatorIds);
-      const creatorNameMap = new Map((creatorData ?? []).map((creator) => [creator.id, creator.full_name]));
-      reports = reportRows.map((report) => ({
-        ...report,
-        profiles: { full_name: creatorNameMap.get(report.created_by) ?? "-" }
-      }));
-    }
+    const creatorNameMap = new Map(profileRows.map((creator) => [creator.id, creator.full_name]));
+    reports = reportRows.map((report) => ({
+      ...report,
+      profiles: { full_name: creatorNameMap.get(report.created_by) ?? "-" }
+    }));
+    volumeReports = volumeReportError ? [] : ((volumeReportData ?? []) as unknown as DepartmentVolumeReport[]);
     clientCount = count ?? 0;
     initialSubmission = submissionData ? (submissionData as unknown as DepartmentSubmissionInitialRow) : null;
     initialVacancyRecords = ((vacancyMonthData ?? []) as unknown as DepartmentVacancyDbRow[]).map(mapVacancyRow);
@@ -378,6 +418,7 @@ export default async function DepartmentReportsPage({
         initialLookupDepartmentId={initialLookupDepartmentId}
         initialLookupWeekStartDate={currentWeek.weekStartDate}
         requireExplicitDepartmentSelection={false}
+        volumeSlot={<DepartmentVolumeBoard clients={holidayClientOptions} reports={volumeReports} />}
         reviewSlot={
           <>
             <h2 className="section-doodle-title mb-3 mt-6">화주별 자료 검토</h2>
@@ -418,76 +459,91 @@ export default async function DepartmentReportsPage({
           </>
         }
       >
-        <div className="grid gap-2 xl:grid-cols-[0.85fr_1.2fr_1fr]">
-          <div className="rounded-2xl border border-[#d9e7f7] bg-white/88 px-3 py-2">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-black text-slate-500">작성현황</p>
-                <p className="text-lg font-black text-[#10223d]">
-                  {reports.length}<span className="text-sm text-slate-500"> / {clientCount}</span>
+        <div className="grid auto-rows-fr gap-2 xl:grid-cols-[0.9fr_1.3fr_1fr]">
+          <section className="flex h-full min-h-[112px] flex-col overflow-hidden rounded-2xl border border-[#d9e7f7] bg-white/90">
+            <header className="flex h-[38px] shrink-0 items-center justify-between border-b border-[#e7eff9] px-3">
+              <div className="flex items-center gap-2">
+                <ClipboardCheck className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
+                <h2 className="text-[13px] font-black text-[#10223d]">작성현황</h2>
+              </div>
+              <p className="text-[13px] font-black tabular-nums text-[#10223d]">
+                {reports.length}<span className="font-bold text-slate-400"> / {clientCount}</span>
+              </p>
+            </header>
+            <div className="grid min-h-0 flex-1 grid-cols-3 divide-x divide-[#e7eff9]">
+              {[
+                { label: "전체", value: clientCount, labelClassName: "text-slate-500", valueClassName: "text-[#10223d]" },
+                { label: "작성", value: reports.length, labelClassName: "text-[#075be8]", valueClassName: "text-[#075be8]" },
+                { label: "미작성", value: missingCount, labelClassName: "text-rose-600", valueClassName: "text-rose-600" }
+              ].map((item) => (
+                <div key={item.label} className="flex min-w-0 flex-col items-center justify-center px-2 text-center">
+                  <p className={cn("text-[11px] font-black leading-none", item.labelClassName)}>{item.label}</p>
+                  <p className={cn("mt-2 text-lg font-black leading-none tabular-nums", item.valueClassName)}>{item.value}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="flex h-full min-h-[112px] flex-col overflow-hidden rounded-2xl border border-[#d9e7f7] bg-white/90">
+            <header className="flex h-[38px] shrink-0 items-center justify-between border-b border-[#e7eff9] px-3">
+              <div className="flex items-center gap-2">
+                <ListChecks className="h-4 w-4 text-orange-500" aria-hidden="true" />
+                <h2 className="text-[13px] font-black text-[#10223d]">내용건수</h2>
+              </div>
+              <p className="text-[13px] font-black tabular-nums text-[#10223d]">
+                {importanceStats.total}<span className="ml-0.5 text-[11px] font-bold text-slate-400">건</span>
+              </p>
+            </header>
+            <div className="flex min-h-0 flex-1 flex-col px-3 pb-2 pt-2.5">
+              <div className="flex h-1.5 shrink-0 overflow-hidden rounded-full bg-slate-100">
+                {importanceStats.rows.map((row) => (
+                  <span
+                    key={row.importance}
+                    className={row.barClassName}
+                    style={{ width: `${row.ratio}%` }}
+                    aria-hidden="true"
+                  />
+                ))}
+              </div>
+              <div className="mt-2 grid min-h-0 flex-1 grid-cols-4 divide-x divide-[#e7eff9]">
+                {importanceStats.rows.map((row) => (
+                  <div key={row.importance} className="flex min-w-0 items-center justify-center gap-1.5 px-1.5">
+                    <span className={cn("inline-flex shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-black leading-4", row.badgeClassName)}>
+                      {row.label}
+                    </span>
+                    <span className="whitespace-nowrap text-xs font-black tabular-nums text-[#10223d]">
+                      {row.count}<span className="ml-1 text-[10px] font-bold text-slate-400">{row.ratio}%</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="flex h-full min-h-[112px] flex-col overflow-hidden rounded-2xl border border-[#d9e7f7] bg-white/90">
+            <header className="flex h-[38px] shrink-0 items-center border-b border-[#e7eff9] px-3">
+              <div className="flex items-center gap-2">
+                <Boxes className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+                <h2 className="text-[13px] font-black text-[#10223d]">물동량</h2>
+              </div>
+            </header>
+            <div className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-[#e7eff9]">
+              <div className="flex min-w-0 flex-col justify-center px-4">
+                <p className="flex items-center gap-1.5 text-[11px] font-black leading-none text-emerald-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                  입고
                 </p>
+                <p className="mt-2 break-words text-[15px] font-black leading-none tabular-nums text-[#10223d]">{inboundVolumeSummary}</p>
               </div>
-              <div className="grid grid-cols-3 gap-1 text-center">
-                <div className="rounded-xl bg-[#f5f9ff] px-2 py-1">
-                  <p className="text-[10px] font-black text-slate-500">전체</p>
-                  <p className="text-xs font-black text-[#10223d]">{clientCount}</p>
-                </div>
-                <div className="rounded-xl bg-blue-50 px-2 py-1">
-                  <p className="text-[10px] font-black text-blue-600">작성</p>
-                  <p className="text-xs font-black text-[#075be8]">{reports.length}</p>
-                </div>
-                <div className="rounded-xl bg-rose-50 px-2 py-1">
-                  <p className="text-[10px] font-black text-rose-600">미작성</p>
-                  <p className="text-xs font-black text-rose-600">{missingCount}</p>
-                </div>
+              <div className="flex min-w-0 flex-col justify-center px-4">
+                <p className="flex items-center gap-1.5 text-[11px] font-black leading-none text-[#075be8]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#2878f0]" aria-hidden="true" />
+                  출고
+                </p>
+                <p className="mt-2 break-words text-[15px] font-black leading-none tabular-nums text-[#10223d]">{outboundVolumeSummary}</p>
               </div>
             </div>
-          </div>
-          <div className="rounded-2xl border border-[#d9e7f7] bg-white/88 px-3 py-2">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-black text-slate-500">내용건수</p>
-                <p className="text-lg font-black text-[#10223d]">{importanceStats.total}<span className="text-sm text-slate-500">건</span></p>
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="mb-1 flex h-2 overflow-hidden rounded-full bg-slate-100">
-                  {importanceStats.rows.map((row) => (
-                    <span
-                      key={row.importance}
-                      className={row.barClassName}
-                      style={{ width: `${row.ratio}%` }}
-                      aria-hidden="true"
-                    />
-                  ))}
-                </div>
-                <div className="grid gap-1 sm:grid-cols-4">
-                  {importanceStats.rows.map((row) => (
-                    <div key={row.importance} className="flex items-center justify-between gap-1 rounded-lg bg-[#f5f9ff] px-1.5 py-1">
-                      <span className={cn("inline-flex rounded-md border px-1 py-0.5 text-[10px] font-black", row.badgeClassName)}>
-                        {row.label}
-                      </span>
-                      <span className="text-[11px] font-black text-[#10223d]">{row.count}<span className="ml-0.5 text-slate-500">{row.ratio}%</span></span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="rounded-2xl border border-[#d9e7f7] bg-white/88 px-3 py-2">
-            <div className="mb-1 flex items-center justify-between">
-              <p className="text-xs font-black text-slate-500">물동량</p>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 px-3 py-1.5">
-                <p className="text-xs font-black text-emerald-700">입고</p>
-                <p className="break-words text-sm font-black text-[#10223d]">{inboundVolumeSummary}</p>
-              </div>
-              <div className="rounded-xl border border-blue-100 bg-blue-50/70 px-3 py-1.5">
-                <p className="text-xs font-black text-blue-700">출고</p>
-                <p className="break-words text-sm font-black text-[#10223d]">{outboundVolumeSummary}</p>
-              </div>
-            </div>
-          </div>
+          </section>
         </div>
       </DepartmentSubmissionEditor>
     </>

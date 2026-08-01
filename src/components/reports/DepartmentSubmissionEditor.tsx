@@ -2,9 +2,17 @@
 
 import type { ReactNode } from "react";
 import { useActionState, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Building2, CalendarDays, CheckCircle2, ClipboardList, Hammer, Pencil, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
+import { BarChart3, Building2, CalendarDays, CheckCircle2, ClipboardList, Hammer, Pencil, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  REPORT_TAB_ACTIVE_CLASS_NAME,
+  REPORT_TAB_ICON_CLASS_NAME,
+  REPORT_TAB_IDLE_CLASS_NAME,
+  REPORT_TAB_INDICATOR_CLASS_NAME,
+  REPORT_TAB_ITEM_CLASS_NAME,
+  REPORT_TAB_NAV_CLASS_NAME
+} from "@/components/reports/report-tab-styles";
 import {
   cancelDepartmentSubmissionAction,
   deleteDepartmentVacancyRecordAction,
@@ -25,6 +33,7 @@ type CenterOption = { id: string; center_name: string };
 type HolidayClientOption = { id: string; client_name: string };
 type HolidayWorkerOption = { id: string; full_name: string };
 type SectionValue = (typeof sections)[number]["value"];
+type DepartmentTabValue = SectionValue | "volume";
 type DepartmentContent = {
   section_type: SectionValue;
   current_importance: Importance;
@@ -115,6 +124,13 @@ const sections = [
   { value: "vacancy", label: "공실", icon: Building2 },
   { value: "holiday_work", label: "공휴일근무", icon: CalendarDays }
 ] as const;
+const departmentTabs: { value: DepartmentTabValue; label: string; icon: typeof ClipboardList }[] = [
+  { value: "common", label: "공통사항", icon: ClipboardList },
+  { value: "volume", label: "물동량", icon: BarChart3 },
+  { value: "facility", label: "시설공사", icon: Hammer },
+  { value: "vacancy", label: "공실", icon: Building2 },
+  { value: "holiday_work", label: "공휴일근무", icon: CalendarDays }
+];
 
 const importanceOptions: { value: Importance; label: string }[] = [
   { value: "very_high", label: "매우높음" },
@@ -161,6 +177,10 @@ function normalizeLoadedContents(firstCategoryId: string, loadedContents: Loaded
 
 function isEditableSubmissionStatus(status: DepartmentSubmissionStatus | null) {
   return status === null || status === "draft" || status === "division_rejected";
+}
+
+function isDepartmentContentSection(value: DepartmentTabValue): value is SectionValue {
+  return value !== "volume";
 }
 
 const CONFIRMATION_CANCEL_WINDOW_DAYS = 3;
@@ -407,6 +427,7 @@ export function DepartmentSubmissionEditor({
   defaultDepartmentId,
   canSubmit,
   children,
+  volumeSlot,
   reviewSlot,
   holidayClientOptions = [],
   holidayWorkerOptions = [],
@@ -423,6 +444,7 @@ export function DepartmentSubmissionEditor({
   defaultDepartmentId?: string | null;
   canSubmit: boolean;
   children?: ReactNode;
+  volumeSlot?: ReactNode;
   reviewSlot?: ReactNode;
   holidayClientOptions?: HolidayClientOption[];
   holidayWorkerOptions?: HolidayWorkerOption[];
@@ -434,7 +456,7 @@ export function DepartmentSubmissionEditor({
   initialLookupWeekStartDate?: string;
   requireExplicitDepartmentSelection?: boolean;
 }) {
-  const [active, setActive] = useState<SectionValue>("common");
+  const [active, setActive] = useState<DepartmentTabValue>("common");
   const [activeDialog, setActiveDialog] = useState<ActiveDialog>(null);
   const [facilityDialogOpen, setFacilityDialogOpen] = useState(false);
   const [facilityEditingItem, setFacilityEditingItem] = useState<FacilityConstructionItem | null>(null);
@@ -491,8 +513,8 @@ export function DepartmentSubmissionEditor({
     null
   );
   const serializedContents = useMemo(() => JSON.stringify(contents), [contents]);
-  const activeContent = contents.find((content) => content.section_type === active);
-  const activeSectionLabel = sections.find((section) => section.value === active)?.label ?? "공통사항";
+  const activeContent = isDepartmentContentSection(active) ? contents.find((content) => content.section_type === active) : undefined;
+  const activeSectionLabel = departmentTabs.find((section) => section.value === active)?.label ?? "공통사항";
   const effectiveStatus = loadedStatus;
   const effectiveSubmissionId = submissionId;
   const canEditSubmission = isEditableSubmissionStatus(effectiveStatus);
@@ -679,45 +701,47 @@ export function DepartmentSubmissionEditor({
       <input type="hidden" name="department_id" value={departmentId} />
 
       <div className="rounded-[1.4rem] border border-[#d9e7f7] bg-white/82 p-2 shadow-[0_14px_34px_rgba(16,34,61,0.06)]">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <nav className="grid min-w-0 flex-1 grid-cols-2 gap-1 rounded-[1rem] bg-[#f5f9ff] p-1 lg:grid-cols-4" role="tablist" aria-label="부서자료 화면 탭">
-            {sections.map((section) => {
-              const Icon = section.icon;
-              const isSelected = active === section.value;
-              return (
-                <button
-                  key={section.value}
-                  type="button"
-                  role="tab"
-                  aria-selected={isSelected}
-                  onClick={() => setActive(section.value)}
-                  className={cn(
-                    "relative flex h-10 items-center justify-center gap-2 rounded-xl px-3 text-[13px] font-extrabold tracking-normal transition",
-                    isSelected
-                      ? "bg-white text-[#075be8] shadow-[0_8px_18px_rgba(7,91,232,0.12)]"
-                      : "text-slate-500 hover:bg-white/70 hover:text-[#10223d]"
-                  )}
-                >
-                  <Icon className="h-4 w-4" aria-hidden="true" />
-                  <span className="truncate">{section.label}</span>
-                  {isSelected ? (
-                    <span className="absolute bottom-1 left-1/2 h-0.5 w-5 -translate-x-1/2 rounded-full bg-[#075be8]" aria-hidden="true" />
-                  ) : null}
-                </button>
-              );
-            })}
-          </nav>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            <div className="rounded-full border border-[#dbe8fb] bg-white/90 px-2 py-1.5 shadow-[0_10px_22px_rgba(16,34,61,0.05)]">
-              <WeekSelect
-                compactWeekLabel
-                onSelectionChange={handleWeekSelectionChange}
-                className="flex flex-wrap items-center gap-1.5"
-                labelClassName="flex items-center gap-1 text-[11px] font-black text-slate-500"
-                weekLabelClassName="flex items-center gap-1 text-[11px] font-black text-slate-500"
-                controlClassName="h-8 w-[78px] rounded-full border border-[#d7e4f6] bg-[#f5f9ff] px-2 text-sm font-black text-[#10223d] outline-none"
-              />
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <nav className={REPORT_TAB_NAV_CLASS_NAME} role="tablist" aria-label="부서자료 화면 탭">
+              {departmentTabs.map((section) => {
+                const Icon = section.icon;
+                const isSelected = active === section.value;
+                return (
+                  <button
+                    key={section.value}
+                    type="button"
+                    role="tab"
+                    aria-selected={isSelected}
+                    onClick={() => setActive(section.value)}
+                    className={cn(
+                      REPORT_TAB_ITEM_CLASS_NAME,
+                      isSelected ? REPORT_TAB_ACTIVE_CLASS_NAME : REPORT_TAB_IDLE_CLASS_NAME
+                    )}
+                  >
+                    <Icon className={REPORT_TAB_ICON_CLASS_NAME} aria-hidden="true" />
+                    <span className="text-[13px] font-bold leading-none">{section.label}</span>
+                    {isSelected ? (
+                      <span className={REPORT_TAB_INDICATOR_CLASS_NAME} aria-hidden="true" />
+                    ) : null}
+                  </button>
+                );
+              })}
+            </nav>
+            <div className="shrink-0">
+              <div className="rounded-full border border-[#dbe8fb] bg-white/90 px-2 py-1.5 shadow-[0_10px_22px_rgba(16,34,61,0.05)]">
+                <WeekSelect
+                  compactWeekLabel
+                  onSelectionChange={handleWeekSelectionChange}
+                  className="flex flex-wrap items-center gap-1.5"
+                  labelClassName="flex items-center gap-1 text-[11px] font-black text-slate-500"
+                  weekLabelClassName="flex items-center gap-1 text-[11px] font-black text-slate-500"
+                  controlClassName="h-8 w-[78px] rounded-full border border-[#d7e4f6] bg-[#f5f9ff] px-2 text-sm font-black text-[#10223d] outline-none"
+                />
+              </div>
             </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               type="submit"
               name="status"
@@ -766,7 +790,7 @@ export function DepartmentSubmissionEditor({
       ) : null}
 
       <section className="rounded-2xl border border-[#d9e7f7] bg-white/86 p-3 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
-        {active === "holiday_work" || active === "vacancy" ? null : (
+        {active === "holiday_work" || active === "vacancy" || active === "volume" ? null : (
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="section-doodle-title">{active === "common" ? "부서 공통사항" : activeSectionLabel}</h2>
             {active === "facility" ? (
@@ -786,7 +810,7 @@ export function DepartmentSubmissionEditor({
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => setActiveDialog({ section: active, period: "current" })}
+                  onClick={() => isDepartmentContentSection(active) && setActiveDialog({ section: active, period: "current" })}
                   disabled={!canEditSubmission || isSubmissionBusy}
                   className="tool-button min-h-9 py-1.5 disabled:opacity-50"
                 >
@@ -794,7 +818,7 @@ export function DepartmentSubmissionEditor({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setActiveDialog({ section: active, period: "next" })}
+                  onClick={() => isDepartmentContentSection(active) && setActiveDialog({ section: active, period: "next" })}
                   disabled={!canEditSubmission || isSubmissionBusy}
                   className="tool-button min-h-9 py-1.5 disabled:opacity-50"
                 >
@@ -804,7 +828,13 @@ export function DepartmentSubmissionEditor({
             )}
           </div>
         )}
-        {active === "facility" ? (
+        {active === "volume" ? (
+          volumeSlot ?? (
+            <div className="rounded-2xl border border-dashed border-[#b9cce6] px-4 py-6 text-center text-sm font-bold text-slate-500">
+              선택한 주차의 물동량 자료가 없습니다.
+            </div>
+          )
+        ) : active === "facility" ? (
           <FacilityConstructionTable
             items={facilityItems}
             disabled={!canEditSubmission || isSubmissionBusy}

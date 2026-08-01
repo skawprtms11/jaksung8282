@@ -1,12 +1,16 @@
 import dynamic from "next/dynamic";
 import type { VolumeChartRow } from "@/components/charts/VolumeComparisonChart";
-import { EmptyState } from "@/components/common/EmptyState";
 import { TableShell } from "@/components/common/TableShell";
 import { MeetingMaterialsTabNav } from "@/components/reports/MeetingMaterialsTabNav";
+import type {
+  MeetingDepartmentVolumeRow,
+  MeetingDepartmentVolumeValue
+} from "@/components/reports/MeetingDepartmentVolumeBoard";
 import type { MeetingOpenRequestItem, MeetingPriorityItem } from "@/components/reports/MeetingPriorityPanel";
 import { MeetingMaterialsWeekFilter } from "@/components/reports/MeetingMaterialsWeekFilter";
+import { pickDefaultDepartmentId } from "@/lib/auth/default-scope";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
-import { isAdmin } from "@/lib/auth/permissions";
+import { canViewMeetingMaterials, isAdmin } from "@/lib/auth/permissions";
 import {
   getCurrentWeekOption,
   getReportMonthByThursday,
@@ -18,7 +22,7 @@ import {
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { cn } from "@/lib/utils/cn";
-import { formatDateTime, volumeTypeLabels, volumeUnitLabels } from "@/lib/utils/labels";
+import { formatDateTime } from "@/lib/utils/labels";
 import type { DepartmentSubmissionStatus, Importance, ItemPeriod, VolumeType, VolumeUnit } from "@/types/enums";
 
 type MeetingTab = "collection" | "materials" | "volumes" | "holiday" | "facility";
@@ -55,6 +59,10 @@ type MeetingReportRow = {
     request_item_sort_order: number | null;
   }[];
   weekly_volumes: { volume_type: VolumeType; quantity: number; unit: VolumeUnit }[];
+};
+
+type VolumeTrendReportRow = Pick<MeetingReportRow, "id" | "department_id" | "client_id" | "weekly_volumes"> & {
+  week_of_month: number;
 };
 
 type ReportItemRequestRow = {
@@ -101,6 +109,7 @@ type SubmissionRow = {
   department_id: string;
   week_start_date: string;
   finalized_at: string | null;
+  departments?: { department_name: string } | null;
   department_weekly_contents: DepartmentContentRow[];
 };
 
@@ -117,21 +126,6 @@ type DepartmentCommonContentItem = {
   title: string;
   content: string;
   sort_order: number;
-};
-
-type PriorityItemQueryRow = {
-  id: string;
-  item_period: ItemPeriod;
-  title: string | null;
-  content: string;
-  importance: Extract<Importance, "very_high" | "high">;
-  work_categories: { category_name: string } | null;
-  weekly_client_reports: {
-    department_id: string;
-    client_id: string;
-    departments: { department_name: string } | null;
-    clients: { client_name: string } | null;
-  } | null;
 };
 
 type OpenRequestQueryRow = ReportItemRequestRow & {
@@ -192,12 +186,16 @@ const MeetingFacilityConstructionBoard = dynamic(
 const VolumeComparisonChart = dynamic(() => import("@/components/charts/VolumeComparisonChart").then((mod) => mod.VolumeComparisonChart), {
   loading: () => <PanelLoading label="물동량 그래프를 불러오는 중입니다." />
 });
+const MeetingDepartmentVolumeBoard = dynamic(
+  () => import("@/components/reports/MeetingDepartmentVolumeBoard").then((mod) => mod.MeetingDepartmentVolumeBoard),
+  { loading: () => <PanelLoading label="부서별 물동량 현황을 불러오는 중입니다." /> }
+);
 
 const tabs: { value: MeetingTab; label: string }[] = [
   { value: "collection", label: "취합현황" },
   { value: "materials", label: "회의자료" },
   { value: "volumes", label: "물동량" },
-  { value: "holiday", label: "공휴일" },
+  { value: "holiday", label: "공휴일근무" },
   { value: "facility", label: "시설공사" }
 ];
 
@@ -206,6 +204,19 @@ function PanelLoading({ label }: { label: string }) {
     <div className="sketch-panel flex min-h-44 items-center justify-center p-4 text-sm font-black text-slate-500">
       {label}
     </div>
+  );
+}
+
+function MeetingMaterialsAccessDenied() {
+  return (
+    <section className="sketch-panel p-6">
+      <div className="mx-auto max-w-2xl text-center">
+        <p className="text-lg font-black text-[#10223d]">회의자료 접근 권한이 없습니다.</p>
+        <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
+          회의자료는 관리자, 부서장, 매니저 권한 사용자만 조회할 수 있습니다.
+        </p>
+      </div>
+    </section>
   );
 }
 
@@ -246,7 +257,12 @@ function getSelectedWeek(params: MeetingSearchParams) {
   return getCurrentWeekOption();
 }
 
-function buildTabHref(tab: MeetingTab, params: MeetingSearchParams, selectedWeek: WeekOption) {
+function buildTabHref(
+  tab: MeetingTab,
+  params: MeetingSearchParams,
+  selectedWeek: WeekOption,
+  defaultMaterialsDepartmentId?: string
+) {
   const nextParams = new URLSearchParams({
     tab,
     report_year: String(selectedWeek.year),
@@ -256,6 +272,8 @@ function buildTabHref(tab: MeetingTab, params: MeetingSearchParams, selectedWeek
   });
   if (params.department_id) {
     nextParams.set("department_id", params.department_id);
+  } else if (tab === "materials" && !params.client_id && defaultMaterialsDepartmentId) {
+    nextParams.set("department_id", defaultMaterialsDepartmentId);
   }
   if (params.client_id) {
     nextParams.set("client_id", params.client_id);
@@ -265,11 +283,7 @@ function buildTabHref(tab: MeetingTab, params: MeetingSearchParams, selectedWeek
 
 function getMeetingReportSelect(tab: MeetingTab) {
   if (tab === "collection") {
-    return "id,department_id,client_id";
-  }
-
-  if (tab === "volumes") {
-    return "id,department_id,client_id,clients(client_name),weekly_volumes(volume_type,quantity,unit)";
+    return "id,department_id,client_id,departments(department_name),clients(client_name),weekly_client_report_items(id,item_period,importance,title,content,work_categories(category_name))";
   }
 
   return "id,department_id,client_id,departments(department_name),clients(client_name),weekly_client_report_items(id,item_period,importance,title,content,work_categories(category_name),weekly_report_item_requests(id,target_type,target_key,report_item_id,department_submission_id,section_type,item_period,item_sort_order,request_content,request_author_name,request_author_department_name,result_content,result_author_name,result_author_department_name,result_created_by,result_created_at,result_updated_at,closed_by,closed_author_name,closed_author_department_name,closed_at,created_by,created_at,updated_at,deleted_at))";
@@ -282,6 +296,10 @@ function getSubmissionSelect(tab: MeetingTab) {
 
   if (tab === "holiday" || tab === "facility") {
     return "id,status,department_id,week_start_date,finalized_at,department_weekly_contents!inner(section_type,current_week_content,next_week_content)";
+  }
+
+  if (tab === "materials") {
+    return "id,status,department_id,week_start_date,finalized_at,departments(department_name),department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content)";
   }
 
   return "id,status,department_id,week_start_date,finalized_at,department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content)";
@@ -297,40 +315,110 @@ function getDepartmentContentSection(tab: MeetingTab): DepartmentContentRow["sec
   return null;
 }
 
-function makeChartRows(reports: MeetingReportRow[]): VolumeChartRow[] {
-  const grouped = new Map<string, { current: number; previous: number }>();
+function makeChartRows(reports: VolumeTrendReportRow[], lastWeekOfMonth: number): VolumeChartRow[] {
+  const weekCount = Math.max(1, Math.min(lastWeekOfMonth, 6));
+  const rows = Array.from({ length: weekCount }, (_, index) => ({
+    name: `${index + 1}주차`,
+    inbound: 0,
+    outbound: 0,
+    total: 0
+  }));
+  let hasVolume = false;
+
   reports.forEach((report) => {
+    const row = rows[report.week_of_month - 1];
+    if (!row) {
+      return;
+    }
     (report.weekly_volumes ?? []).forEach((volume) => {
-      const key = `${report.clients?.client_name ?? "화주"} ${volumeTypeLabels[volume.volume_type]}/${volumeUnitLabels[volume.unit]}`;
-      const current = grouped.get(key) ?? { current: 0, previous: 0 };
-      current.current += Number(volume.quantity);
-      grouped.set(key, current);
+      if (volume.volume_type !== "inbound" && volume.volume_type !== "outbound") {
+        return;
+      }
+      const quantity = Number(volume.quantity);
+      row[volume.volume_type] += quantity;
+      row.total += quantity;
+      hasVolume = true;
     });
   });
-  return Array.from(grouped.entries()).map(([name, value]) => {
-    const changeLabel =
-      value.previous === 0 && value.current > 0
-        ? "신규"
-        : value.previous === 0
-          ? "0%"
-          : `${Math.round(((value.current - value.previous) / value.previous) * 100)}%`;
-    return { name, current: value.current, previous: value.previous, changeLabel };
+
+  return hasVolume ? rows : [];
+}
+
+function getPreviousReportMonth(year: number, month: number) {
+  return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
+}
+
+function createVolumeValue(): MeetingDepartmentVolumeValue {
+  return { inbound: 0, outbound: 0, total: 0 };
+}
+
+function addVolumeValues(target: MeetingDepartmentVolumeValue, volumes: MeetingReportRow["weekly_volumes"]) {
+  volumes.forEach((volume) => {
+    if (volume.volume_type !== "inbound" && volume.volume_type !== "outbound") {
+      return;
+    }
+    const quantity = Number(volume.quantity);
+    target[volume.volume_type] += quantity;
+    target.total += quantity;
   });
 }
 
-function makePriorityItems(rows: PriorityItemQueryRow[]): MeetingPriorityItem[] {
-  return rows
-    .filter((row) => row.weekly_client_reports)
-    .map((row) => ({
-      id: row.id,
-      title: row.title?.trim() || row.content.split("\n")[0]?.trim() || "제목 없음",
-      content: row.content,
-      importance: row.importance,
-      period: row.item_period,
-      categoryName: row.work_categories?.category_name ?? "기타",
-      departmentName: row.weekly_client_reports?.departments?.department_name ?? "-",
-      clientName: row.weekly_client_reports?.clients?.client_name ?? "-"
-    }))
+function makeDepartmentVolumeRows(
+  departments: DepartmentRow[],
+  currentReports: VolumeTrendReportRow[],
+  previousReports: VolumeTrendReportRow[]
+): MeetingDepartmentVolumeRow[] {
+  const rowMap = new Map<string, MeetingDepartmentVolumeRow>();
+  departments.forEach((department) => {
+    rowMap.set(department.id, {
+      departmentId: department.id,
+      departmentName: department.department_name,
+      weeks: Array.from({ length: 5 }, createVolumeValue),
+      totals: createVolumeValue(),
+      previousTotals: createVolumeValue()
+    });
+  });
+
+  currentReports.forEach((report) => {
+    const row = rowMap.get(report.department_id);
+    const week = row?.weeks[report.week_of_month - 1];
+    if (!row || !week) {
+      return;
+    }
+    addVolumeValues(week, report.weekly_volumes ?? []);
+    addVolumeValues(row.totals, report.weekly_volumes ?? []);
+  });
+
+  previousReports.forEach((report) => {
+    const row = rowMap.get(report.department_id);
+    if (!row || report.week_of_month < 1 || report.week_of_month > 5) {
+      return;
+    }
+    addVolumeValues(row.previousTotals, report.weekly_volumes ?? []);
+  });
+
+  return Array.from(rowMap.values());
+}
+
+function makePriorityItems(reports: MeetingReportRow[]): MeetingPriorityItem[] {
+  return reports
+    .flatMap((report) =>
+      report.weekly_client_report_items
+        .filter(
+          (item): item is MeetingWorkItemRow & { importance: Extract<Importance, "very_high" | "high"> } =>
+            item.importance === "very_high" || item.importance === "high"
+        )
+        .map((item) => ({
+          id: item.id,
+          title: item.title?.trim() || item.content.split("\n")[0]?.trim() || "제목 없음",
+          content: item.content,
+          importance: item.importance,
+          period: item.item_period,
+          categoryName: item.work_categories?.category_name ?? "기타",
+          departmentName: report.departments?.department_name ?? "-",
+          clientName: report.clients?.client_name ?? "-"
+        }))
+    )
     .sort((left, right) => {
       if (left.importance !== right.importance) {
         return left.importance === "very_high" ? -1 : 1;
@@ -537,7 +625,10 @@ function makeCommonMeetingRows(submissions: SubmissionRow[], departments: Depart
       id: `${submission.id}-common`,
       department_id: submission.department_id,
       client_id: "common",
-      departments: { department_name: departmentNameMap.get(submission.department_id) ?? "-" },
+      departments: {
+        department_name:
+          departmentNameMap.get(submission.department_id) ?? submission.departments?.department_name ?? "-"
+      },
       clients: { client_name: "공통사항" },
       weekly_client_report_items: [...currentItems, ...nextItems],
       weekly_volumes: []
@@ -572,15 +663,19 @@ export default async function MeetingMaterialsPage({
   const activeTab = getActiveTab(params.tab);
   const selectedWeek = getSelectedWeek(params);
   const { profile } = await getCurrentUserProfile();
+  if (!profile || !canViewMeetingMaterials(profile)) {
+    return <MeetingMaterialsAccessDenied />;
+  }
   const supabase = await createSupabaseServerClient();
   let departments: DepartmentRow[] = [];
   let clients: ClientSummaryRow[] = [];
   let reports: MeetingReportRow[] = [];
-  let priorityItemRows: PriorityItemQueryRow[] = [];
   let openRequestItems: MeetingOpenRequestItem[] = [];
   let submissions: SubmissionRow[] = [];
   let workCategories: WorkCategoryRow[] = [];
   let commonReports: MeetingReportRow[] = [];
+  let volumeTrendReports: VolumeTrendReportRow[] = [];
+  let previousVolumeTrendReports: VolumeTrendReportRow[] = [];
 
   if (supabase && profile) {
     let dataClient = supabase;
@@ -590,27 +685,49 @@ export default async function MeetingMaterialsPage({
       dataClient = supabase;
     }
     let materialsDepartmentLimit: string | undefined;
+    let prefetchedDepartments: DepartmentRow[] | null = null;
     if (isAdmin(profile) && activeTab === "materials" && !params.department_id && !params.client_id) {
-      const { data: firstDepartment } = await dataClient
+      const { data: defaultDepartments } = await dataClient
         .from("departments")
-        .select("id")
+        .select("id,department_name")
         .eq("is_active", true)
         .order("sort_order", { ascending: true })
-        .order("department_name", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      materialsDepartmentLimit = firstDepartment?.id;
+        .order("department_name", { ascending: true });
+      prefetchedDepartments = (defaultDepartments ?? []) as DepartmentRow[];
+      materialsDepartmentLimit = pickDefaultDepartmentId(prefetchedDepartments, profile.app_role) || undefined;
     }
     const departmentFilter = isAdmin(profile) ? params.department_id ?? materialsDepartmentLimit : profile.department_id;
-    const needsDepartments = activeTab === "collection" || activeTab === "materials" || activeTab === "holiday" || activeTab === "facility";
+    const needsDepartments =
+      activeTab === "collection" ||
+      activeTab === "volumes" ||
+      activeTab === "holiday" ||
+      activeTab === "facility" ||
+      Boolean(prefetchedDepartments);
     const needsClients = activeTab === "collection";
-    const needsReports = activeTab === "collection" || activeTab === "materials" || activeTab === "volumes";
+    const needsReports = activeTab === "collection" || activeTab === "materials";
     const needsSubmissions = activeTab === "collection" || activeTab === "materials" || activeTab === "holiday" || activeTab === "facility";
     const contentSectionFilter = getDepartmentContentSection(activeTab);
+    const previousReportMonth = getPreviousReportMonth(selectedWeek.year, selectedWeek.month);
 
-    const [departmentResult, clientResult, reportResult, priorityItemResult, openRequestResult, submissionResult, categoryResult] = await Promise.all([
+    const [
+      departmentResult,
+      clientResult,
+      reportResult,
+      openRequestResult,
+      submissionResult,
+      categoryResult,
+      commonMaterialRequestResult,
+      volumeTrendResult,
+      previousVolumeTrendResult
+    ] = await Promise.all([
       needsDepartments
-        ? (() => {
+        ? prefetchedDepartments
+          ? Promise.resolve({
+              data: departmentFilter
+                ? prefetchedDepartments.filter((department) => department.id === departmentFilter)
+                : prefetchedDepartments
+            })
+          : (() => {
             let query = dataClient
               .from("departments")
               .select("id,department_name")
@@ -653,29 +770,12 @@ export default async function MeetingMaterialsPage({
             if (params.client_id) {
               query = query.eq("client_id", params.client_id);
             }
+            if (activeTab === "collection") {
+              query = query.in("weekly_client_report_items.importance", ["very_high", "high"]);
+            }
             return query;
           })()
         : Promise.resolve({ data: [], error: null }),
-      activeTab === "collection"
-        ? (() => {
-            let query = dataClient
-              .from("weekly_client_report_items")
-              .select(
-                "id,item_period,title,content,importance,work_categories(category_name),weekly_client_reports!inner(department_id,client_id,departments(department_name),clients(client_name))"
-              )
-              .in("importance", ["very_high", "high"])
-              .eq("weekly_client_reports.week_start_date", selectedWeek.weekStartDate)
-              .is("weekly_client_reports.deleted_at", null)
-              .limit(MEETING_REPORT_LIMIT);
-            if (departmentFilter) {
-              query = query.eq("weekly_client_reports.department_id", departmentFilter);
-            }
-            if (params.client_id) {
-              query = query.eq("weekly_client_reports.client_id", params.client_id);
-            }
-            return query;
-          })()
-        : Promise.resolve({ data: [] }),
       activeTab === "collection"
         ? (() => {
             let clientRequestQuery = dataClient
@@ -733,6 +833,64 @@ export default async function MeetingMaterialsPage({
         : Promise.resolve({ data: [] }),
       activeTab === "materials" || activeTab === "collection"
         ? dataClient.from("work_categories").select("id,category_name").eq("is_active", true).order("sort_order", { ascending: true })
+        : Promise.resolve({ data: [] }),
+      activeTab === "materials"
+        ? (() => {
+            let query = dataClient
+              .from("weekly_report_item_requests")
+              .select(
+                "id,target_type,target_key,report_item_id,department_submission_id,section_type,item_period,item_sort_order,request_content,request_author_name,request_author_department_name,result_content,result_author_name,result_author_department_name,result_created_by,result_created_at,result_updated_at,closed_by,closed_author_name,closed_author_department_name,closed_at,created_by,created_at,updated_at,department_weekly_submissions!inner(department_id,week_start_date)"
+              )
+              .eq("target_type", "department_common")
+              .eq("department_weekly_submissions.week_start_date", selectedWeek.weekStartDate)
+              .is("deleted_at", null)
+              .order("created_at", { ascending: true })
+              .limit(MEETING_REPORT_LIMIT);
+            if (departmentFilter) {
+              query = query.eq("department_weekly_submissions.department_id", departmentFilter);
+            }
+            return query;
+          })()
+        : Promise.resolve({ data: [] }),
+      activeTab === "volumes"
+        ? (() => {
+            let query = dataClient
+              .from("weekly_client_reports")
+              .select("id,department_id,client_id,week_of_month,weekly_volumes(volume_type,quantity,unit)")
+              .eq("report_year", selectedWeek.year)
+              .eq("report_month", selectedWeek.month)
+              .lte("week_of_month", selectedWeek.weekOfMonth)
+              .is("deleted_at", null)
+              .order("week_of_month", { ascending: true })
+              .limit(MEETING_REPORT_LIMIT);
+            if (departmentFilter) {
+              query = query.eq("department_id", departmentFilter);
+            }
+            if (params.client_id) {
+              query = query.eq("client_id", params.client_id);
+            }
+            return query;
+          })()
+        : Promise.resolve({ data: [] }),
+      activeTab === "volumes"
+        ? (() => {
+            let query = dataClient
+              .from("weekly_client_reports")
+              .select("id,department_id,client_id,week_of_month,weekly_volumes(volume_type,quantity,unit)")
+              .eq("report_year", previousReportMonth.year)
+              .eq("report_month", previousReportMonth.month)
+              .lte("week_of_month", selectedWeek.weekOfMonth)
+              .is("deleted_at", null)
+              .order("week_of_month", { ascending: true })
+              .limit(MEETING_REPORT_LIMIT);
+            if (departmentFilter) {
+              query = query.eq("department_id", departmentFilter);
+            }
+            if (params.client_id) {
+              query = query.eq("client_id", params.client_id);
+            }
+            return query;
+          })()
         : Promise.resolve({ data: [] })
     ]);
 
@@ -755,7 +913,6 @@ export default async function MeetingMaterialsPage({
       })),
       weekly_volumes: report.weekly_volumes ?? []
     }));
-    priorityItemRows = (priorityItemResult.data ?? []) as unknown as PriorityItemQueryRow[];
     openRequestItems = makeOpenRequestItems(
       (openRequestResult.data ?? []) as unknown as OpenRequestQueryRow[],
       (categoryResult.data ?? []) as WorkCategoryRow[],
@@ -766,22 +923,20 @@ export default async function MeetingMaterialsPage({
       department_weekly_contents: submission.department_weekly_contents ?? []
     }));
     workCategories = (categoryResult.data ?? []) as WorkCategoryRow[];
+    volumeTrendReports = (volumeTrendResult.data ?? []) as unknown as VolumeTrendReportRow[];
+    previousVolumeTrendReports = (previousVolumeTrendResult.data ?? []) as unknown as VolumeTrendReportRow[];
     commonReports = activeTab === "materials" ? makeCommonMeetingRows(submissions, departments, workCategories) : [];
     if (activeTab === "materials") {
       const commonTargetKeys = commonReports.flatMap((report) =>
         report.weekly_client_report_items.map((item) => item.request_target_key)
       );
       if (commonTargetKeys.length > 0) {
-        const { data: requestRows } = await dataClient
-          .from("weekly_report_item_requests")
-          .select(
-            "id,target_type,target_key,report_item_id,department_submission_id,section_type,item_period,item_sort_order,request_content,request_author_name,request_author_department_name,result_content,result_author_name,result_author_department_name,result_created_by,result_created_at,result_updated_at,closed_by,closed_author_name,closed_author_department_name,closed_at,created_by,created_at,updated_at"
-          )
-          .in("target_key", commonTargetKeys)
-          .is("deleted_at", null)
-          .order("created_at", { ascending: true });
+        const commonTargetKeySet = new Set(commonTargetKeys);
         const requestMap = new Map<string, ReportItemRequestRow[]>();
-        ((requestRows ?? []) as ReportItemRequestRow[]).forEach((request) => {
+        ((commonMaterialRequestResult.data ?? []) as unknown as ReportItemRequestRow[]).forEach((request) => {
+          if (!commonTargetKeySet.has(request.target_key)) {
+            return;
+          }
           const rows = requestMap.get(request.target_key) ?? [];
           rows.push(request);
           requestMap.set(request.target_key, rows);
@@ -799,11 +954,15 @@ export default async function MeetingMaterialsPage({
     }
   }
 
-  const chartRows = activeTab === "volumes" ? makeChartRows(reports) : [];
-  const priorityItems = activeTab === "collection" ? makePriorityItems(priorityItemRows) : [];
+  const chartRows = activeTab === "volumes" ? makeChartRows(volumeTrendReports, selectedWeek.weekOfMonth) : [];
+  const departmentVolumeRows =
+    activeTab === "volumes" ? makeDepartmentVolumeRows(departments, volumeTrendReports, previousVolumeTrendReports) : [];
+  const priorityItems = activeTab === "collection" ? makePriorityItems(reports) : [];
   const materialRows = activeTab === "materials" ? [...commonReports, ...reports] : reports;
   const { clientCountMap, writtenClientMap } =
     activeTab === "collection" ? countByDepartment(clients, reports) : { clientCountMap: new Map(), writtenClientMap: new Map() };
+  const defaultMaterialsDepartmentId =
+    params.department_id ?? (pickDefaultDepartmentId(departments, profile.app_role) || profile.department_id || undefined);
 
   return (
     <div className="space-y-4">
@@ -813,7 +972,7 @@ export default async function MeetingMaterialsPage({
             activeTab={activeTab}
             tabs={tabs.map((tab) => ({
               ...tab,
-              href: buildTabHref(tab.value, params, selectedWeek)
+              href: buildTabHref(tab.value, params, selectedWeek, defaultMaterialsDepartmentId)
             }))}
           />
           <MeetingMaterialsWeekFilter defaultWeekStartDate={selectedWeek.weekStartDate} />
@@ -838,7 +997,7 @@ export default async function MeetingMaterialsPage({
           canManageAllRequests={isAdmin(profile)}
         />
       ) : null}
-      {activeTab === "volumes" ? <VolumesView chartRows={chartRows} reports={reports} /> : null}
+      {activeTab === "volumes" ? <VolumesView chartRows={chartRows} departmentRows={departmentVolumeRows} /> : null}
       {activeTab === "holiday" ? (
         <MeetingHolidayWorkBoard departments={departments} submissions={submissions} selectedWeek={selectedWeek} />
       ) : null}
@@ -927,14 +1086,14 @@ function CollectionView({
                 const status = compactDepartmentStatus(submission?.status ?? null);
                 return (
                   <tr key={department.id} className="border-t border-slate-100">
-                    <td className="truncate px-2 py-2.5 font-black text-[#10223d]" title={department.department_name}>
+                    <td className="truncate px-2 py-1.5 text-[12px] font-black text-[#10223d]" title={department.department_name}>
                       {department.department_name}
                     </td>
-                    <td className="px-2 py-2.5">
+                    <td className="px-2 py-1.5">
                       <span className="font-black text-[#075be8]">{writtenClients}</span>
                       <span className="text-slate-400"> / {totalClients}</span>
                     </td>
-                    <td className="px-2 py-2.5">
+                    <td className="px-2 py-1.5">
                       <span
                         className={cn(
                           "font-black",
@@ -944,12 +1103,12 @@ function CollectionView({
                         {departmentCompletionRate}%
                       </span>
                     </td>
-                    <td className="px-2 py-2.5">
+                    <td className="px-2 py-1.5">
                       <span className={cn("inline-flex rounded-full border px-2 py-0.5 font-black", status.className)}>
                         {status.label}
                       </span>
                     </td>
-                    <td className="truncate px-2 py-2.5">{formatDateTime(submission?.finalized_at).split(" ")[0]}</td>
+                    <td className="truncate px-2 py-1.5">{formatDateTime(submission?.finalized_at).split(" ")[0]}</td>
                   </tr>
                 );
               })}
@@ -961,37 +1120,62 @@ function CollectionView({
   );
 }
 
-function VolumesView({ chartRows, reports }: { chartRows: VolumeChartRow[]; reports: MeetingReportRow[] }) {
+function VolumesView({
+  chartRows,
+  departmentRows
+}: {
+  chartRows: VolumeChartRow[];
+  departmentRows: MeetingDepartmentVolumeRow[];
+}) {
+  const weekRows = [1, 2, 3, 4, 5].map(
+    (week) => chartRows.find((row) => row.name === `${week}주차`) ?? { name: `${week}주차`, inbound: 0, outbound: 0, total: 0 }
+  );
+  const monthlyTotal = weekRows.reduce(
+    (total, row) => ({
+      inbound: total.inbound + row.inbound,
+      outbound: total.outbound + row.outbound,
+      total: total.total + row.total
+    }),
+    { inbound: 0, outbound: 0, total: 0 }
+  );
+
   return (
-    <div className="grid gap-4 xl:grid-cols-[1fr_460px]">
-      <VolumeComparisonChart rows={chartRows} />
-      <section className="sketch-panel p-4">
-        <h2 className="section-doodle-title mb-3">물동량 요약</h2>
-        {reports.length === 0 ? (
-          <EmptyState title="선택한 주차의 물동량 데이터가 없습니다." />
-        ) : (
+    <div className="space-y-4">
+      <div className="grid gap-4 xl:grid-cols-[1fr_460px]">
+        <VolumeComparisonChart rows={chartRows} />
+        <section className="sketch-panel p-4">
+          <h2 className="section-doodle-title mb-3">물동량 요약</h2>
           <TableShell>
-            <table className="table-sticky w-full min-w-[420px] text-left text-sm">
+            <table className="table-sticky w-full min-w-[420px] table-fixed text-left text-xs">
               <thead>
                 <tr>
-                  <th className="px-3 py-3">화주</th>
-                  <th className="px-3 py-3">물동량</th>
+                  <th className="px-3 py-2.5">주차</th>
+                  <th className="px-2 py-2.5 text-right">입고</th>
+                  <th className="px-2 py-2.5 text-right">출고</th>
+                  <th className="px-3 py-2.5 text-right">합계</th>
                 </tr>
               </thead>
               <tbody>
-                {reports.map((report) => (
-                  <tr key={report.id} className="border-t border-slate-100 align-top">
-                    <td className="px-3 py-3 font-black text-[#10223d]">{report.clients?.client_name ?? "-"}</td>
-                    <td className="px-3 py-3">
-                      {report.weekly_volumes.map((volume) => `${volumeTypeLabels[volume.volume_type]} ${volume.quantity}${volumeUnitLabels[volume.unit]}`).join(", ") || "-"}
-                    </td>
+                {weekRows.map((row) => (
+                  <tr key={row.name} className="border-t border-slate-100">
+                    <td className="px-3 py-2 font-black text-[#10223d]">{row.name}</td>
+                    <td className="px-2 py-2 text-right font-bold">{row.inbound.toLocaleString("ko-KR")}</td>
+                    <td className="px-2 py-2 text-right font-bold">{row.outbound.toLocaleString("ko-KR")}</td>
+                    <td className="px-3 py-2 text-right font-black text-[#10223d]">{row.total.toLocaleString("ko-KR")}</td>
                   </tr>
                 ))}
+                <tr className="border-t border-[#cfddec] bg-[#f5f9ff]">
+                  <td className="px-3 py-2.5 font-black text-[#10223d]">합계</td>
+                  <td className="px-2 py-2.5 text-right font-black text-emerald-700">{monthlyTotal.inbound.toLocaleString("ko-KR")}</td>
+                  <td className="px-2 py-2.5 text-right font-black text-blue-700">{monthlyTotal.outbound.toLocaleString("ko-KR")}</td>
+                  <td className="px-3 py-2.5 text-right font-black text-[#10223d]">{monthlyTotal.total.toLocaleString("ko-KR")}</td>
+                </tr>
               </tbody>
             </table>
           </TableShell>
-        )}
-      </section>
+        </section>
+      </div>
+      <MeetingDepartmentVolumeBoard rows={departmentRows} />
     </div>
   );
 }

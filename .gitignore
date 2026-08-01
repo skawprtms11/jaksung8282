@@ -11,3 +11,4 @@ coverage/
 netlify/.next/
 .netlify/
 .harness/
+supabase/.temp/

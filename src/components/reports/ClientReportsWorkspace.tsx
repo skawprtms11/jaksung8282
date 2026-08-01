@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ClientReportEditor, type ClientReportEditorInitialReport } from "@/components/reports/ClientReportEditor";
 import { ClientReportsTable, type ClientReportTableRow } from "@/components/reports/ClientReportsTable";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -10,6 +10,10 @@ import type { ItemPeriod } from "@/types/enums";
 type Department = { id: string; department_name: string };
 type Client = { id: string; client_name: string; department_id: string };
 type Category = { id: string; category_name: string; icon_key: string };
+
+function isEditableReportStatus(status?: ClientReportTableRow["status"] | null) {
+  return status === "draft" || status === "rejected";
+}
 
 export function ClientReportsWorkspace({
   departments,
@@ -29,6 +33,18 @@ export function ClientReportsWorkspace({
   const [editingReport, setEditingReport] = useState<ClientReportEditorInitialReport | null>(null);
   const [activeDialog, setActiveDialog] = useState<ItemPeriod | "volumes" | null>(null);
   const [localReports, setLocalReports] = useState<ClientReportTableRow[]>(reports);
+  const selectedReport = useMemo(
+    () =>
+      editingReport
+        ? localReports.find((report) => report.id === editingReport.id) ?? null
+        : defaultClientId
+          ? localReports.find((report) => report.clientId === defaultClientId) ?? null
+          : null,
+    [defaultClientId, editingReport, localReports]
+  );
+  const canContinueSelectedReport = !editingReport && isEditableReportStatus(selectedReport?.status);
+  const editorInitialReport = editingReport ?? (canContinueSelectedReport ? selectedReport?.editReport ?? null : null);
+  const autoSaveExistingReport = Boolean(canContinueSelectedReport && editorInitialReport);
 
   const clearEditMode = useCallback(() => {
     setEditingReport(null);
@@ -47,26 +63,30 @@ export function ClientReportsWorkspace({
     clearEditMode();
   }, [clearEditMode]);
 
-  const startEdit = useCallback((report: ClientReportEditorInitialReport) => {
-    setEditingReport(report);
-    setActiveDialog(null);
-  }, []);
-
   const openEditDialog = useCallback((report: ClientReportEditorInitialReport, period: ItemPeriod) => {
     setEditingReport(report);
     setActiveDialog(period);
   }, []);
 
+  const handleReportStatusChange = useCallback((reportIds: string[], status: ClientReportTableRow["status"], submittedAt: string | null) => {
+    const reportIdSet = new Set(reportIds);
+    setLocalReports((current) =>
+      current.map((report) => (reportIdSet.has(report.id) ? { ...report, status, submittedAt } : report))
+    );
+  }, []);
+
   return (
     <>
       <ClientReportEditor
-        key={editingReport?.id ?? `${defaultDepartmentId ?? "department"}-${defaultClientId ?? "client"}`}
+        key={editorInitialReport?.id ?? `${defaultDepartmentId ?? "department"}-${defaultClientId ?? "client"}`}
         departments={departments}
         clients={clients}
         categories={categories}
-        defaultDepartmentId={editingReport?.department_id ?? defaultDepartmentId}
-        defaultClientId={editingReport?.client_id ?? defaultClientId}
-        initialReport={editingReport}
+        defaultDepartmentId={editorInitialReport?.department_id ?? defaultDepartmentId}
+        defaultClientId={editorInitialReport?.client_id ?? defaultClientId}
+        initialReport={editorInitialReport}
+        autoSaveExistingReport={autoSaveExistingReport}
+        currentReportStatus={selectedReport?.status ?? null}
         initialDialog={activeDialog}
         onSaved={handleSaved}
         onEditDialogClosed={() => setActiveDialog(null)}
@@ -77,9 +97,9 @@ export function ClientReportsWorkspace({
         <ClientReportsTable
           reports={localReports}
           activeEditingReportId={editingReport?.id ?? null}
-          onStartEdit={startEdit}
           onCancelEdit={clearEditMode}
           onOpenEditDialog={openEditDialog}
+          onReportStatusChange={handleReportStatusChange}
         />
       )}
     </>

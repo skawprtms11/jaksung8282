@@ -1,10 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { BarChart3, CalendarDays, ClipboardCheck, FileText, Hammer } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import {
+  REPORT_TAB_ACTIVE_CLASS_NAME,
+  REPORT_TAB_ICON_CLASS_NAME,
+  REPORT_TAB_IDLE_CLASS_NAME,
+  REPORT_TAB_INDICATOR_CLASS_NAME,
+  REPORT_TAB_ITEM_CLASS_NAME,
+  REPORT_TAB_NAV_CLASS_NAME
+} from "@/components/reports/report-tab-styles";
 
 type MeetingTabValue = "collection" | "materials" | "volumes" | "holiday" | "facility";
 
@@ -31,22 +38,8 @@ export function MeetingMaterialsTabNav({
 }) {
   const router = useRouter();
 
-  useEffect(() => {
-    const prefetchTabs = () => {
-      tabs.forEach((tab) => router.prefetch(tab.href));
-    };
-
-    if (typeof window.requestIdleCallback === "function") {
-      const idleId = window.requestIdleCallback(prefetchTabs, { timeout: 1200 });
-      return () => window.cancelIdleCallback(idleId);
-    }
-
-    const timeoutId = window.setTimeout(prefetchTabs, 250);
-    return () => window.clearTimeout(timeoutId);
-  }, [router, tabs]);
-
   return (
-    <nav className="grid min-w-0 flex-1 grid-cols-2 gap-1 rounded-[1rem] bg-[#f5f9ff] p-1 lg:grid-cols-5" aria-label="회의자료 화면 탭">
+    <nav className={REPORT_TAB_NAV_CLASS_NAME} aria-label="회의자료 화면 탭">
       {tabs.map((tab) => {
         const Icon = iconMap[tab.value];
         const isSelected = activeTab === tab.value;
@@ -54,23 +47,21 @@ export function MeetingMaterialsTabNav({
           <Link
             key={tab.value}
             href={tab.href}
-            prefetch
+            prefetch={false}
             scroll={false}
             onFocus={() => router.prefetch(tab.href)}
             onMouseEnter={() => router.prefetch(tab.href)}
             onTouchStart={() => router.prefetch(tab.href)}
             className={cn(
-              "relative flex h-10 items-center justify-center gap-2 rounded-xl px-3 text-[13px] font-extrabold tracking-normal transition",
-              isSelected
-                ? "bg-white text-[#075be8] shadow-[0_8px_18px_rgba(7,91,232,0.12)]"
-                : "text-slate-500 hover:bg-white/70 hover:text-[#10223d]"
+              REPORT_TAB_ITEM_CLASS_NAME,
+              isSelected ? REPORT_TAB_ACTIVE_CLASS_NAME : REPORT_TAB_IDLE_CLASS_NAME
             )}
             aria-current={isSelected ? "page" : undefined}
           >
-            <Icon className="h-4 w-4" aria-hidden="true" />
+            <Icon className={REPORT_TAB_ICON_CLASS_NAME} aria-hidden="true" />
             {tab.label}
             {isSelected ? (
-              <span className="absolute bottom-1 left-1/2 h-0.5 w-5 -translate-x-1/2 rounded-full bg-[#075be8]" aria-hidden="true" />
+              <span className={REPORT_TAB_INDICATOR_CLASS_NAME} aria-hidden="true" />
             ) : null}
           </Link>
         );

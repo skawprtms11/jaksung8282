@@ -37,6 +37,10 @@ export function canRegisterDepartmentClients(profile: Pick<ProfileSummary, "app_
   return profile?.app_role === "admin" || profile?.app_role === "department_head" || profile?.app_role === "manager";
 }
 
+export function canViewMeetingMaterials(profile: Pick<ProfileSummary, "app_role"> | null) {
+  return profile?.app_role === "admin" || profile?.app_role === "department_head" || profile?.app_role === "manager";
+}
+
 export function canReviewClientReport(profile: Pick<ProfileSummary, "app_role"> | null) {
   return profile?.app_role === "admin" || profile?.app_role === "department_head" || profile?.app_role === "manager";
 }

@@ -15,7 +15,7 @@ import {
 import { saveClientReportAction, type SavedClientReportRow } from "@/actions/reports";
 import { ActionMessage } from "@/components/common/ActionMessage";
 import { WeekSelect } from "./WeekSelect";
-import type { Importance, ItemPeriod, VolumeType, VolumeUnit } from "@/types/enums";
+import type { ClientReportStatus, Importance, ItemPeriod, VolumeType, VolumeUnit } from "@/types/enums";
 
 type Department = { id: string; department_name: string };
 type Client = { id: string; client_name: string; department_id: string };
@@ -94,6 +94,8 @@ export function ClientReportEditor({
   defaultDepartmentId,
   defaultClientId,
   initialReport,
+  autoSaveExistingReport,
+  currentReportStatus,
   initialDialog,
   onSaved,
   onEditDialogClosed
@@ -104,6 +106,8 @@ export function ClientReportEditor({
   defaultDepartmentId?: string | null;
   defaultClientId?: string | null;
   initialReport?: ClientReportEditorInitialReport | null;
+  autoSaveExistingReport?: boolean;
+  currentReportStatus?: ClientReportStatus | null;
   initialDialog?: ActiveDialog;
   onSaved?: (report?: SavedClientReportRow) => void;
   onEditDialogClosed?: () => void;
@@ -123,6 +127,7 @@ export function ClientReportEditor({
   const previousInitialDialogRef = useRef<ActiveDialog>(initialDialog ?? null);
   const firstCategory = categories[0]?.id ?? "";
   const needsClientSelection = !isEditMode && !clientId;
+  const isConfirmedReport = currentReportStatus === "submitted" || currentReportStatus === "approved";
   const currentItems = items.filter((item) => item.item_period === "current");
   const nextItems = items.filter((item) => item.item_period === "next");
   const normalizedItems = useMemo(() => {
@@ -213,7 +218,7 @@ export function ClientReportEditor({
   }
 
   function completeDialog() {
-    if (isEditMode) {
+    if (isEditMode && !autoSaveExistingReport) {
       closeDialogAndRemoveEditParam();
       return;
     }
@@ -255,21 +260,24 @@ export function ClientReportEditor({
             title="금주 실시사항"
             count={currentItems.length}
             icon="current"
-            buttonLabel="금주 실시사항 작성"
+            buttonLabel={isConfirmedReport ? "확정완료" : "금주 실시사항 작성"}
+            disabled={isConfirmedReport}
             onOpen={() => openItemDialog("current")}
           />
           <EditorLaunchCard
             title="차주 예정사항"
             count={nextItems.length}
             icon="next"
-            buttonLabel="차주 예정사항 작성"
+            buttonLabel={isConfirmedReport ? "확정완료" : "차주 예정사항 작성"}
+            disabled={isConfirmedReport}
             onOpen={() => openItemDialog("next")}
           />
           <EditorLaunchCard
             title="금주 물동량"
             count={volumes.length}
             icon="volumes"
-            buttonLabel="물동량 작성"
+            buttonLabel={isConfirmedReport ? "확정완료" : "물동량 작성"}
+            disabled={isConfirmedReport}
             onOpen={openVolumeDialog}
           />
         </div>
@@ -285,7 +293,7 @@ export function ClientReportEditor({
           onAdd={() => addItem(activeDialog)}
           onClose={closeDialogAndRemoveEditParam}
           onComplete={completeDialog}
-          completeLabel={isEditMode ? "작성 내용 적용" : "작성 완료 및 저장"}
+          completeLabel={isEditMode && !autoSaveExistingReport ? "작성 내용 적용" : "작성 완료 및 저장"}
           onRemove={(actualIndex) => setItems((current) => current.filter((_, index) => index !== actualIndex))}
           onUpdate={updateItem}
         />
@@ -297,7 +305,7 @@ export function ClientReportEditor({
           onAdd={addVolume}
           onClose={closeDialogAndRemoveEditParam}
           onComplete={completeDialog}
-          completeLabel={isEditMode ? "작성 내용 적용" : "작성 완료 및 저장"}
+          completeLabel={isEditMode && !autoSaveExistingReport ? "작성 내용 적용" : "작성 완료 및 저장"}
           onMove={(index, direction) =>
             setVolumes((current) => {
               const targetIndex = index + direction;
@@ -317,12 +325,14 @@ function EditorLaunchCard({
   count,
   icon,
   buttonLabel,
+  disabled,
   onOpen
 }: {
   title: string;
   count: number;
   icon: "current" | "next" | "volumes";
   buttonLabel: string;
+  disabled?: boolean;
   onOpen: () => void;
 }) {
   const Icon = icon === "volumes" ? Boxes : ClipboardList;
@@ -338,8 +348,14 @@ function EditorLaunchCard({
         </div>
         <span className="section-chip">{count}건</span>
       </div>
-      <button type="button" onClick={onOpen} className="tool-button mt-3 min-h-9 w-full py-1.5">
-        <Plus className="h-4 w-4" aria-hidden="true" />
+      <button
+        type="button"
+        onClick={onOpen}
+        disabled={disabled}
+        title={disabled ? "확정된 자료는 확정취소 후 수정할 수 있습니다." : undefined}
+        className="tool-button mt-3 min-h-9 w-full py-1.5 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {disabled ? <Save className="h-4 w-4" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
         {buttonLabel}
       </button>
     </article>
