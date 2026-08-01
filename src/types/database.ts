@@ -567,6 +567,18 @@ export type Database = {
         Args: Record<string, never>;
         Returns: Json;
       };
+      get_meeting_materials_payload: {
+        Args: {
+          p_tab: string;
+          p_week_start_date: string;
+          p_report_year: number;
+          p_report_month: number;
+          p_week_of_month: number;
+          p_department_id?: string | null;
+          p_client_id?: string | null;
+        };
+        Returns: Json;
+      };
       soft_delete_notices_atomic: {
         Args: {
           p_notice_ids: string[];

@@ -156,6 +156,35 @@ export async function incrementNoticeView(id: string) {
   await supabase.rpc("increment_notice_view", { notice_id: id });
 }
 
+export async function loadNoticeCommentsAction(noticeId: string): Promise<ActionResult<NoticeCommentActionRow[]>> {
+  const parsed = idSchema.safeParse(noticeId);
+  if (!parsed.success) {
+    return { ok: false, message: "댓글을 불러올 게시글을 확인하세요." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요." };
+  }
+
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  if (claimsError || !claimsData?.claims?.sub) {
+    return { ok: false, message: "로그인이 필요합니다." };
+  }
+
+  const { data, error } = await supabase
+    .from("notice_comments")
+    .select("id,notice_id,parent_id,content,author_name,author_department_name,created_by,created_at,updated_at")
+    .eq("notice_id", parsed.data)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    return { ok: false, message: safeErrorMessage(error.message) };
+  }
+  return { ok: true, message: "댓글을 불러왔습니다.", data: (data ?? []) as NoticeCommentActionRow[] };
+}
+
 export async function saveNoticeCollectionStatusAction(formData: FormData): Promise<ActionResult<NoticeCollectionStatus>> {
   const { profile } = await getCurrentUserProfile();
   if (!profile) {

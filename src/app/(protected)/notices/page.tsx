@@ -1,7 +1,6 @@
 import { NoticeBoard } from "@/components/notices/NoticeBoard";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { isAdmin } from "@/lib/auth/permissions";
-import { countNoticeCommentsByNoticeId } from "@/lib/notices/comments";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { NoticeType } from "@/types/enums";
 
@@ -22,17 +21,14 @@ type DepartmentRow = {
   department_name: string;
 };
 
-type NoticeCommentRow = {
-  id: string;
-  notice_id: string;
-  parent_id: string | null;
-  content: string;
-  author_name: string;
-  author_department_name: string | null;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
+type NoticeQueryRow = Omit<NoticeRow, "comment_count"> & {
+  notice_comments: { count: number }[] | null;
 };
+
+function toNoticeRow(row: NoticeQueryRow): NoticeRow {
+  const { notice_comments: commentCounts, ...notice } = row;
+  return { ...notice, comment_count: Number(commentCounts?.[0]?.count ?? 0) };
+}
 
 export default async function NoticesPage({
   searchParams
@@ -48,13 +44,13 @@ export default async function NoticesPage({
   let notices: NoticeRow[] = [];
   let importantNotices: NoticeRow[] = [];
   let departments: DepartmentRow[] = [];
-  let comments: NoticeCommentRow[] = [];
 
   if (supabase) {
     let query = supabase
       .from("notices")
-      .select("id,notice_type,title,content,is_pinned,view_count,created_by,created_at")
+      .select("id,notice_type,title,content,is_pinned,view_count,created_by,created_at,notice_comments(count)")
       .is("deleted_at", null)
+      .is("notice_comments.deleted_at", null)
       .eq("is_active", true)
       .order("is_pinned", { ascending: false })
       .order("created_at", { ascending: false })
@@ -67,8 +63,9 @@ export default async function NoticesPage({
     }
     const importantNoticeQuery = supabase
       .from("notices")
-      .select("id,notice_type,title,content,is_pinned,view_count,created_by,created_at")
+      .select("id,notice_type,title,content,is_pinned,view_count,created_by,created_at,notice_comments(count)")
       .is("deleted_at", null)
+      .is("notice_comments.deleted_at", null)
       .eq("is_active", true)
       .eq("is_pinned", true)
       .order("created_at", { ascending: false })
@@ -84,21 +81,8 @@ export default async function NoticesPage({
       importantNoticeQuery,
       departmentQuery
     ]);
-    const noticeRows = (data ?? []) as unknown as Omit<NoticeRow, "comment_count">[];
-    const importantNoticeRows = (importantNoticeData ?? []) as unknown as Omit<NoticeRow, "comment_count">[];
-    const noticeIds = Array.from(new Set([...noticeRows, ...importantNoticeRows].map((notice) => notice.id)));
-    if (noticeIds.length > 0) {
-      const { data: commentData } = await supabase
-        .from("notice_comments")
-        .select("id,notice_id,parent_id,content,author_name,author_department_name,created_by,created_at,updated_at")
-        .in("notice_id", noticeIds)
-        .is("deleted_at", null)
-        .order("created_at", { ascending: true });
-      comments = (commentData ?? []) as unknown as NoticeCommentRow[];
-    }
-    const commentCountMap = countNoticeCommentsByNoticeId(comments);
-    notices = noticeRows.map((notice) => ({ ...notice, comment_count: commentCountMap.get(notice.id) ?? 0 }));
-    importantNotices = importantNoticeRows.map((notice) => ({ ...notice, comment_count: commentCountMap.get(notice.id) ?? 0 }));
+    notices = ((data ?? []) as unknown as NoticeQueryRow[]).map(toNoticeRow);
+    importantNotices = ((importantNoticeData ?? []) as unknown as NoticeQueryRow[]).map(toNoticeRow);
     departments = (departmentData ?? []) as DepartmentRow[];
   }
 
@@ -106,7 +90,7 @@ export default async function NoticesPage({
     <NoticeBoard
       notices={notices}
       importantNotices={importantNotices}
-      comments={comments}
+      comments={[]}
       departments={departments}
       canCreate={isAdmin(profile)}
       currentUser={

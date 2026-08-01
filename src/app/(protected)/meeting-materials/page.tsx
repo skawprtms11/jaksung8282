@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import dynamic from "next/dynamic";
 import type { VolumeChartRow } from "@/components/charts/VolumeComparisonChart";
 import { TableShell } from "@/components/common/TableShell";
@@ -10,7 +11,7 @@ import type { MeetingOpenRequestItem, MeetingPriorityItem } from "@/components/r
 import { MeetingMaterialsWeekFilter } from "@/components/reports/MeetingMaterialsWeekFilter";
 import { pickDefaultDepartmentId } from "@/lib/auth/default-scope";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
-import { canViewMeetingMaterials, isAdmin } from "@/lib/auth/permissions";
+import { canViewMeetingMaterials, isAdmin, type ProfileSummary } from "@/lib/auth/permissions";
 import {
   getCurrentWeekOption,
   getReportMonthByThursday,
@@ -138,6 +139,7 @@ type OpenRequestQueryRow = ReportItemRequestRow & {
     work_categories: { category_name: string } | null;
     weekly_client_reports: {
       department_id: string;
+      client_id: string;
       week_start_date: string;
       report_year: number;
       report_month: number;
@@ -168,8 +170,86 @@ type MeetingSearchParams = {
   week_start_date?: string;
 };
 
+type MeetingMaterialsPayload = {
+  resolvedDepartmentId: string | null;
+  departments: DepartmentRow[];
+  clients: ClientSummaryRow[];
+  reports: MeetingReportRow[];
+  openRequests: OpenRequestQueryRow[];
+  submissions: SubmissionRow[];
+  workCategories: WorkCategoryRow[];
+  commonMaterialRequests: ReportItemRequestRow[];
+  volumeTrendReports: VolumeTrendReportRow[];
+  previousVolumeTrendReports: VolumeTrendReportRow[];
+};
+
+function isMeetingMaterialsPayload(value: unknown): value is MeetingMaterialsPayload {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const payload = value as Partial<MeetingMaterialsPayload>;
+  return (
+    Array.isArray(payload.departments) &&
+    Array.isArray(payload.clients) &&
+    Array.isArray(payload.reports) &&
+    Array.isArray(payload.openRequests) &&
+    Array.isArray(payload.submissions) &&
+    Array.isArray(payload.workCategories) &&
+    Array.isArray(payload.commonMaterialRequests) &&
+    Array.isArray(payload.volumeTrendReports) &&
+    Array.isArray(payload.previousVolumeTrendReports)
+  );
+}
+
+function normalizeMeetingReports(rows: MeetingReportRow[]) {
+  return rows.map((report) => ({
+    ...report,
+    weekly_client_report_items: (report.weekly_client_report_items ?? []).map((item) => ({
+      ...item,
+      weekly_report_item_requests: (item.weekly_report_item_requests ?? [])
+        .filter((request) => !request.deleted_at)
+        .sort((left, right) => left.created_at.localeCompare(right.created_at)),
+      request_target_key: item.id,
+      request_target_type: "client_item" as const,
+      request_department_submission_id: null,
+      request_item_sort_order: null
+    })),
+    weekly_volumes: report.weekly_volumes ?? []
+  }));
+}
+
+function attachCommonMaterialRequests(rows: MeetingReportRow[], requests: ReportItemRequestRow[]) {
+  const commonTargetKeys = rows.flatMap((report) =>
+    report.weekly_client_report_items.map((item) => item.request_target_key)
+  );
+  if (commonTargetKeys.length === 0) {
+    return rows;
+  }
+
+  const commonTargetKeySet = new Set(commonTargetKeys);
+  const requestMap = new Map<string, ReportItemRequestRow[]>();
+  requests.forEach((request) => {
+    if (!commonTargetKeySet.has(request.target_key)) {
+      return;
+    }
+    const requestRows = requestMap.get(request.target_key) ?? [];
+    requestRows.push(request);
+    requestMap.set(request.target_key, requestRows);
+  });
+
+  return rows.map((report) => ({
+    ...report,
+    weekly_client_report_items: report.weekly_client_report_items.map((item) => ({
+      ...item,
+      weekly_report_item_requests: requestMap.get(item.request_target_key) ?? []
+    }))
+  }));
+}
+
 const MEETING_REPORT_LIMIT = 500;
 const COMMON_CONTENT_FORMAT = "department-common-items/v1";
+const OPEN_REQUEST_COMPATIBILITY_SELECT =
+  "id,target_type,target_key,report_item_id,department_submission_id,section_type,item_period,item_sort_order,request_content,request_author_name,request_author_department_name,result_content,result_author_name,result_author_department_name,result_created_by,result_created_at,result_updated_at,closed_by,closed_author_name,closed_author_department_name,closed_at,created_by,created_at,updated_at,deleted_at,weekly_client_report_items(id,item_period,title,content,importance,work_categories(category_name),weekly_client_reports(department_id,client_id,week_start_date,report_year,report_month,week_of_month,departments(department_name),clients(client_name))),department_weekly_submissions(id,department_id,week_start_date,report_year,report_month,week_of_month,departments(department_name),department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content))";
 const MeetingPriorityPanel = dynamic(() => import("@/components/reports/MeetingPriorityPanel").then((mod) => mod.MeetingPriorityPanel), {
   loading: () => <PanelLoading label="핵심 이슈를 불러오는 중입니다." />
 });
@@ -206,6 +286,14 @@ function PanelLoading({ label }: { label: string }) {
     </div>
   );
 }
+
+const meetingTabLoadingLabels: Record<MeetingTab, string> = {
+  collection: "취합현황을 불러오는 중입니다.",
+  materials: "회의자료를 불러오는 중입니다.",
+  volumes: "물동량 현황을 불러오는 중입니다.",
+  holiday: "공휴일 근무현황을 불러오는 중입니다.",
+  facility: "시설공사 자료를 불러오는 중입니다."
+};
 
 function MeetingMaterialsAccessDenied() {
   return (
@@ -666,6 +754,82 @@ export default async function MeetingMaterialsPage({
   if (!profile || !canViewMeetingMaterials(profile)) {
     return <MeetingMaterialsAccessDenied />;
   }
+
+  let initialDepartments: DepartmentRow[] | undefined;
+  if (isAdmin(profile) && !params.department_id) {
+    const supabase = await createSupabaseServerClient();
+    if (supabase) {
+      let dataClient = supabase;
+      try {
+        dataClient = createSupabaseAdminClient();
+      } catch {
+        dataClient = supabase;
+      }
+      const { data, error } = await dataClient
+        .from("departments")
+        .select("id,department_name")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+        .order("department_name", { ascending: true });
+      if (!error) {
+        initialDepartments = (data ?? []) as DepartmentRow[];
+      }
+    }
+  }
+
+  const defaultDepartmentId =
+    params.department_id ??
+    (isAdmin(profile)
+      ? pickDefaultDepartmentId(initialDepartments ?? [], profile.app_role) || undefined
+      : profile.department_id ?? undefined);
+  const contentKey = [
+    activeTab,
+    selectedWeek.weekStartDate,
+    params.department_id ?? "all",
+    params.client_id ?? "all"
+  ].join("-");
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-[1.4rem] border border-[#d9e7f7] bg-white/82 p-2 shadow-[0_14px_34px_rgba(16,34,61,0.06)]">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <MeetingMaterialsTabNav
+            activeTab={activeTab}
+            tabs={tabs.map((tab) => ({
+              ...tab,
+              href: buildTabHref(tab.value, params, selectedWeek, defaultDepartmentId)
+            }))}
+          />
+          <MeetingMaterialsWeekFilter defaultWeekStartDate={selectedWeek.weekStartDate} />
+        </div>
+      </div>
+
+      <Suspense key={contentKey} fallback={<PanelLoading label={meetingTabLoadingLabels[activeTab]} />}>
+        <MeetingMaterialsContent
+          params={params}
+          activeTab={activeTab}
+          selectedWeek={selectedWeek}
+          profile={profile}
+          initialDepartments={initialDepartments}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
+async function MeetingMaterialsContent({
+  params,
+  activeTab,
+  selectedWeek,
+  profile,
+  initialDepartments
+}: {
+  params: MeetingSearchParams;
+  activeTab: MeetingTab;
+  selectedWeek: WeekOption;
+  profile: ProfileSummary;
+  initialDepartments?: DepartmentRow[];
+}) {
   const supabase = await createSupabaseServerClient();
   let departments: DepartmentRow[] = [];
   let clients: ClientSummaryRow[] = [];
@@ -678,22 +842,93 @@ export default async function MeetingMaterialsPage({
   let previousVolumeTrendReports: VolumeTrendReportRow[] = [];
 
   if (supabase && profile) {
-    let dataClient = supabase;
-    try {
-      dataClient = createSupabaseAdminClient();
-    } catch {
-      dataClient = supabase;
-    }
+    const compatibilityRequestPromise = (async (): Promise<OpenRequestQueryRow[] | null> => {
+      if (activeTab !== "collection") {
+        return null;
+      }
+      try {
+        const admin = createSupabaseAdminClient();
+        const { data, error } = await admin
+          .from("weekly_report_item_requests")
+          .select(OPEN_REQUEST_COMPATIBILITY_SELECT)
+          .is("deleted_at", null)
+          .is("closed_at", null)
+          .order("created_at", { ascending: false })
+          .limit(MEETING_REPORT_LIMIT);
+        return error ? null : ((data ?? []) as unknown as OpenRequestQueryRow[]);
+      } catch {
+        return null;
+      }
+    })();
+    const [{ data: rpcData, error: rpcError }, compatibilityRequestData] = await Promise.all([
+      supabase.rpc("get_meeting_materials_payload", {
+        p_tab: activeTab,
+        p_week_start_date: selectedWeek.weekStartDate,
+        p_report_year: selectedWeek.year,
+        p_report_month: selectedWeek.month,
+        p_week_of_month: selectedWeek.weekOfMonth,
+        p_department_id: params.department_id ?? null,
+        p_client_id: params.client_id ?? null
+      }),
+      compatibilityRequestPromise
+    ]);
+
+    if (!rpcError && isMeetingMaterialsPayload(rpcData)) {
+      departments = rpcData.departments;
+      clients = rpcData.clients;
+      reports = normalizeMeetingReports(rpcData.reports);
+      submissions = rpcData.submissions.map((submission) => ({
+        ...submission,
+        department_weekly_contents: submission.department_weekly_contents ?? []
+      }));
+      workCategories = rpcData.workCategories;
+      volumeTrendReports = rpcData.volumeTrendReports;
+      previousVolumeTrendReports = rpcData.previousVolumeTrendReports;
+      let openRequestRows = rpcData.openRequests;
+      if (activeTab === "collection" && compatibilityRequestData) {
+        const departmentFilter = rpcData.resolvedDepartmentId;
+        openRequestRows = compatibilityRequestData.filter((request) => {
+          if (request.target_type === "client_item") {
+            const report = request.weekly_client_report_items?.weekly_client_reports;
+            return Boolean(
+              report &&
+              (!departmentFilter || report.department_id === departmentFilter) &&
+              (!params.client_id || report.client_id === params.client_id)
+            );
+          }
+          const submission = request.department_weekly_submissions;
+          return Boolean(
+            !params.client_id &&
+            submission &&
+            (!departmentFilter || submission.department_id === departmentFilter)
+          );
+        });
+      }
+      openRequestItems = makeOpenRequestItems(openRequestRows, workCategories, rpcData.resolvedDepartmentId ?? undefined);
+      commonReports = activeTab === "materials" ? makeCommonMeetingRows(submissions, departments, workCategories) : [];
+      if (activeTab === "materials") {
+        commonReports = attachCommonMaterialRequests(commonReports, rpcData.commonMaterialRequests);
+      }
+    } else {
+      console.warn("[meeting-materials] Falling back to legacy queries", rpcError?.message ?? "invalid RPC payload");
+      let dataClient = supabase;
+      try {
+        dataClient = createSupabaseAdminClient();
+      } catch {
+        dataClient = supabase;
+      }
     let materialsDepartmentLimit: string | undefined;
-    let prefetchedDepartments: DepartmentRow[] | null = null;
+    let prefetchedDepartments: DepartmentRow[] | null = initialDepartments ?? null;
     if (isAdmin(profile) && activeTab === "materials" && !params.department_id && !params.client_id) {
-      const { data: defaultDepartments } = await dataClient
-        .from("departments")
-        .select("id,department_name")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true })
-        .order("department_name", { ascending: true });
-      prefetchedDepartments = (defaultDepartments ?? []) as DepartmentRow[];
+      if (!prefetchedDepartments) {
+        const { data: defaultDepartments } = await dataClient
+          .from("departments")
+          .select("id,department_name")
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true })
+          .order("department_name", { ascending: true });
+        prefetchedDepartments = (defaultDepartments ?? []) as DepartmentRow[];
+      }
       materialsDepartmentLimit = pickDefaultDepartmentId(prefetchedDepartments, profile.app_role) || undefined;
     }
     const departmentFilter = isAdmin(profile) ? params.department_id ?? materialsDepartmentLimit : profile.department_id;
@@ -899,20 +1134,7 @@ export default async function MeetingMaterialsPage({
       id: link.client_id,
       department_id: link.department_id
     }));
-    reports = ((reportResult.error ? [] : reportResult.data ?? []) as unknown as MeetingReportRow[]).map((report) => ({
-      ...report,
-      weekly_client_report_items: (report.weekly_client_report_items ?? []).map((item) => ({
-        ...item,
-        weekly_report_item_requests: (item.weekly_report_item_requests ?? [])
-          .filter((request) => !request.deleted_at)
-          .sort((left, right) => left.created_at.localeCompare(right.created_at)),
-        request_target_key: item.id,
-        request_target_type: "client_item" as const,
-        request_department_submission_id: null,
-        request_item_sort_order: null
-      })),
-      weekly_volumes: report.weekly_volumes ?? []
-    }));
+    reports = normalizeMeetingReports((reportResult.error ? [] : reportResult.data ?? []) as unknown as MeetingReportRow[]);
     openRequestItems = makeOpenRequestItems(
       (openRequestResult.data ?? []) as unknown as OpenRequestQueryRow[],
       (categoryResult.data ?? []) as WorkCategoryRow[],
@@ -927,30 +1149,11 @@ export default async function MeetingMaterialsPage({
     previousVolumeTrendReports = (previousVolumeTrendResult.data ?? []) as unknown as VolumeTrendReportRow[];
     commonReports = activeTab === "materials" ? makeCommonMeetingRows(submissions, departments, workCategories) : [];
     if (activeTab === "materials") {
-      const commonTargetKeys = commonReports.flatMap((report) =>
-        report.weekly_client_report_items.map((item) => item.request_target_key)
+      commonReports = attachCommonMaterialRequests(
+        commonReports,
+        (commonMaterialRequestResult.data ?? []) as unknown as ReportItemRequestRow[]
       );
-      if (commonTargetKeys.length > 0) {
-        const commonTargetKeySet = new Set(commonTargetKeys);
-        const requestMap = new Map<string, ReportItemRequestRow[]>();
-        ((commonMaterialRequestResult.data ?? []) as unknown as ReportItemRequestRow[]).forEach((request) => {
-          if (!commonTargetKeySet.has(request.target_key)) {
-            return;
-          }
-          const rows = requestMap.get(request.target_key) ?? [];
-          rows.push(request);
-          requestMap.set(request.target_key, rows);
-        });
-        const attachRequests = (rows: MeetingReportRow[]) =>
-          rows.map((report) => ({
-            ...report,
-            weekly_client_report_items: report.weekly_client_report_items.map((item) => ({
-              ...item,
-              weekly_report_item_requests: requestMap.get(item.request_target_key) ?? []
-            }))
-          }));
-        commonReports = attachRequests(commonReports);
-      }
+    }
     }
   }
 
@@ -961,24 +1164,8 @@ export default async function MeetingMaterialsPage({
   const materialRows = activeTab === "materials" ? [...commonReports, ...reports] : reports;
   const { clientCountMap, writtenClientMap } =
     activeTab === "collection" ? countByDepartment(clients, reports) : { clientCountMap: new Map(), writtenClientMap: new Map() };
-  const defaultMaterialsDepartmentId =
-    params.department_id ?? (pickDefaultDepartmentId(departments, profile.app_role) || profile.department_id || undefined);
-
   return (
-    <div className="space-y-4">
-      <div className="rounded-[1.4rem] border border-[#d9e7f7] bg-white/82 p-2 shadow-[0_14px_34px_rgba(16,34,61,0.06)]">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <MeetingMaterialsTabNav
-            activeTab={activeTab}
-            tabs={tabs.map((tab) => ({
-              ...tab,
-              href: buildTabHref(tab.value, params, selectedWeek, defaultMaterialsDepartmentId)
-            }))}
-          />
-          <MeetingMaterialsWeekFilter defaultWeekStartDate={selectedWeek.weekStartDate} />
-        </div>
-      </div>
-
+    <>
       {activeTab === "collection" ? (
         <CollectionView
           departments={departments}
@@ -1002,7 +1189,7 @@ export default async function MeetingMaterialsPage({
         <MeetingHolidayWorkBoard departments={departments} submissions={submissions} selectedWeek={selectedWeek} />
       ) : null}
       {activeTab === "facility" ? <MeetingFacilityConstructionBoard departments={departments} submissions={submissions} /> : null}
-    </div>
+    </>
   );
 }
 

@@ -22,11 +22,8 @@ export const getCurrentUserProfile = cache(async (): Promise<{
     return { profile: null, setupRequired: true };
   }
 
-  const {
-    data: { session }
-  } = await supabase.auth.getSession();
-
-  const userId = session?.user.id;
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const userId = claimsData?.claims?.sub;
   if (!userId) {
     return { profile: null, setupRequired: false };
   }

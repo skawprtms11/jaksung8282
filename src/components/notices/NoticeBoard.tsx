@@ -23,6 +23,7 @@ import {
   deleteNoticeAction,
   deleteNoticeCommentAction,
   incrementNoticeView,
+  loadNoticeCommentsAction,
   saveNoticeAction,
   saveNoticeCollectionStatusAction,
   saveNoticeCommentAction,
@@ -179,6 +180,9 @@ export function NoticeBoard({
   const [visibleNotices, setVisibleNotices] = useState(notices);
   const [visibleImportantNotices, setVisibleImportantNotices] = useState(importantNotices);
   const [visibleComments, setVisibleComments] = useState(comments);
+  const loadedCommentNoticeIds = useRef(new Set(comments.map((comment) => comment.notice_id)));
+  const [loadingCommentNoticeId, setLoadingCommentNoticeId] = useState<string | null>(null);
+  const [commentLoadError, setCommentLoadError] = useState<{ noticeId: string; message: string } | null>(null);
   const [deleteState, setDeleteState] = useState<Awaited<ReturnType<typeof deleteNoticeAction>> | null>(null);
   const [isDeleting, startDeleteTransition] = useTransition();
   const [saveState, saveAction, isNoticeSaving] = useActionState(
@@ -204,6 +208,29 @@ export function NoticeBoard({
       rows.map((row) => (row.id === notice.id ? { ...row, view_count: row.view_count + 1 } : row))
     );
     void incrementNoticeView(notice.id);
+    if (loadedCommentNoticeIds.current.has(notice.id)) {
+      setCommentLoadError(null);
+      return;
+    }
+
+    setLoadingCommentNoticeId(notice.id);
+    setCommentLoadError(null);
+    void loadNoticeCommentsAction(notice.id)
+      .then((result) => {
+        if (!result.ok || !result.data) {
+          setCommentLoadError({ noticeId: notice.id, message: result.message });
+          return;
+        }
+        const loadedComments = result.data;
+        setVisibleComments((rows) => [
+          ...rows.filter((comment) => comment.notice_id !== notice.id),
+          ...loadedComments
+        ]);
+        loadedCommentNoticeIds.current.add(notice.id);
+      })
+      .finally(() => {
+        setLoadingCommentNoticeId((current) => (current === notice.id ? null : current));
+      });
   }
 
   function updateNoticeCommentCount(noticeId: string, delta: number) {
@@ -463,8 +490,11 @@ export function NoticeBoard({
       ) : null}
       {detailNotice ? (
         <NoticeDetailDialog
+          key={detailNotice.id}
           notice={detailNotice}
           comments={visibleComments.filter((comment) => comment.notice_id === detailNotice.id)}
+          isCommentsLoading={loadingCommentNoticeId === detailNotice.id}
+          commentsError={commentLoadError?.noticeId === detailNotice.id ? commentLoadError.message : null}
           currentUser={currentUser}
           departments={departments}
           onClose={() => setDetailNotice(null)}
@@ -619,6 +649,8 @@ function NoticeWriteDialog({
 function NoticeDetailDialog({
   notice,
   comments,
+  isCommentsLoading,
+  commentsError,
   currentUser,
   departments,
   onClose,
@@ -628,6 +660,8 @@ function NoticeDetailDialog({
 }: {
   notice: NoticeBoardRow;
   comments: NoticeCommentRow[];
+  isCommentsLoading: boolean;
+  commentsError: string | null;
   currentUser: CurrentUser | null;
   departments: DepartmentRow[];
   onClose: () => void;
@@ -638,18 +672,12 @@ function NoticeDetailDialog({
   const parsedContent = parseNoticeContent(notice.content);
   const collectionRows = mergeCollectionStatuses(departments, parsedContent.collectionStatuses);
   const completedCount = collectionRows.filter((row) => row.is_completed).length;
-  const [visibleComments, setVisibleComments] = useState(comments);
 
   function handleCommentSaved(comment: NoticeCommentRow) {
-    setVisibleComments((rows) => {
-      const exists = rows.some((row) => row.id === comment.id);
-      return exists ? rows.map((row) => (row.id === comment.id ? comment : row)) : [...rows, comment];
-    });
     onCommentSaved(comment);
   }
 
   function handleCommentDeleted(comment: NoticeCommentRow) {
-    setVisibleComments((rows) => rows.filter((row) => row.id !== comment.id));
     onCommentDeleted(comment);
   }
 
@@ -688,7 +716,10 @@ function NoticeDetailDialog({
           ) : null}
           <NoticeCommentsSection
             noticeId={notice.id}
-            comments={visibleComments}
+            comments={comments}
+            commentCount={notice.comment_count}
+            isLoading={isCommentsLoading}
+            error={commentsError}
             currentUser={currentUser}
             onCommentSaved={handleCommentSaved}
             onCommentDeleted={handleCommentDeleted}
@@ -706,12 +737,18 @@ function NoticeDetailDialog({
 function NoticeCommentsSection({
   noticeId,
   comments,
+  commentCount,
+  isLoading,
+  error,
   currentUser,
   onCommentSaved,
   onCommentDeleted
 }: {
   noticeId: string;
   comments: NoticeCommentRow[];
+  commentCount: number;
+  isLoading: boolean;
+  error: string | null;
   currentUser: CurrentUser | null;
   onCommentSaved: (comment: NoticeCommentRow) => void;
   onCommentDeleted: (comment: NoticeCommentRow) => void;
@@ -723,32 +760,44 @@ function NoticeCommentsSection({
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <MessageCircle className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
-          <p className="text-sm font-black text-[#10223d]">댓글 {comments.length}</p>
+          <p className="text-sm font-black text-[#10223d]">댓글 {isLoading ? commentCount : comments.length}</p>
         </div>
       </div>
-      <NoticeCommentForm
-        noticeId={noticeId}
-        currentUser={currentUser}
-        submitLabel="댓글 등록"
-        onCommentSaved={onCommentSaved}
-      />
-      <div className="mt-4 space-y-2">
-        {commentTree.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[#b9cce6] px-4 py-6 text-center text-sm font-bold text-slate-400">
-            아직 등록된 댓글이 없습니다.
+      {isLoading ? (
+        <div className="rounded-2xl border border-dashed border-[#b9cce6] px-4 py-6 text-center text-sm font-bold text-slate-400">
+          댓글을 불러오는 중입니다.
+        </div>
+      ) : error ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-center text-sm font-bold text-rose-600">
+          {error}
+        </div>
+      ) : (
+        <>
+          <NoticeCommentForm
+            noticeId={noticeId}
+            currentUser={currentUser}
+            submitLabel="댓글 등록"
+            onCommentSaved={onCommentSaved}
+          />
+          <div className="mt-4 space-y-2">
+            {commentTree.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-[#b9cce6] px-4 py-6 text-center text-sm font-bold text-slate-400">
+                아직 등록된 댓글이 없습니다.
+              </div>
+            ) : (
+              commentTree.map((comment) => (
+                <NoticeCommentItem
+                  key={comment.id}
+                  comment={comment}
+                  currentUser={currentUser}
+                  onCommentSaved={onCommentSaved}
+                  onCommentDeleted={onCommentDeleted}
+                />
+              ))
+            )}
           </div>
-        ) : (
-          commentTree.map((comment) => (
-            <NoticeCommentItem
-              key={comment.id}
-              comment={comment}
-              currentUser={currentUser}
-              onCommentSaved={onCommentSaved}
-              onCommentDeleted={onCommentDeleted}
-            />
-          ))
-        )}
-      </div>
+        </>
+      )}
     </section>
   );
 }
