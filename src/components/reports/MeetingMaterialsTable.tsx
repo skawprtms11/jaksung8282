@@ -65,7 +65,7 @@ export type MeetingMaterialsReport = {
   weekly_client_report_items: MeetingReportItem[];
 };
 
-type SelectedItem = {
+export type MeetingItemDetailSelection = {
   reportId: string;
   clientName: string;
   departmentName: string;
@@ -137,17 +137,19 @@ function removeRequestFromReports(reports: MeetingMaterialsReport[], requestId: 
 export function MeetingMaterialsTable({
   reports,
   currentUserId,
-  canManageAllRequests
+  canManageAllRequests,
+  emptyTitle = "선택한 주차의 회의자료가 없습니다."
 }: {
   reports: MeetingMaterialsReport[];
   currentUserId: string;
   canManageAllRequests: boolean;
+  emptyTitle?: string;
 }) {
   const [reportRows, setReportRows] = useState(reports);
-  const [selected, setSelected] = useState<SelectedItem | null>(null);
+  const [selected, setSelected] = useState<MeetingItemDetailSelection | null>(null);
 
   if (reportRows.length === 0) {
-    return <EmptyState title="선택한 주차의 회의자료가 없습니다." />;
+    return <EmptyState title={emptyTitle} />;
   }
 
   function openItem(report: MeetingMaterialsReport, item: MeetingReportItem) {
@@ -238,7 +240,7 @@ export function MeetingMaterialsTable({
       </TableShell>
 
       {selected ? (
-        <ItemDetailDialog
+        <MeetingItemDetailDialog
           selected={selected}
           currentUserId={currentUserId}
           canManageAllRequests={canManageAllRequests}
@@ -308,7 +310,7 @@ function MeetingWorkItemList({
   );
 }
 
-function ItemDetailDialog({
+export function MeetingItemDetailDialog({
   selected,
   currentUserId,
   canManageAllRequests,
@@ -316,7 +318,7 @@ function ItemDetailDialog({
   onRequestSaved,
   onRequestDeleted
 }: {
-  selected: SelectedItem;
+  selected: MeetingItemDetailSelection;
   currentUserId: string;
   canManageAllRequests: boolean;
   onClose: () => void;

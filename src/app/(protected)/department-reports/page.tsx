@@ -1,6 +1,12 @@
 import dynamic from "next/dynamic";
 import { Boxes, ClipboardCheck, ListChecks } from "lucide-react";
+import {
+  DepartmentOpenRequestBoard,
+  type DepartmentOpenRequestItem
+} from "@/components/reports/DepartmentOpenRequestBoard";
 import type { DepartmentVolumeReport } from "@/components/reports/DepartmentVolumeBoard";
+import { DepartmentCommonSearchToolbar } from "@/components/reports/DepartmentCommonSearchToolbar";
+import type { MeetingReportItemRequest } from "@/components/reports/MeetingMaterialsTable";
 import type {
   DepartmentSubmissionEditorInitialSubmission,
   DepartmentVacancyRecordValue,
@@ -12,6 +18,13 @@ import { TableShell } from "@/components/common/TableShell";
 import { pickDefaultClientId, pickDefaultDepartmentId } from "@/lib/auth/default-scope";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { canSubmitDepartment, isAdmin } from "@/lib/auth/permissions";
+import {
+  filterClientReportSearchItems,
+  filterDepartmentCommonSearchItems,
+  hasClientReportSearchFilters,
+  parseClientReportSearchFilters,
+  parseDepartmentCommonContentItems
+} from "@/lib/reports/client-report-search";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils/cn";
@@ -29,6 +42,7 @@ type ProfileNameRow = HolidayWorkerOption & { is_active: boolean };
 type ClientReviewItem = {
   item_period: "current" | "next";
   importance: Importance;
+  work_category_id: string;
   title: string;
   content: string;
   sort_order: number;
@@ -37,6 +51,10 @@ type ClientReviewItem = {
 type ClientReviewRow = {
   id: string;
   created_by: string;
+  report_year: number;
+  report_month: number;
+  week_of_month: number;
+  week_start_date: string;
   status: ClientReportStatus;
   updated_at: string;
   clients: { client_name: string } | null;
@@ -57,8 +75,69 @@ type DepartmentSubmissionInitialRow = {
 type DepartmentVacancyDbRow = Omit<DepartmentVacancyRecordValue, "center_name"> & {
   center_masters: { center_name: string } | null;
 };
+type AdminProfileRow = { id: string };
+type OpenRequestDepartmentContentRow = {
+  section_type: "common" | "facility" | "vacancy" | "holiday_work";
+  current_importance: Importance;
+  current_work_category_id: string | null;
+  current_week_content: string;
+  next_importance: Importance;
+  next_work_category_id: string | null;
+  next_week_content: string;
+};
+type DepartmentOpenRequestQueryRow = MeetingReportItemRequest & {
+  deleted_at?: string | null;
+  weekly_client_report_items?: {
+    id: string;
+    item_period: "current" | "next";
+    title: string | null;
+    content: string;
+    importance: Importance;
+    work_category_id: string;
+    sort_order: number;
+    work_categories: { category_name: string } | null;
+    weekly_client_reports: {
+      id: string;
+      department_id: string;
+      client_id: string;
+      report_year: number;
+      report_month: number;
+      week_of_month: number;
+      deleted_at: string | null;
+      departments: { department_name: string } | null;
+      clients: { client_name: string } | null;
+    } | null;
+  } | null;
+  department_weekly_submissions?: {
+    id: string;
+    department_id: string;
+    report_year: number;
+    report_month: number;
+    week_of_month: number;
+    deleted_at: string | null;
+    departments: { department_name: string } | null;
+    department_weekly_contents: OpenRequestDepartmentContentRow[];
+  } | null;
+};
 
-const CLIENT_REVIEW_LIMIT = 100;
+type DepartmentReportsSearchParams = {
+  department_id?: string;
+  client_id?: string;
+  q?: string;
+  search_data?: string;
+  work_category_id?: string;
+  importance?: string;
+  title?: string;
+  current_content?: string;
+  next_content?: string;
+  date_from?: string;
+  date_to?: string;
+};
+
+const CLIENT_REVIEW_LIMIT = 300;
+const OPEN_REQUEST_LIMIT = 200;
+const OPEN_REQUEST_FIELDS =
+  "id,target_type,target_key,report_item_id,department_submission_id,section_type,item_period,item_sort_order,request_content,request_author_name,request_author_department_name,result_content,result_author_name,result_author_department_name,result_created_by,result_created_at,result_updated_at,closed_by,closed_author_name,closed_author_department_name,closed_at,created_by,created_at,updated_at,deleted_at";
 const DepartmentSubmissionEditor = dynamic(
   () => import("@/components/reports/DepartmentSubmissionEditor").then((mod) => mod.DepartmentSubmissionEditor),
   {
@@ -218,17 +297,141 @@ function buildVacancyTrend(rows: DepartmentVacancyRecordValue[]): DepartmentVaca
   return Array.from(pointMap.values()).sort((left, right) => left.week_start_date.localeCompare(right.week_start_date));
 }
 
+function makeDepartmentOpenRequestItems(
+  rows: DepartmentOpenRequestQueryRow[],
+  categories: CategoryOption[],
+  adminCreatorIds: Set<string>
+): DepartmentOpenRequestItem[] {
+  const categoryNameMap = new Map(categories.map((category) => [category.id, category.category_name]));
+  const requestsByTarget = rows.reduce((map, request) => {
+    const targetRequests = map.get(request.target_key) ?? [];
+    targetRequests.push(request);
+    map.set(request.target_key, targetRequests);
+    return map;
+  }, new Map<string, MeetingReportItemRequest[]>());
+
+  return rows
+    .filter((request) => adminCreatorIds.has(request.created_by) && !request.closed_at && !request.deleted_at)
+    .map((request): DepartmentOpenRequestItem | null => {
+      const targetRequests = requestsByTarget.get(request.target_key) ?? [request];
+      if (request.target_type === "client_item") {
+        const item = request.weekly_client_report_items;
+        const report = item?.weekly_client_reports;
+        if (!item || !report || report.deleted_at) {
+          return null;
+        }
+        const clientName = report.clients?.client_name ?? "-";
+        const departmentName = report.departments?.department_name ?? "-";
+        const title = item.title?.trim() || item.content.split("\n")[0]?.trim() || "제목 없음";
+        const categoryName = item.work_categories?.category_name ?? "기타";
+        return {
+          requestId: request.id,
+          requestCreatedAt: request.created_at,
+          weekLabel: `${report.report_year}.${String(report.report_month).padStart(2, "0")} ${report.week_of_month}주차 · ${item.item_period === "current" ? "금주" : "차주"}`,
+          sourceLabel: clientName,
+          categoryName,
+          title,
+          requestContent: request.request_content,
+          resultContent: request.result_content,
+          selection: {
+            reportId: report.id,
+            clientName,
+            departmentName,
+            isCommon: false,
+            item: {
+              id: item.id,
+              item_period: item.item_period,
+              title,
+              content: item.content,
+              importance: item.importance,
+              work_categories: { category_name: categoryName },
+              weekly_report_item_requests: targetRequests,
+              request_target_key: request.target_key,
+              request_target_type: "client_item",
+              request_department_submission_id: null,
+              request_item_sort_order: null
+            }
+          }
+        };
+      }
+
+      const submission = request.department_weekly_submissions;
+      if (
+        request.target_type !== "department_common" ||
+        !submission ||
+        submission.deleted_at ||
+        !request.item_period ||
+        typeof request.item_sort_order !== "number"
+      ) {
+        return null;
+      }
+      const commonContent = submission.department_weekly_contents.find((content) => content.section_type === "common");
+      if (!commonContent) {
+        return null;
+      }
+      const commonItems = parseDepartmentCommonContentItems(
+        request.item_period === "current" ? commonContent.current_week_content : commonContent.next_week_content,
+        request.item_period === "current" ? commonContent.current_importance : commonContent.next_importance,
+        (request.item_period === "current" ? commonContent.current_work_category_id : commonContent.next_work_category_id) ?? "",
+        "공통사항"
+      );
+      const commonItem = commonItems.find((item) => item.sort_order === request.item_sort_order) ?? commonItems[0];
+      const departmentName = submission.departments?.department_name ?? "-";
+      const title = commonItem?.title?.trim() || commonItem?.content.split("\n")[0]?.trim() || "제목 없음";
+      const content = commonItem?.content ?? "-";
+      const categoryName = commonItem?.work_category_id
+        ? categoryNameMap.get(commonItem.work_category_id) ?? "기타"
+        : "기타";
+      return {
+        requestId: request.id,
+        requestCreatedAt: request.created_at,
+        weekLabel: `${submission.report_year}.${String(submission.report_month).padStart(2, "0")} ${submission.week_of_month}주차 · ${request.item_period === "current" ? "금주" : "차주"}`,
+        sourceLabel: "부서 공통사항",
+        categoryName,
+        title,
+        requestContent: request.request_content,
+        resultContent: request.result_content,
+        selection: {
+          reportId: submission.id,
+          clientName: "공통사항",
+          departmentName,
+          isCommon: true,
+          item: {
+            id: request.target_key,
+            item_period: request.item_period,
+            title,
+            content,
+            importance:
+              commonItem?.importance ??
+              (request.item_period === "current" ? commonContent.current_importance : commonContent.next_importance),
+            work_categories: { category_name: categoryName },
+            weekly_report_item_requests: targetRequests,
+            request_target_key: request.target_key,
+            request_target_type: "department_common",
+            request_department_submission_id: submission.id,
+            request_item_sort_order: request.item_sort_order
+          }
+        }
+      };
+    })
+    .filter((request): request is DepartmentOpenRequestItem => Boolean(request))
+    .sort((left, right) => right.requestCreatedAt.localeCompare(left.requestCreatedAt));
+}
+
 export default async function DepartmentReportsPage({
   searchParams
 }: {
-  searchParams: Promise<{ department_id?: string; client_id?: string }>;
+  searchParams: Promise<DepartmentReportsSearchParams>;
 }) {
   const params = await searchParams;
+  const searchFilters = parseClientReportSearchFilters(params);
+  const hasSearchFilters = hasClientReportSearchFilters(searchFilters);
   const { profile } = await getCurrentUserProfile();
   const supabase = await createSupabaseServerClient();
   let departments: DepartmentOption[] = [];
   let categories: CategoryOption[] = [];
   let reports: ClientReviewRow[] = [];
+  let reviewReports: ClientReviewRow[] = [];
   let volumeReports: DepartmentVolumeReport[] = [];
   let holidayClientOptions: HolidayClientOption[] = [];
   let holidayWorkerOptions: HolidayWorkerOption[] = [];
@@ -237,6 +440,7 @@ export default async function DepartmentReportsPage({
   let initialVacancyTrend: DepartmentVacancyTrendPointValue[] = [];
   let clientCount = 0;
   let initialSubmission: DepartmentSubmissionEditorInitialSubmission | null = null;
+  let departmentOpenRequests: DepartmentOpenRequestItem[] = [];
   let initialLookupDepartmentId: string | null = null;
   const currentWeek = getCurrentWeekOption();
   if (supabase && profile) {
@@ -289,7 +493,10 @@ export default async function DepartmentReportsPage({
       { data: centerData },
       { data: volumeReportData, error: volumeReportError },
       { data: vacancyMonthData },
-      { data: vacancyTrendData }
+      { data: vacancyTrendData },
+      { data: adminProfileData },
+      { data: clientOpenRequestData },
+      { data: commonOpenRequestData }
     ] = await Promise.all([
       (() => {
         let query = dataClient.from("departments").select("id,department_name").eq("is_active", true).order("sort_order");
@@ -302,9 +509,9 @@ export default async function DepartmentReportsPage({
       (() => {
         let query = dataClient
           .from("weekly_client_reports")
-          .select("id,created_by,status,updated_at,clients(client_name),weekly_client_report_items(item_period,importance,title,content,sort_order,work_categories(category_name,icon_key)),weekly_volumes(volume_type,quantity,unit)")
-          .eq("week_start_date", currentWeek.weekStartDate)
+          .select("id,created_by,report_year,report_month,week_of_month,week_start_date,status,updated_at,clients(client_name),weekly_client_report_items(item_period,importance,work_category_id,title,content,sort_order,work_categories(category_name,icon_key)),weekly_volumes(volume_type,quantity,unit)")
           .is("deleted_at", null)
+          .order("week_start_date", { ascending: false })
           .order("updated_at", { ascending: false })
           .limit(CLIENT_REVIEW_LIMIT);
         if (departmentFilter) {
@@ -315,6 +522,22 @@ export default async function DepartmentReportsPage({
         }
         if (selectedClientFilter) {
           query = query.eq("client_id", selectedClientFilter);
+        }
+        if (searchFilters.dateFrom || searchFilters.dateTo) {
+          if (searchFilters.dateFrom) {
+            query = query.gte(
+              "week_start_date",
+              searchFilters.dateFrom < currentWeek.weekStartDate ? searchFilters.dateFrom : currentWeek.weekStartDate
+            );
+          }
+          if (searchFilters.dateTo) {
+            query = query.lte(
+              "week_start_date",
+              searchFilters.dateTo > currentWeek.weekStartDate ? searchFilters.dateTo : currentWeek.weekStartDate
+            );
+          }
+        } else {
+          query = query.eq("week_start_date", currentWeek.weekStartDate);
         }
         return query;
       })(),
@@ -371,7 +594,36 @@ export default async function DepartmentReportsPage({
             .is("deleted_at", null)
         : Promise.resolve({ data: [], error: null }),
       Promise.resolve({ data: [] }),
-      Promise.resolve({ data: [] })
+      Promise.resolve({ data: [] }),
+      dataClient.from("profiles").select("id").eq("app_role", "admin"),
+      selectedDepartmentFilter
+        ? dataClient
+          .from("weekly_report_item_requests")
+          .select(
+            `${OPEN_REQUEST_FIELDS},weekly_client_report_items!inner(id,item_period,title,content,importance,work_category_id,sort_order,work_categories(category_name),weekly_client_reports!inner(id,department_id,client_id,report_year,report_month,week_of_month,deleted_at,departments(department_name),clients(client_name)))`
+          )
+          .eq("target_type", "client_item")
+          .eq("weekly_client_report_items.weekly_client_reports.department_id", selectedDepartmentFilter)
+          .is("weekly_client_report_items.weekly_client_reports.deleted_at", null)
+          .is("deleted_at", null)
+          .is("closed_at", null)
+          .order("created_at", { ascending: false })
+          .limit(OPEN_REQUEST_LIMIT)
+        : Promise.resolve({ data: [] }),
+      selectedDepartmentFilter
+        ? dataClient
+          .from("weekly_report_item_requests")
+          .select(
+            `${OPEN_REQUEST_FIELDS},department_weekly_submissions!inner(id,department_id,report_year,report_month,week_of_month,deleted_at,departments(department_name),department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content))`
+          )
+          .eq("target_type", "department_common")
+          .eq("department_weekly_submissions.department_id", selectedDepartmentFilter)
+          .is("department_weekly_submissions.deleted_at", null)
+          .is("deleted_at", null)
+          .is("closed_at", null)
+          .order("created_at", { ascending: false })
+          .limit(OPEN_REQUEST_LIMIT)
+        : Promise.resolve({ data: [] })
     ]);
     departments = (departmentData ?? []) as DepartmentOption[];
     categories = (categoryData ?? []) as CategoryOption[];
@@ -387,13 +639,31 @@ export default async function DepartmentReportsPage({
     holidayWorkerOptions = profileRows.filter((worker) => worker.is_active).map(({ id, full_name }) => ({ id, full_name }));
     const reportRows = reportError ? [] : ((reportData ?? []) as unknown as ClientReviewRow[]);
     const creatorNameMap = new Map(profileRows.map((creator) => [creator.id, creator.full_name]));
-    reports = reportRows.map((report) => ({
+    const namedReports = reportRows.map((report) => ({
       ...report,
       profiles: { full_name: creatorNameMap.get(report.created_by) ?? "-" }
     }));
+    reports = namedReports.filter((report) => report.week_start_date === currentWeek.weekStartDate);
+    reviewReports = hasSearchFilters
+      ? namedReports.flatMap((report) => {
+          const matchingItems = filterClientReportSearchItems(report, searchFilters);
+          return matchingItems.length > 0
+            ? [{ ...report, weekly_client_report_items: matchingItems }]
+            : [];
+        })
+      : namedReports;
     volumeReports = volumeReportError ? [] : ((volumeReportData ?? []) as unknown as DepartmentVolumeReport[]);
     clientCount = count ?? 0;
     initialSubmission = submissionData ? (submissionData as unknown as DepartmentSubmissionInitialRow) : null;
+    const adminCreatorIds = new Set(((adminProfileData ?? []) as AdminProfileRow[]).map((adminProfile) => adminProfile.id));
+    if (isAdmin(profile)) {
+      adminCreatorIds.add(profile.id);
+    }
+    departmentOpenRequests = makeDepartmentOpenRequestItems(
+      [...(clientOpenRequestData ?? []), ...(commonOpenRequestData ?? [])] as unknown as DepartmentOpenRequestQueryRow[],
+      categories,
+      adminCreatorIds
+    );
     initialVacancyRecords = ((vacancyMonthData ?? []) as unknown as DepartmentVacancyDbRow[]).map(mapVacancyRow);
     initialVacancyTrend = buildVacancyTrend(((vacancyTrendData ?? []) as unknown as DepartmentVacancyDbRow[]).map(mapVacancyRow));
   }
@@ -401,6 +671,26 @@ export default async function DepartmentReportsPage({
   const inboundVolumeSummary = summarizeVolumeByUnit(reports, "inbound");
   const outboundVolumeSummary = summarizeVolumeByUnit(reports, "outbound");
   const importanceStats = getImportanceStats(reports);
+  const commonSubmissionContent = initialSubmission?.department_weekly_contents.find(
+    (content) => content.section_type === "common"
+  );
+  const departmentCommonMatchesSearch = Boolean(
+    hasSearchFilters &&
+      initialSubmission &&
+      commonSubmissionContent &&
+      filterDepartmentCommonSearchItems(
+        {
+          week_start_date: initialSubmission.week_start_date,
+          current_importance: commonSubmissionContent.current_importance ?? "medium",
+          current_work_category_id: commonSubmissionContent.current_work_category_id ?? categories[0]?.id ?? "",
+          current_week_content: commonSubmissionContent.current_week_content ?? "",
+          next_importance: commonSubmissionContent.next_importance ?? "medium",
+          next_work_category_id: commonSubmissionContent.next_work_category_id ?? categories[0]?.id ?? "",
+          next_week_content: commonSubmissionContent.next_week_content ?? ""
+        },
+        searchFilters
+      ).length > 0
+  );
   return (
     <>
       <DepartmentSubmissionEditor
@@ -417,13 +707,33 @@ export default async function DepartmentReportsPage({
         initialSubmission={initialSubmission}
         initialLookupDepartmentId={initialLookupDepartmentId}
         initialLookupWeekStartDate={currentWeek.weekStartDate}
+        commonSearchFilters={searchFilters}
         requireExplicitDepartmentSelection={false}
         volumeSlot={<DepartmentVolumeBoard clients={holidayClientOptions} reports={volumeReports} />}
+        commonRequestSlot={
+          profile ? (
+            <DepartmentOpenRequestBoard
+              requests={departmentOpenRequests}
+              currentUserId={profile.id}
+              canManageAllRequests={isAdmin(profile)}
+            />
+          ) : null
+        }
+        commonSearchSlot={
+          <DepartmentCommonSearchToolbar
+            key={Object.values(searchFilters).join("|")}
+            categories={categories}
+            filters={searchFilters}
+            resultCount={reviewReports.length + (departmentCommonMatchesSearch ? 1 : 0)}
+            unifiedDataSearch
+            showQuickReset
+          />
+        }
         reviewSlot={
           <>
             <h2 className="section-doodle-title mb-3 mt-6">화주별 자료 검토</h2>
-            {reports.length === 0 ? (
-              <EmptyState title="검토할 화주별 자료가 없습니다." />
+            {reviewReports.length === 0 ? (
+              <EmptyState title={hasSearchFilters ? "검색 조건에 맞는 화주자료가 없습니다." : "검토할 화주별 자료가 없습니다."} />
             ) : (
               <TableShell>
                 <table className="table-sticky min-w-[1080px] w-full text-left text-sm">
@@ -438,9 +748,14 @@ export default async function DepartmentReportsPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {reports.map((report) => (
+                    {reviewReports.map((report) => (
                       <tr key={report.id} className="border-t border-slate-100 align-top">
-                        <td className="px-3 py-3 font-medium">{report.clients?.client_name ?? "-"}</td>
+                        <td className="px-3 py-3">
+                          <span className="block font-medium">{report.clients?.client_name ?? "-"}</span>
+                          <span className="mt-1 block text-[11px] font-bold text-slate-400">
+                            {report.report_year}.{String(report.report_month).padStart(2, "0")} {report.week_of_month}주차
+                          </span>
+                        </td>
                         <td className="px-3 py-3">{report.profiles?.full_name ?? "-"}</td>
                         <td className="w-[34%] px-3 py-3">
                           <WorkItemList rows={report.weekly_client_report_items} period="current" />

@@ -34,6 +34,8 @@ export type ClientReportTableRow = {
   clientId: string;
   clientName: string;
   authorName: string;
+  weekStartDate: string;
+  weekLabel: string;
   submittedAt: string | null;
   currentItems: ClientReportItem[];
   nextItems: ClientReportItem[];
@@ -111,13 +113,15 @@ export function ClientReportsTable({
   activeEditingReportId,
   onCancelEdit,
   onOpenEditDialog,
-  onReportStatusChange
+  onReportStatusChange,
+  hideVolumes = false
 }: {
   reports: ClientReportTableRow[];
   activeEditingReportId?: string | null;
   onCancelEdit: () => void;
   onOpenEditDialog: (report: ClientReportEditorInitialReport, period: ItemPeriod) => void;
   onReportStatusChange?: (reportIds: string[], status: ClientReportStatus, submittedAt: string | null) => void;
+  hideVolumes?: boolean;
 }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [statusOverrides, setStatusOverrides] = useState<Map<string, ClientReportStatus>>(() => new Map());
@@ -404,20 +408,27 @@ export function ClientReportsTable({
                       className="h-4 w-4 rounded border-slate-300"
                     />
                   </td>
-                  <td className="px-3 py-3 font-black text-[#10223d]">{report.clientName}</td>
+                  <td className="px-3 py-3">
+                    <span className="block font-black text-[#10223d]">{report.clientName}</span>
+                    <span className="mt-1 block text-[11px] font-bold text-slate-400">{report.weekLabel}</span>
+                  </td>
                   <td className="px-3 py-3">{report.authorName}</td>
                   <td className="w-[34%] px-3 py-3">{renderEditableCell(report, "current", report.currentItems)}</td>
                   <td className="w-[34%] px-3 py-3">{renderEditableCell(report, "next", report.nextItems)}</td>
                   <td className="px-3 py-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() => openVolumeDialog(report)}
-                      className="icon-tool-button mx-auto"
-                      aria-label={`${report.clientName} 물동량 작성내용 확인`}
-                      title="물동량 확인"
-                    >
-                      <Eye className="h-4 w-4" aria-hidden="true" />
-                    </button>
+                    {hideVolumes ? (
+                      <span className="text-slate-400">-</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => openVolumeDialog(report)}
+                        className="icon-tool-button mx-auto"
+                        aria-label={`${report.clientName} 물동량 작성내용 확인`}
+                        title="물동량 확인"
+                      >
+                        <Eye className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    )}
                   </td>
                   <td className="px-3 py-3">
                     <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-black", reportStatusClassName(report.status))}>
@@ -530,7 +541,7 @@ function VolumeConfirmDialog({
                 <h2 id="volume-confirm-title" className="text-lg font-black text-slate-900">
                   물동량 작성내용
                 </h2>
-                <p className="mt-1 text-sm font-semibold text-slate-500">{report.clientName}</p>
+                <p className="mt-1 text-sm font-semibold text-slate-500">{report.clientName} · {report.weekLabel}</p>
               </div>
             </div>
             <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">

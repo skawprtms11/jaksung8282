@@ -95,6 +95,9 @@ type SavedClientReportDbRow = {
   created_by: string;
   department_id: string;
   client_id: string;
+  report_year: number;
+  report_month: number;
+  week_of_month: number;
   week_start_date: string;
   status: ClientReportStatus;
   submitted_at: string | null;
@@ -188,6 +191,8 @@ export type SavedClientReportRow = {
   clientId: string;
   clientName: string;
   authorName: string;
+  weekStartDate: string;
+  weekLabel: string;
   submittedAt: string | null;
   currentItems: {
     importance: "very_high" | "high" | "medium" | "low";
@@ -234,7 +239,7 @@ export type SavedClientReportRow = {
 };
 
 const SAVED_CLIENT_REPORT_SELECT =
-  "id,created_by,department_id,client_id,week_start_date,status,submitted_at,clients(client_name),weekly_client_report_items(item_period,importance,work_category_id,title,content,sort_order,work_categories(category_name)),weekly_volumes(volume_type,quantity,unit,custom_unit,note,sort_order)";
+  "id,created_by,department_id,client_id,report_year,report_month,week_of_month,week_start_date,status,submitted_at,clients(client_name),weekly_client_report_items(item_period,importance,work_category_id,title,content,sort_order,work_categories(category_name)),weekly_volumes(volume_type,quantity,unit,custom_unit,note,sort_order)";
 
 const REPORT_ITEM_REQUEST_SELECT =
   "id,target_type,target_key,report_item_id,department_submission_id,section_type,item_period,item_sort_order,request_content,request_author_name,request_author_department_name,result_content,result_author_name,result_author_department_name,result_created_by,result_created_at,result_updated_at,closed_by,closed_author_name,closed_author_department_name,closed_at,created_by,created_at,updated_at";
@@ -432,6 +437,8 @@ export async function saveClientReportAction(_: ActionResult<SavedClientReportRo
     clientId: report.client_id,
     clientName: report.clients?.client_name ?? "-",
     authorName: profile?.id === report.created_by ? profile.full_name : "-",
+    weekStartDate: report.week_start_date,
+    weekLabel: `${report.report_year}.${String(report.report_month).padStart(2, "0")} ${report.week_of_month}주차`,
     submittedAt: report.submitted_at,
     currentItems: sortedItems
       .filter((item) => item.item_period === "current")
