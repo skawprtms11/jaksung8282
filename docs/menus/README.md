@@ -19,6 +19,7 @@
 - `src/actions/reports.ts`: 회의자료, 부서자료, 화주자료 문서를 모두 확인한다.
 - `src/components/masters/MasterForms.tsx` 또는 `src/actions/masters.ts`: 영향받는 마스터 메뉴 문서를 모두 확인한다.
 - `src/components/layout/Header.tsx`, `Sidebar.tsx`, `/api/header-filters`: 회의자료, 부서자료, 화주자료와 권한이 달라지는 모든 메뉴 문서를 확인한다.
+- 사이드바의 공지사항·회의자료·부서자료·화주자료는 배포 환경에서 전체 route payload를 백그라운드 프리페치한다. 마스터·보조 메뉴는 자동 부분 프리페치를 사용하며 모든 링크는 Next.js 기본 내비게이션을 유지한다.
 - `src/lib/auth/permissions.ts`, `src/types/enums.ts`, `src/types/database.ts`, Supabase RLS/RPC: 루트 `AGENTS.md`와 영향받는 모든 메뉴 문서를 확인한다.
 
 기능 계약이 바뀌면 코드와 같은 작업에서 해당 메뉴 문서를 갱신한다.

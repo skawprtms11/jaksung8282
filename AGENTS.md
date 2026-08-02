@@ -135,6 +135,7 @@ tests                          순수 로직과 권한 계약 단위 테스트
 - 사용자 가입 요청은 관리자 클라이언트로 Auth 사용자와 비활성 `client_owner` 프로필을 만든 뒤 `user_registration_requests`에 `pending` 행을 저장한다. 중간 실패 시 생성한 Auth 사용자를 정리한다.
 - `/reset-password`는 `NEXT_PUBLIC_SITE_URL` 기준 복구 링크를 발송하고, 유효한 복구 세션에서 8자 이상의 새 비밀번호를 설정한 뒤 로그아웃한다.
 - `src/app/(protected)/layout.tsx`는 환경 설정, 프로필, 활성상태를 확인하고 `ProtectedShell`을 렌더링한다. 이 검사를 개별 화면에서 우회하지 않는다.
+- 보호 레이아웃은 인증 쿠키 접근으로 요청 단위 동적 렌더링을 유지한다. 하위 메뉴와 탭의 세션 내 프리페치 결과까지 무효화하는 전역 `force-dynamic` 강제 설정을 다시 추가하지 않는다.
 - 헤더의 부서·화주 필터는 회의자료, 부서자료, 화주자료에서만 동작한다. 옵션은 `/api/header-filters`가 역할 범위에 맞게 반환한다.
 - 화주자료의 화주담당자 옵션은 활성 `client_assignments`로 제한한다. 부서자료와 화주자료는 유효한 기본 부서·화주를 선택하며, 회의자료의 전체 범위 가능 여부는 탭별로 다르다.
 - 사이드바 메뉴 노출은 `permissions.ts`를 사용한다. URL 직접 접근도 각 page와 server action에서 다시 차단한다.

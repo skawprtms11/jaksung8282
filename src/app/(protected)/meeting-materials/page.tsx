@@ -744,33 +744,9 @@ export default async function MeetingMaterialsPage({
     return <MeetingMaterialsAccessDenied />;
   }
 
-  let initialDepartments: DepartmentRow[] | undefined;
-  if (isAdmin(profile) && !params.department_id) {
-    const supabase = await createSupabaseServerClient();
-    if (supabase) {
-      let dataClient = supabase;
-      try {
-        dataClient = createSupabaseAdminClient();
-      } catch {
-        dataClient = supabase;
-      }
-      const { data, error } = await dataClient
-        .from("departments")
-        .select("id,department_name")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true })
-        .order("department_name", { ascending: true });
-      if (!error) {
-        initialDepartments = (data ?? []) as DepartmentRow[];
-      }
-    }
-  }
-
   const defaultDepartmentId =
     params.department_id ??
-    (isAdmin(profile)
-      ? pickDefaultDepartmentId(initialDepartments ?? [], profile.app_role) || undefined
-      : profile.department_id ?? undefined);
+    (!isAdmin(profile) ? profile.department_id ?? undefined : undefined);
   const contentKey = [
     activeTab,
     selectedWeek.weekStartDate,
@@ -794,13 +770,9 @@ export default async function MeetingMaterialsPage({
       </div>
 
       <Suspense key={contentKey} fallback={<PanelLoading label={meetingTabLoadingLabels[activeTab]} />}>
-        <MeetingMaterialsContent
-          params={params}
-          activeTab={activeTab}
-          selectedWeek={selectedWeek}
-          profile={profile}
-          initialDepartments={initialDepartments}
-        />
+        <div data-meeting-tab-content={activeTab}>
+          <MeetingMaterialsContent params={params} activeTab={activeTab} selectedWeek={selectedWeek} profile={profile} />
+        </div>
       </Suspense>
     </div>
   );
@@ -810,14 +782,12 @@ async function MeetingMaterialsContent({
   params,
   activeTab,
   selectedWeek,
-  profile,
-  initialDepartments
+  profile
 }: {
   params: MeetingSearchParams;
   activeTab: MeetingTab;
   selectedWeek: WeekOption;
   profile: ProfileSummary;
-  initialDepartments?: DepartmentRow[];
 }) {
   const searchFilters = parseClientReportSearchFilters(params);
   const hasSearchFilters = hasClientReportSearchFilters(searchFilters);
@@ -909,7 +879,7 @@ async function MeetingMaterialsContent({
         dataClient = supabase;
       }
     let materialsDepartmentLimit: string | undefined;
-    let prefetchedDepartments: DepartmentRow[] | null = initialDepartments ?? null;
+    let prefetchedDepartments: DepartmentRow[] | null = null;
     if (isAdmin(profile) && activeTab === "materials" && !params.department_id && !params.client_id) {
       if (!prefetchedDepartments) {
         const { data: defaultDepartments } = await dataClient
