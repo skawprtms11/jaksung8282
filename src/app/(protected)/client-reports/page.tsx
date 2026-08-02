@@ -3,6 +3,20 @@ import { type ClientReportTableRow } from "@/components/reports/ClientReportsTab
 import { pickDefaultClientId, pickDefaultDepartmentId } from "@/lib/auth/default-scope";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { isAdmin } from "@/lib/auth/permissions";
+import {
+  getCurrentWeekOption,
+  getReportMonthByThursday,
+  getWeekEndDate,
+  getWeekOfMonth,
+  resolveWeekFromSelection,
+  type WeekOption
+} from "@/lib/dates/week";
+import {
+  filterClientReportSearchItems,
+  hasClientReportSearchFilters,
+  parseClientReportSearchFilters,
+  type ClientReportSearchFilters
+} from "@/lib/reports/client-report-search";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { ClientReportStatus, VolumeType, VolumeUnit } from "@/types/enums";
@@ -14,6 +28,24 @@ type ClientAssignmentRow = { client_id: string };
 type DefaultClientAssignmentRow = { client_id: string; clients: { id: string; client_name: string } | null };
 type CategoryOption = { id: string; category_name: string; icon_key: string };
 type ProfileNameRow = { id: string; full_name: string };
+type ClientReportsSearchParams = {
+  department_id?: string;
+  client_id?: string;
+  status?: ClientReportStatus;
+  report_year?: string;
+  report_month?: string;
+  week_of_month?: string;
+  week_start_date?: string;
+  q?: string;
+  search_data?: string;
+  work_category_id?: string;
+  importance?: string;
+  title?: string;
+  current_content?: string;
+  next_content?: string;
+  date_from?: string;
+  date_to?: string;
+};
 type ReportRow = {
   id: string;
   created_by: string;
@@ -49,7 +81,7 @@ type ReportRow = {
   }[];
 };
 
-const REPORT_LIST_LIMIT = 100;
+const REPORT_LIST_LIMIT = 300;
 const CLIENT_REPORT_SELECT =
   "id,created_by,department_id,client_id,report_year,report_month,week_of_month,week_start_date,week_end_date,status,submitted_at,updated_at,departments(department_name),clients(client_name),weekly_client_report_items(item_period,importance,work_category_id,title,content,sort_order,work_categories(category_name,icon_key)),weekly_volumes(volume_type,quantity,unit,custom_unit,note,sort_order)";
 const ClientReportsWorkspace = dynamic(
@@ -63,16 +95,115 @@ const ClientReportsWorkspace = dynamic(
   }
 );
 
+function makeWeekFromStartDate(weekStartDate: string): WeekOption {
+  const { year, month } = getReportMonthByThursday(weekStartDate);
+  const weekOfMonth = getWeekOfMonth(weekStartDate);
+  const weekEndDate = getWeekEndDate(weekStartDate);
+  return {
+    year,
+    month,
+    weekOfMonth,
+    weekStartDate,
+    weekEndDate,
+    label: `${year}년 ${month}월 ${weekOfMonth}주차`
+  };
+}
+
+function getSelectedWeek(params: ClientReportsSearchParams) {
+  if (params.week_start_date && /^\d{4}-\d{2}-\d{2}$/.test(params.week_start_date)) {
+    return makeWeekFromStartDate(params.week_start_date);
+  }
+  const year = Number(params.report_year);
+  const month = Number(params.report_month);
+  const weekOfMonth = Number(params.week_of_month);
+  if (Number.isInteger(year) && Number.isInteger(month) && Number.isInteger(weekOfMonth)) {
+    try {
+      return resolveWeekFromSelection(year, month, weekOfMonth);
+    } catch {
+      return getCurrentWeekOption();
+    }
+  }
+  return getCurrentWeekOption();
+}
+
+function toClientReportTableRow(report: ReportRow, editSource: ReportRow = report): ClientReportTableRow {
+  return {
+    id: report.id,
+    clientId: report.client_id,
+    clientName: report.clients?.client_name ?? "-",
+    authorName: report.profiles?.full_name ?? "-",
+    weekStartDate: report.week_start_date,
+    weekLabel: `${report.report_year}.${String(report.report_month).padStart(2, "0")} ${report.week_of_month}주차`,
+    submittedAt: report.submitted_at,
+    currentItems: report.weekly_client_report_items
+      .filter((item) => item.item_period === "current")
+      .sort((left, right) => left.sort_order - right.sort_order)
+      .map((item) => ({
+        importance: item.importance,
+        title: item.title,
+        content: item.content,
+        categoryName: item.work_categories?.category_name ?? "기타"
+      })),
+    nextItems: report.weekly_client_report_items
+      .filter((item) => item.item_period === "next")
+      .sort((left, right) => left.sort_order - right.sort_order)
+      .map((item) => ({
+        importance: item.importance,
+        title: item.title,
+        content: item.content,
+        categoryName: item.work_categories?.category_name ?? "기타"
+      })),
+    volumes: report.weekly_volumes
+      .slice()
+      .sort((left, right) => left.sort_order - right.sort_order)
+      .map((volume) => ({
+        volumeType: volume.volume_type,
+        quantity: Number(volume.quantity),
+        unit: volume.unit,
+        customUnit: volume.custom_unit ?? null,
+        note: volume.note ?? null
+      })),
+    status: report.status,
+    editReport: {
+      id: editSource.id,
+      department_id: editSource.department_id,
+      client_id: editSource.client_id,
+      week_start_date: editSource.week_start_date,
+      items: editSource.weekly_client_report_items
+        .slice()
+        .sort((left, right) => left.sort_order - right.sort_order)
+        .map((item) => ({
+          item_period: item.item_period,
+          importance: item.importance,
+          work_category_id: item.work_category_id,
+          title: item.title,
+          content: item.content,
+          sort_order: item.sort_order
+        })),
+      volumes: editSource.weekly_volumes
+        .slice()
+        .sort((left, right) => left.sort_order - right.sort_order)
+        .map((volume) => ({
+          volume_type: volume.volume_type,
+          quantity: Number(volume.quantity),
+          unit: volume.unit,
+          custom_unit: volume.custom_unit ?? null,
+          note: volume.note ?? null,
+          sort_order: volume.sort_order
+        }))
+    }
+  };
+}
+
 export default async function ClientReportsPage({
   searchParams
 }: {
-  searchParams: Promise<{
-	    department_id?: string;
-	    client_id?: string;
-	    status?: ClientReportStatus;
-	  }>;
+  searchParams: Promise<ClientReportsSearchParams>;
 }) {
   const params = await searchParams;
+  const selectedWeek = getSelectedWeek(params);
+  const searchFilters = parseClientReportSearchFilters(params);
+  const hasSearchFilters = hasClientReportSearchFilters(searchFilters);
   const { profile } = await getCurrentUserProfile();
   const supabase = await createSupabaseServerClient();
   let departments: DepartmentOption[] = [];
@@ -80,6 +211,8 @@ export default async function ClientReportsPage({
   let editorClients: ClientOption[] = [];
   let categories: CategoryOption[] = [];
   let reports: ReportRow[] = [];
+  let reportSourceById = new Map<string, ReportRow>();
+  let editorReport: ReportRow | null = null;
   let defaultDepartmentId = params.department_id ?? null;
   let defaultClientId: string | undefined;
 
@@ -192,6 +325,22 @@ export default async function ClientReportsPage({
         if (params.status) {
           query = query.eq("status", params.status);
         }
+        if (searchFilters.dateFrom || searchFilters.dateTo) {
+          if (searchFilters.dateFrom) {
+            query = query.gte(
+              "week_start_date",
+              searchFilters.dateFrom < selectedWeek.weekStartDate ? searchFilters.dateFrom : selectedWeek.weekStartDate
+            );
+          }
+          if (searchFilters.dateTo) {
+            query = query.lte(
+              "week_start_date",
+              searchFilters.dateTo > selectedWeek.weekStartDate ? searchFilters.dateTo : selectedWeek.weekStartDate
+            );
+          }
+        } else {
+          query = query.eq("week_start_date", selectedWeek.weekStartDate);
+        }
         return query;
       })()
     ]);
@@ -208,85 +357,39 @@ export default async function ClientReportsPage({
     editorClients = profile.app_role === "client_owner" ? clients.filter((client) => assignedClientIds.has(client.id)) : clients;
     const reportRows = reportError ? [] : ((reportData ?? []) as unknown as ReportRow[]);
     const creatorNameMap = new Map(((profileData ?? []) as ProfileNameRow[]).map((creator) => [creator.id, creator.full_name]));
-    reports = reportRows.map((report) => ({
+    const namedReports = reportRows.map((report) => ({
       ...report,
       profiles: { full_name: creatorNameMap.get(report.created_by) ?? "-" }
     }));
+    reportSourceById = new Map(namedReports.map((report) => [report.id, report]));
+    editorReport = namedReports.find(
+      (report) => report.client_id === selectedClientFilter && report.week_start_date === selectedWeek.weekStartDate
+    ) ?? null;
+    reports = hasSearchFilters
+      ? namedReports.flatMap((report) => {
+          const matchingItems = filterClientReportSearchItems(report, searchFilters);
+          return matchingItems.length > 0
+            ? [{ ...report, weekly_client_report_items: matchingItems, weekly_volumes: [] }]
+            : [];
+        })
+      : namedReports;
   }
-  const tableRows: ClientReportTableRow[] = reports.map((report) => ({
-    id: report.id,
-    clientId: report.client_id,
-    clientName: report.clients?.client_name ?? "-",
-    authorName: report.profiles?.full_name ?? "-",
-    submittedAt: report.submitted_at,
-    currentItems: report.weekly_client_report_items
-      .filter((item) => item.item_period === "current")
-      .sort((left, right) => left.sort_order - right.sort_order)
-      .map((item) => ({
-        importance: item.importance,
-        title: item.title,
-        content: item.content,
-        categoryName: item.work_categories?.category_name ?? "기타"
-      })),
-    nextItems: report.weekly_client_report_items
-      .filter((item) => item.item_period === "next")
-      .sort((left, right) => left.sort_order - right.sort_order)
-      .map((item) => ({
-        importance: item.importance,
-        title: item.title,
-        content: item.content,
-        categoryName: item.work_categories?.category_name ?? "기타"
-      })),
-    volumes: report.weekly_volumes
-      .slice()
-      .sort((left, right) => left.sort_order - right.sort_order)
-      .map((volume) => ({
-        volumeType: volume.volume_type,
-        quantity: Number(volume.quantity),
-        unit: volume.unit,
-        customUnit: volume.custom_unit ?? null,
-        note: volume.note ?? null
-      })),
-    status: report.status,
-    editReport: {
-      id: report.id,
-      department_id: report.department_id,
-      client_id: report.client_id,
-      week_start_date: report.week_start_date,
-      items: report.weekly_client_report_items
-        .slice()
-        .sort((left, right) => left.sort_order - right.sort_order)
-        .map((item) => ({
-          item_period: item.item_period,
-          importance: item.importance,
-          work_category_id: item.work_category_id,
-          title: item.title,
-          content: item.content,
-          sort_order: item.sort_order
-        })),
-      volumes: report.weekly_volumes
-        .slice()
-        .sort((left, right) => left.sort_order - right.sort_order)
-        .map((volume) => ({
-          volume_type: volume.volume_type,
-          quantity: Number(volume.quantity),
-          unit: volume.unit,
-          custom_unit: volume.custom_unit ?? null,
-          note: volume.note ?? null,
-          sort_order: volume.sort_order
-        }))
-    }
-  }));
+  const tableRows = reports.map((report) => toClientReportTableRow(report, reportSourceById.get(report.id) ?? report));
+  const editorTableRow = editorReport ? toClientReportTableRow(editorReport) : null;
 
   return (
     <>
       <ClientReportsWorkspace
-        key={`client-reports-${defaultDepartmentId ?? "department"}-${params.client_id ?? "all"}-${params.status ?? "all"}`}
+        key={`client-reports-${defaultDepartmentId ?? "department"}-${params.client_id ?? "all"}-${params.status ?? "all"}-${selectedWeek.weekStartDate}-${Object.values(searchFilters).join("|")}`}
         departments={departments}
         clients={editorClients}
         categories={categories}
         defaultDepartmentId={defaultDepartmentId}
         defaultClientId={params.client_id ?? defaultClientId}
+        selectedWeekStartDate={selectedWeek.weekStartDate}
+        searchFilters={searchFilters}
+        hasSearchFilters={hasSearchFilters}
+        editorReport={editorTableRow}
         reports={tableRows}
       />
     </>

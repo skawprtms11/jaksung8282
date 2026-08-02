@@ -25,6 +25,14 @@ import { ActionMessage } from "@/components/common/ActionMessage";
 import { cn } from "@/lib/utils/cn";
 import { getCurrentWeekOption, type WeekOption } from "@/lib/dates/week";
 import { WeekSelect } from "./WeekSelect";
+import {
+  DEPARTMENT_COMMON_CONTENT_FORMAT,
+  filterDepartmentCommonSearchItems,
+  hasClientReportSearchFilters,
+  parseDepartmentCommonContentItems,
+  type ClientReportSearchFilters,
+  type DepartmentCommonContentItem
+} from "@/lib/reports/client-report-search";
 import type { DepartmentSubmissionStatus, Importance } from "@/types/enums";
 
 type Department = { id: string; department_name: string };
@@ -62,13 +70,6 @@ export type DepartmentSubmissionEditorInitialSubmission = {
 };
 type ContentPeriod = "current" | "next";
 type ActiveDialog = { section: SectionValue; period: ContentPeriod } | null;
-type DepartmentCommonContentItem = {
-  importance: Importance;
-  work_category_id: string;
-  title: string;
-  content: string;
-  sort_order: number;
-};
 type FacilityConstructionStatus = "planned" | "in_progress" | "completed";
 type FacilityConstructionItem = {
   id: string;
@@ -138,7 +139,6 @@ const importanceOptions: { value: Importance; label: string }[] = [
   { value: "medium", label: "보통" },
   { value: "low", label: "낮음" }
 ];
-const COMMON_CONTENT_FORMAT = "department-common-items/v1";
 const FACILITY_CONTENT_FORMAT = "department-facility-constructions/v1";
 const HOLIDAY_WORK_CONTENT_FORMAT = "department-holiday-work/v1";
 const facilityStatusOptions: { value: FacilityConstructionStatus; label: string }[] = [
@@ -210,50 +210,12 @@ function importanceIconClassName(importance: Importance) {
   return "border-slate-200 bg-slate-50 text-slate-500";
 }
 
-function normalizeImportance(value: unknown, fallback: Importance): Importance {
-  return importanceOptions.some((option) => option.value === value) ? (value as Importance) : fallback;
-}
-
 function parseCommonContentItems(
   value: string,
   fallbackImportance: Importance,
   fallbackCategoryId: string
 ): DepartmentCommonContentItem[] {
-  const trimmedValue = value.trim();
-  if (!trimmedValue) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(trimmedValue) as {
-      format?: string;
-      items?: Array<Partial<DepartmentCommonContentItem>>;
-    };
-    if (parsed.format === COMMON_CONTENT_FORMAT && Array.isArray(parsed.items)) {
-      return parsed.items
-        .map((item, index) => ({
-          importance: normalizeImportance(item.importance, fallbackImportance),
-          work_category_id:
-            typeof item.work_category_id === "string" && item.work_category_id ? item.work_category_id : fallbackCategoryId,
-          title: String(item.title ?? ""),
-          content: String(item.content ?? ""),
-          sort_order: Number.isFinite(item.sort_order) ? Number(item.sort_order) : index
-        }))
-        .sort((left, right) => left.sort_order - right.sort_order);
-    }
-  } catch {
-    // Existing plain text content is rendered as a single content row.
-  }
-
-  return [
-    {
-      importance: fallbackImportance,
-      work_category_id: fallbackCategoryId,
-      title: "내용",
-      content: trimmedValue,
-      sort_order: 0
-    }
-  ];
+  return parseDepartmentCommonContentItems(value, fallbackImportance, fallbackCategoryId);
 }
 
 function commonDialogItems(value: string, fallbackImportance: Importance, fallbackCategoryId: string): DepartmentCommonContentItem[] {
@@ -274,7 +236,7 @@ function serializeCommonContentItems(items: DepartmentCommonContentItem[]) {
   if (normalizedItems.every((item) => item.title.trim().length === 0 && item.content.trim().length === 0)) {
     return "";
   }
-  return JSON.stringify({ format: COMMON_CONTENT_FORMAT, items: normalizedItems });
+  return JSON.stringify({ format: DEPARTMENT_COMMON_CONTENT_FORMAT, items: normalizedItems });
 }
 
 function makeLocalId() {
@@ -429,6 +391,9 @@ export function DepartmentSubmissionEditor({
   children,
   volumeSlot,
   reviewSlot,
+  commonRequestSlot,
+  commonSearchSlot,
+  commonSearchFilters,
   holidayClientOptions = [],
   holidayWorkerOptions = [],
   centerOptions = [],
@@ -446,6 +411,9 @@ export function DepartmentSubmissionEditor({
   children?: ReactNode;
   volumeSlot?: ReactNode;
   reviewSlot?: ReactNode;
+  commonRequestSlot?: ReactNode;
+  commonSearchSlot?: ReactNode;
+  commonSearchFilters?: ClientReportSearchFilters;
   holidayClientOptions?: HolidayClientOption[];
   holidayWorkerOptions?: HolidayWorkerOption[];
   centerOptions?: CenterOption[];
@@ -514,6 +482,26 @@ export function DepartmentSubmissionEditor({
   );
   const serializedContents = useMemo(() => JSON.stringify(contents), [contents]);
   const activeContent = isDepartmentContentSection(active) ? contents.find((content) => content.section_type === active) : undefined;
+  const commonSearchActive = Boolean(
+    active === "common" && commonSearchFilters && hasClientReportSearchFilters(commonSearchFilters)
+  );
+  const commonMatchingItems =
+    commonSearchActive && activeContent && commonSearchFilters
+      ? filterDepartmentCommonSearchItems(
+          {
+            week_start_date: weekStartDate,
+            current_importance: activeContent.current_importance,
+            current_work_category_id: activeContent.current_work_category_id,
+            current_week_content: activeContent.current_week_content,
+            next_importance: activeContent.next_importance,
+            next_work_category_id: activeContent.next_work_category_id,
+            next_week_content: activeContent.next_week_content
+          },
+          commonSearchFilters
+        )
+      : undefined;
+  const commonMatchesSearch =
+    !commonSearchActive || !activeContent || Boolean(commonMatchingItems?.length);
   const activeSectionLabel = departmentTabs.find((section) => section.value === active)?.label ?? "공통사항";
   const effectiveStatus = loadedStatus;
   const effectiveSubmissionId = submissionId;
@@ -741,44 +729,47 @@ export function DepartmentSubmissionEditor({
               </div>
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <button
-              type="submit"
-              name="status"
-              value="submitted_to_division"
-              disabled={!canSubmit || !canEditSubmission || isSubmissionBusy}
-              title={
-                !canSubmit
-                  ? "부서 최종 제출은 부서장과 관리자만 가능합니다."
-                  : !canEditSubmission
-                    ? "확정 또는 승인된 부서자료는 수정할 수 없습니다."
-                    : isSubmissionBusy
-                      ? "부서자료를 불러오는 중입니다."
-                      : undefined
-              }
-              className="tool-button tool-button-primary min-h-9 py-1.5 disabled:opacity-50"
-            >
-              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-              {isSubmittedToDivision ? "확정완료" : isSavingSubmission ? "확정 중" : "확정"}
-            </button>
-            {isSubmittedToDivision ? (
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+            {active === "common" && commonSearchSlot ? commonSearchSlot : <span className="flex-1" />}
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 lg:pt-4">
               <button
                 type="submit"
-                formAction={cancelAction}
-                disabled={!canSubmit || isSubmissionBusy || isCancelWindowExpired}
-                className="tool-button min-h-9 py-1.5 text-[#075be8] disabled:opacity-50"
+                name="status"
+                value="submitted_to_division"
+                disabled={!canSubmit || !canEditSubmission || isSubmissionBusy}
                 title={
                   !canSubmit
-                    ? "확정취소는 부서장과 관리자만 가능합니다."
-                    : isCancelWindowExpired
-                      ? "확정 후 3일이 지난 부서자료는 확정취소할 수 없습니다."
-                      : undefined
+                    ? "부서 최종 제출은 부서장과 관리자만 가능합니다."
+                    : !canEditSubmission
+                      ? "확정 또는 승인된 부서자료는 수정할 수 없습니다."
+                      : isSubmissionBusy
+                        ? "부서자료를 불러오는 중입니다."
+                        : undefined
                 }
+                className="tool-button tool-button-primary h-9 disabled:opacity-50"
               >
-                <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                {isCancellingSubmission ? "취소 중" : "확정취소"}
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                {isSubmittedToDivision ? "확정완료" : isSavingSubmission ? "확정 중" : "확정"}
               </button>
-            ) : null}
+              {isSubmittedToDivision ? (
+                <button
+                  type="submit"
+                  formAction={cancelAction}
+                  disabled={!canSubmit || isSubmissionBusy || isCancelWindowExpired}
+                  className="tool-button h-9 text-[#075be8] disabled:opacity-50"
+                  title={
+                    !canSubmit
+                      ? "확정취소는 부서장과 관리자만 가능합니다."
+                      : isCancelWindowExpired
+                        ? "확정 후 3일이 지난 부서자료는 확정취소할 수 없습니다."
+                        : undefined
+                  }
+                >
+                  <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                  {isCancellingSubmission ? "취소 중" : "확정취소"}
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
@@ -788,6 +779,8 @@ export function DepartmentSubmissionEditor({
           {children}
         </div>
       ) : null}
+
+      {active === "common" ? commonRequestSlot : null}
 
       <section className="rounded-2xl border border-[#d9e7f7] bg-white/86 p-3 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
         {active === "holiday_work" || active === "vacancy" || active === "volume" ? null : (
@@ -871,7 +864,7 @@ export function DepartmentSubmissionEditor({
             onRecordsChange={setVacancyRecords}
             onRefresh={refreshVacancyData}
           />
-        ) : activeContent ? (
+        ) : activeContent && commonMatchesSearch ? (
           <div className="grid gap-3 md:grid-cols-2">
             <PreviewBlock
               title="금주 실시사항"
@@ -879,6 +872,7 @@ export function DepartmentSubmissionEditor({
               structured={active === "common"}
               importance={activeContent.current_importance}
               categoryId={activeContent.current_work_category_id}
+              visibleStructuredItems={commonMatchingItems?.filter((item) => item.item_period === "current")}
               categories={categories}
               categoryName={categories.find((category) => category.id === activeContent.current_work_category_id)?.category_name ?? "기타"}
               disabled={!canEditSubmission || isSubmissionBusy}
@@ -890,11 +884,16 @@ export function DepartmentSubmissionEditor({
               structured={active === "common"}
               importance={activeContent.next_importance}
               categoryId={activeContent.next_work_category_id}
+              visibleStructuredItems={commonMatchingItems?.filter((item) => item.item_period === "next")}
               categories={categories}
               categoryName={categories.find((category) => category.id === activeContent.next_work_category_id)?.category_name ?? "기타"}
               disabled={!canEditSubmission || isSubmissionBusy}
               onEdit={() => setActiveDialog({ section: active, period: "next" })}
             />
+          </div>
+        ) : active === "common" && commonSearchFilters && hasClientReportSearchFilters(commonSearchFilters) ? (
+          <div className="rounded-2xl border border-dashed border-[#b9cce6] px-4 py-6 text-center text-sm font-bold text-slate-500">
+            검색 조건에 맞는 부서 공통사항이 없습니다.
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-[#b9cce6] px-4 py-6 text-center text-sm font-bold text-slate-500">
@@ -2266,6 +2265,7 @@ function PreviewBlock({
   structured,
   importance,
   categoryId,
+  visibleStructuredItems,
   categories,
   categoryName,
   disabled,
@@ -2276,13 +2276,15 @@ function PreviewBlock({
   structured: boolean;
   importance: Importance;
   categoryId: string;
+  visibleStructuredItems?: DepartmentCommonContentItem[];
   categories: Category[];
   categoryName: string;
   disabled?: boolean;
   onEdit: () => void;
 }) {
   const structuredItems = structured
-    ? parseCommonContentItems(value, importance, categoryId).filter((item) => item.title.trim() || item.content.trim())
+    ? (visibleStructuredItems ?? parseCommonContentItems(value, importance, categoryId))
+        .filter((item) => item.title.trim() || item.content.trim())
     : [];
 
   return (

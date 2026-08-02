@@ -3,8 +3,10 @@
 import { useCallback, useMemo, useState } from "react";
 import { ClientReportEditor, type ClientReportEditorInitialReport } from "@/components/reports/ClientReportEditor";
 import { ClientReportsTable, type ClientReportTableRow } from "@/components/reports/ClientReportsTable";
+import { ClientReportsToolbar } from "@/components/reports/ClientReportsToolbar";
 import { EmptyState } from "@/components/common/EmptyState";
 import type { SavedClientReportRow } from "@/actions/reports";
+import type { ClientReportSearchFilters } from "@/lib/reports/client-report-search";
 import type { ItemPeriod } from "@/types/enums";
 
 type Department = { id: string; department_name: string };
@@ -21,6 +23,10 @@ export function ClientReportsWorkspace({
   categories,
   defaultDepartmentId,
   defaultClientId,
+  selectedWeekStartDate,
+  searchFilters,
+  hasSearchFilters,
+  editorReport,
   reports
 }: {
   departments: Department[];
@@ -28,6 +34,10 @@ export function ClientReportsWorkspace({
   categories: Category[];
   defaultDepartmentId?: string | null;
   defaultClientId?: string | null;
+  selectedWeekStartDate: string;
+  searchFilters: ClientReportSearchFilters;
+  hasSearchFilters: boolean;
+  editorReport?: ClientReportTableRow | null;
   reports: ClientReportTableRow[];
 }) {
   const [editingReport, setEditingReport] = useState<ClientReportEditorInitialReport | null>(null);
@@ -38,9 +48,11 @@ export function ClientReportsWorkspace({
       editingReport
         ? localReports.find((report) => report.id === editingReport.id) ?? null
         : defaultClientId
-          ? localReports.find((report) => report.clientId === defaultClientId) ?? null
+          ? localReports.find(
+              (report) => report.clientId === defaultClientId && report.weekStartDate === selectedWeekStartDate
+            ) ?? editorReport ?? null
           : null,
-    [defaultClientId, editingReport, localReports]
+    [defaultClientId, editingReport, editorReport, localReports, selectedWeekStartDate]
   );
   const canContinueSelectedReport = !editingReport && isEditableReportStatus(selectedReport?.status);
   const editorInitialReport = editingReport ?? (canContinueSelectedReport ? selectedReport?.editReport ?? null : null);
@@ -77,13 +89,20 @@ export function ClientReportsWorkspace({
 
   return (
     <>
+      <ClientReportsToolbar
+        categories={categories}
+        selectedWeekStartDate={selectedWeekStartDate}
+        filters={searchFilters}
+        resultCount={localReports.length}
+      />
       <ClientReportEditor
-        key={editorInitialReport?.id ?? `${defaultDepartmentId ?? "department"}-${defaultClientId ?? "client"}`}
+        key={editorInitialReport?.id ?? `${defaultDepartmentId ?? "department"}-${defaultClientId ?? "client"}-${selectedWeekStartDate}`}
         departments={departments}
         clients={clients}
         categories={categories}
         defaultDepartmentId={editorInitialReport?.department_id ?? defaultDepartmentId}
         defaultClientId={editorInitialReport?.client_id ?? defaultClientId}
+        selectedWeekStartDate={selectedWeekStartDate}
         initialReport={editorInitialReport}
         autoSaveExistingReport={autoSaveExistingReport}
         currentReportStatus={selectedReport?.status ?? null}
@@ -92,7 +111,7 @@ export function ClientReportsWorkspace({
         onEditDialogClosed={() => setActiveDialog(null)}
       />
       {localReports.length === 0 ? (
-        <EmptyState title="화주별 주간자료가 없습니다." />
+        <EmptyState title={hasSearchFilters ? "검색 조건에 맞는 화주자료가 없습니다." : "선택한 주차의 화주별 자료가 없습니다."} />
       ) : (
         <ClientReportsTable
           reports={localReports}
@@ -100,6 +119,7 @@ export function ClientReportsWorkspace({
           onCancelEdit={clearEditMode}
           onOpenEditDialog={openEditDialog}
           onReportStatusChange={handleReportStatusChange}
+          hideVolumes={hasSearchFilters}
         />
       )}
     </>

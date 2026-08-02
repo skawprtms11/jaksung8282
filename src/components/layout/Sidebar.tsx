@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import Link, { useLinkStatus } from "next/link";
+import { useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   Bell,
   Building2,
@@ -30,6 +30,13 @@ const baseMenus = [
   { href: "/mini-game", label: "미니게임", icon: Gamepad2 }
 ];
 
+const fullPrefetchMenuHrefs = new Set([
+  noticeMenu.href,
+  meetingMaterialsMenu.href,
+  "/department-reports",
+  "/client-reports"
+]);
+
 const departmentMasterMenu = { href: "/admin/departments", label: "부서마스터", icon: Building2 };
 const centerMasterMenu = { href: "/admin/centers", label: "센터마스터", icon: PackageSearch };
 
@@ -54,6 +61,15 @@ function prewarmPrimaryMenuModules() {
   ]);
 }
 
+function MenuIcon({ icon: Icon }: { icon: typeof Home }) {
+  const { pending } = useLinkStatus();
+  return pending ? (
+    <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
+  ) : (
+    <Icon className="h-5 w-5" aria-hidden="true" />
+  );
+}
+
 export function Sidebar({
   profile,
   isHidden,
@@ -64,9 +80,6 @@ export function Sidebar({
   onToggleHidden: () => void;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const [pendingHref, setPendingHref] = useState<string | null>(null);
-  const [isNavigating, startNavigation] = useTransition();
   const menus = useMemo(
     () => [
       noticeMenu,
@@ -80,29 +93,22 @@ export function Sidebar({
   );
 
   useEffect(() => {
-    const timers: number[] = [];
-    const targetHrefs = menus.map((menu) => menu.href).filter((href) => href !== pathname);
     const startPrefetch = () => {
       prewarmPrimaryMenuModules();
-      targetHrefs.forEach((href, index) => {
-        timers.push(window.setTimeout(() => router.prefetch(href), 150 + index * 550));
-      });
     };
 
     if (typeof window.requestIdleCallback === "function") {
       const idleId = window.requestIdleCallback(startPrefetch, { timeout: 900 });
       return () => {
         window.cancelIdleCallback(idleId);
-        timers.forEach((timer) => window.clearTimeout(timer));
       };
     }
 
     const timeoutId = window.setTimeout(startPrefetch, 300);
     return () => {
       window.clearTimeout(timeoutId);
-      timers.forEach((timer) => window.clearTimeout(timer));
     };
-  }, [menus, pathname, router]);
+  }, []);
 
   return (
     <aside
@@ -138,33 +144,12 @@ export function Sidebar({
             <Link
               key={menu.href}
               href={menu.href}
-              prefetch={false}
+              prefetch={fullPrefetchMenuHrefs.has(menu.href) ? true : "auto"}
               onFocus={() => router.prefetch(menu.href)}
-              onMouseEnter={() => router.prefetch(menu.href)}
-              onTouchStart={() => router.prefetch(menu.href)}
-              onClick={(event) => {
-                if (
-                  menu.href === pathname ||
-                  event.button !== 0 ||
-                  event.metaKey ||
-                  event.ctrlKey ||
-                  event.shiftKey ||
-                  event.altKey
-                ) {
-                  return;
-                }
-                event.preventDefault();
-                setPendingHref(menu.href);
-                startNavigation(() => router.push(menu.href));
-              }}
               className="focus-ring group flex min-w-0 items-center gap-3 rounded-2xl border border-transparent px-3 py-2.5 text-sm font-bold text-[#203653] transition hover:-translate-y-0.5 hover:border-[#dbe8fb] hover:bg-[#eaf3ff] hover:text-[#075be8] hover:shadow-[0_16px_30px_rgba(7,91,232,0.12)]"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#f2f7ff] text-[#0b2d5f] transition group-hover:bg-[#075be8] group-hover:text-white">
-                {isNavigating && pendingHref === menu.href ? (
-                  <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Icon className="h-5 w-5" aria-hidden="true" />
-                )}
+                <MenuIcon icon={Icon} />
               </span>
               <span className="min-w-0 flex-1 truncate">{menu.label}</span>
             </Link>

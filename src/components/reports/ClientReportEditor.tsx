@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { saveClientReportAction, type SavedClientReportRow } from "@/actions/reports";
 import { ActionMessage } from "@/components/common/ActionMessage";
-import { WeekSelect } from "./WeekSelect";
+import { getCurrentWeekOption, getReportMonthByThursday, getWeekEndDate, getWeekOfMonth } from "@/lib/dates/week";
 import type { ClientReportStatus, Importance, ItemPeriod, VolumeType, VolumeUnit } from "@/types/enums";
 
 type Department = { id: string; department_name: string };
@@ -93,6 +93,7 @@ export function ClientReportEditor({
   categories,
   defaultDepartmentId,
   defaultClientId,
+  selectedWeekStartDate,
   initialReport,
   autoSaveExistingReport,
   currentReportStatus,
@@ -105,6 +106,7 @@ export function ClientReportEditor({
   categories: Category[];
   defaultDepartmentId?: string | null;
   defaultClientId?: string | null;
+  selectedWeekStartDate: string;
   initialReport?: ClientReportEditorInitialReport | null;
   autoSaveExistingReport?: boolean;
   currentReportStatus?: ClientReportStatus | null;
@@ -120,6 +122,13 @@ export function ClientReportEditor({
     (defaultClientId ? clients.find((client) => client.id === defaultClientId) : null);
   const departmentId = initialReport?.department_id ?? selectedClient?.department_id ?? defaultDepartmentId ?? departments[0]?.id ?? "";
   const clientId = initialReport?.client_id ?? selectedClient?.id ?? "";
+  const fallbackWeek = getCurrentWeekOption();
+  const reportWeekStartDate = /^\d{4}-\d{2}-\d{2}$/.test(initialReport?.week_start_date ?? selectedWeekStartDate)
+    ? initialReport?.week_start_date ?? selectedWeekStartDate
+    : fallbackWeek.weekStartDate;
+  const reportWeekEndDate = getWeekEndDate(reportWeekStartDate);
+  const reportMonth = getReportMonthByThursday(reportWeekStartDate);
+  const reportWeekOfMonth = getWeekOfMonth(reportWeekStartDate);
   const [items, setItems] = useState<ItemDraft[]>(initialReport?.items ?? []);
   const [volumes, setVolumes] = useState<VolumeDraft[]>(initialReport?.volumes ?? []);
   const [activeDialog, setActiveDialog] = useState<ActiveDialog>(initialReport ? initialDialog ?? null : null);
@@ -237,22 +246,14 @@ export function ClientReportEditor({
       <input type="hidden" name="id" value={initialReport?.id ?? ""} />
       <input type="hidden" name="department_id" value={departmentId} />
       <input type="hidden" name="client_id" value={clientId} />
+      <input type="hidden" name="report_year" value={reportMonth.year} />
+      <input type="hidden" name="report_month" value={reportMonth.month} />
+      <input type="hidden" name="week_of_month" value={reportWeekOfMonth} />
+      <input type="hidden" name="week_start_date" value={reportWeekStartDate} />
+      <input type="hidden" name="week_end_date" value={reportWeekEndDate} />
       <button ref={draftSubmitRef} type="submit" name="status" value="draft" className="hidden" aria-hidden="true" tabIndex={-1}>
         자동 저장
       </button>
-
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
-          <WeekSelect
-            compactWeekLabel
-            defaultWeekStartDate={initialReport?.week_start_date}
-            className="contents"
-            labelClassName="text-xs font-bold text-slate-600"
-            weekLabelClassName="text-xs font-bold text-slate-600"
-            controlClassName="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm xl:w-[120px]"
-          />
-        </div>
-      </div>
 
       <section className="space-y-3">
         <div className="grid gap-3 lg:grid-cols-3">

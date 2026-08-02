@@ -3,8 +3,6 @@ import { ProtectedShell } from "@/components/layout/ProtectedShell";
 import { SetupNotice } from "@/components/common/SetupNotice";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 
-export const dynamic = "force-dynamic";
-
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { profile, setupRequired } = await getCurrentUserProfile();
   if (setupRequired) {
