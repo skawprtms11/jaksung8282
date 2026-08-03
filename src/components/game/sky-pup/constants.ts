@@ -7,7 +7,13 @@ export const PLAYER_MAX_Y = 560;
 export const PLAYER_BASE_HP = 5;
 export const PLAYER_MAX_HP = 8;
 export const PLAYER_BASE_SPEED = 360;
-export const DIFFICULTY_TIME_SCALE = 0.7;
+export const DIFFICULTY_TIME_SCALE = 0.35;
+export const LATE_DIFFICULTY_START_SECONDS = 90;
+export const LATE_DIFFICULTY_ACCELERATION = 0.15;
+export const ENEMY_SPAWN_INTERVAL_SCALE = 1.25;
+export const ENEMY_FIRE_INTERVAL_SCALE = 1.25;
+export const ENEMY_MOVE_SPEED_SCALE = 0.85;
+export const ENEMY_BULLET_SPEED_SCALE = 0.8;
 
 export const ENEMY_CONFIG: Record<EnemyKind, { hp: number; speed: number; radius: number; score: number; fire: number }> = {
   normal: { hp: 1, speed: 72, radius: 16, score: 100, fire: 2.25 },

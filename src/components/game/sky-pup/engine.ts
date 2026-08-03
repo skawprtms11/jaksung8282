@@ -1,16 +1,22 @@
-import { DIFFICULTY_TIME_SCALE, ENEMY_CONFIG, GAME_HEIGHT, GAME_WIDTH, PLAYER_BASE_HP, PLAYER_BASE_SPEED, PLAYER_MAX_HP, PLAYER_MAX_Y, PLAYER_MIN_Y, UPGRADES } from "./constants";
+import { DIFFICULTY_TIME_SCALE, ENEMY_BULLET_SPEED_SCALE, ENEMY_CONFIG, ENEMY_FIRE_INTERVAL_SCALE, ENEMY_MOVE_SPEED_SCALE, ENEMY_SPAWN_INTERVAL_SCALE, GAME_HEIGHT, GAME_WIDTH, LATE_DIFFICULTY_ACCELERATION, LATE_DIFFICULTY_START_SECONDS, PLAYER_BASE_HP, PLAYER_BASE_SPEED, PLAYER_MAX_HP, PLAYER_MAX_Y, PLAYER_MIN_Y, UPGRADES } from "./constants";
 import { ObjectPool } from "./pool";
 import { renderScene } from "./renderer";
 import { loadGameData, saveGameData } from "./storage";
-import type { Bullet, Enemy, EnemyKind, EngineCallbacks, GameHud, GameResult, GameStatus, HealItem, ItemKind, Particle, Player, Upgrade, UpgradeKind } from "./types";
+import { normalizeJoystickInput } from "./controls";
+import type { Bullet, Enemy, EnemyKind, EngineCallbacks, GameHud, GameResult, GameStatus, HealItem, ItemKind, Particle, Player, SkyPupVisualAssets, Upgrade, UpgradeKind } from "./types";
 
 const TAU = Math.PI * 2;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const distanceSquared = (ax: number, ay: number, bx: number, by: number) => (ax - bx) ** 2 + (ay - by) ** 2;
+const difficultyElapsed = (elapsed: number) => (
+  elapsed * DIFFICULTY_TIME_SCALE
+  + Math.max(0, elapsed - LATE_DIFFICULTY_START_SECONDS) * LATE_DIFFICULTY_ACCELERATION
+);
 
 export class SkyPupEngine {
   private readonly canvas: HTMLCanvasElement;
   private readonly callbacks: EngineCallbacks;
+  private visualAssets: SkyPupVisualAssets = {};
   private readonly bullets = new ObjectPool<Bullet>(240, () => ({ active: false, friendly: true, x: 0, y: 0, vx: 0, vy: 0, radius: 4, damage: 1, life: 0, pierce: 0, color: "#fff" }));
   private readonly enemies = new ObjectPool<Enemy>(72, () => ({ active: false, kind: "normal", x: 0, y: 0, vx: 0, vy: 0, radius: 16, hp: 1, maxHp: 1, score: 100, fireTimer: 1, age: 0, phase: 0, flash: 0 }));
   private readonly items = new ObjectPool<HealItem>(8, () => ({ active: false, kind: "apple", x: 0, y: 0, vx: -35, age: 0, radius: 18 }));
@@ -43,6 +49,7 @@ export class SkyPupEngine {
   private storedBest = 0;
   private moveX = 0;
   private moveY = 0;
+  private reducedMotion = false;
 
   constructor(canvas: HTMLCanvasElement, callbacks: EngineCallbacks) {
     this.canvas = canvas;
@@ -81,6 +88,16 @@ export class SkyPupEngine {
   destroy() { cancelAnimationFrame(this.frame); }
   getStatus() { return this.status; }
 
+  setVisualAssets(assets: SkyPupVisualAssets) {
+    this.visualAssets = assets;
+    this.draw();
+  }
+
+  setReducedMotion(reduced: boolean) {
+    this.reducedMotion = reduced;
+    this.draw();
+  }
+
   setTarget(clientX: number, clientY: number) {
     const rect = this.canvas.getBoundingClientRect();
     this.player.targetX = clamp((clientX - rect.left) * (GAME_WIDTH / rect.width), 34, GAME_WIDTH - 34);
@@ -88,16 +105,9 @@ export class SkyPupEngine {
   }
 
   setJoystick(x: number, y: number) {
-    const length = Math.hypot(x, y);
-    if (length < 0.015) {
-      this.moveX = 0; this.moveY = 0;
-      return;
-    }
-    const directionX = x / length;
-    const directionY = y / length;
-    const response = Math.min(1, 0.42 + Math.min(1, length) * 0.58);
-    this.moveX = directionX * response;
-    this.moveY = directionY * response;
+    const normalized = normalizeJoystickInput(x, y);
+    this.moveX = normalized.x;
+    this.moveY = normalized.y;
   }
 
   releaseJoystick() {
@@ -165,19 +175,19 @@ export class SkyPupEngine {
     else if (this.elapsed >= this.nextMiniBoss) { this.spawnEnemy("miniBoss"); this.nextMiniBoss += 90; this.callbacks.onSound("boss"); }
     this.spawnTimer -= delta;
     if (this.spawnTimer <= 0 && !this.enemies.active().some((enemy) => enemy.kind === "mainBoss")) {
-      const difficultyElapsed = this.elapsed * DIFFICULTY_TIME_SCALE;
-      const difficulty = 1 + difficultyElapsed / 75;
+      const scaledElapsed = difficultyElapsed(this.elapsed);
+      const difficulty = 1 + scaledElapsed / 75;
       const roll = Math.random();
-      const kind: EnemyKind = difficultyElapsed < 10
+      const kind: EnemyKind = scaledElapsed < 10
         ? "normal"
-        : difficultyElapsed < 18
+        : scaledElapsed < 18
           ? (roll > 0.72 ? "fast" : "normal")
-          : difficultyElapsed < 25
+          : scaledElapsed < 25
           ? (roll > 0.84 ? "tank" : roll > 0.55 ? "fast" : "normal")
           : roll > 0.89 ? "tank" : roll > 0.7 ? "tracker" : roll > 0.46 ? "fast" : "normal";
       this.spawnEnemy(kind);
-      if (difficultyElapsed > 120 && Math.random() < 0.18) this.spawnEnemy(Math.random() > 0.5 ? "normal" : "fast");
-      this.spawnTimer = Math.max(0.3, 1.08 / difficulty) * (0.82 + Math.random() * 0.35);
+      if (scaledElapsed > 120 && Math.random() < 0.18) this.spawnEnemy(Math.random() > 0.5 ? "normal" : "fast");
+      this.spawnTimer = Math.max(0.3, 1.08 / difficulty) * (0.82 + Math.random() * 0.35) * ENEMY_SPAWN_INTERVAL_SCALE;
     }
     this.healTimer -= delta;
     if (this.healTimer <= 0) { this.spawnItem(); this.healTimer = 30 + Math.random() * 10; }
@@ -185,16 +195,16 @@ export class SkyPupEngine {
 
   private spawnEnemy(kind: EnemyKind) {
     const enemy = this.enemies.acquire(); if (!enemy) return;
-    const config = ENEMY_CONFIG[kind]; const difficulty = 1 + this.elapsed * DIFFICULTY_TIME_SCALE / 170;
+    const config = ENEMY_CONFIG[kind]; const difficulty = 1 + difficultyElapsed(this.elapsed) / 170;
     let spawnX = 48 + Math.random() * (GAME_WIDTH - 96);
     if (this.elapsed < 15 && Math.abs(spawnX - this.player.x) < 70) spawnX = this.player.x < GAME_WIDTH / 2 ? GAME_WIDTH - 58 : 58;
-    Object.assign(enemy, { kind, x: spawnX, y: -config.radius - Math.random() * 25, vx: 0, vy: config.speed * difficulty, radius: config.radius, hp: Math.ceil(config.hp * (kind.includes("Boss") ? difficulty : 1)), maxHp: Math.ceil(config.hp * (kind.includes("Boss") ? difficulty : 1)), score: config.score, fireTimer: 0.5 + Math.random() * config.fire, age: 0, phase: Math.random() * TAU, flash: 0 });
+    Object.assign(enemy, { kind, x: spawnX, y: -config.radius - Math.random() * 25, vx: 0, vy: config.speed * difficulty * ENEMY_MOVE_SPEED_SCALE, radius: config.radius, hp: Math.ceil(config.hp * (kind.includes("Boss") ? difficulty : 1)), maxHp: Math.ceil(config.hp * (kind.includes("Boss") ? difficulty : 1)), score: config.score, fireTimer: 0.5 + Math.random() * config.fire, age: 0, phase: Math.random() * TAU, flash: 0 });
     if (kind === "miniBoss" || kind === "mainBoss") enemy.x = GAME_WIDTH / 2;
   }
 
   private updateEnemies(delta: number) {
-    const difficultyElapsed = this.elapsed * DIFFICULTY_TIME_SCALE;
-    const difficulty = 1 + difficultyElapsed / 120;
+    const scaledElapsed = difficultyElapsed(this.elapsed);
+    const difficulty = 1 + scaledElapsed / 120;
     for (const enemy of this.enemies.active()) {
       enemy.age += delta; enemy.flash = Math.max(0, enemy.flash - delta * 8); enemy.fireTimer -= delta;
       if (enemy.kind === "tracker") {
@@ -209,9 +219,9 @@ export class SkyPupEngine {
       }
       enemy.x = clamp(enemy.x + enemy.vx * delta, enemy.radius + 8, GAME_WIDTH - enemy.radius - 8); enemy.y += enemy.vy * delta;
       if (enemy.fireTimer <= 0) {
-        if (difficultyElapsed > 12) this.fireEnemy(enemy, difficulty);
-        enemy.fireTimer = difficultyElapsed > 12
-          ? ENEMY_CONFIG[enemy.kind].fire / difficulty * (0.9 + Math.random() * 0.42)
+        if (scaledElapsed > 12) this.fireEnemy(enemy, difficulty);
+        enemy.fireTimer = scaledElapsed > 12
+          ? ENEMY_CONFIG[enemy.kind].fire / difficulty * (0.9 + Math.random() * 0.42) * ENEMY_FIRE_INTERVAL_SCALE
           : 0.35 + Math.random() * 0.3;
       }
       if (enemy.y > GAME_HEIGHT + enemy.radius * 2) enemy.active = false;
@@ -286,7 +296,7 @@ export class SkyPupEngine {
 
   private spawnEnemyBullet(enemy: Enemy, angle: number, speed: number, radius: number) {
     const bullet = this.bullets.acquire(); if (!bullet) return;
-    Object.assign(bullet, { friendly: false, x: enemy.x - enemy.radius * 0.65, y: enemy.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, radius, damage: 1, life: 5, pierce: 0, color: enemy.kind.includes("Boss") ? "#ff5f8f" : "#69a7ff" });
+    Object.assign(bullet, { friendly: false, x: enemy.x - enemy.radius * 0.65, y: enemy.y, vx: Math.cos(angle) * speed * ENEMY_BULLET_SPEED_SCALE, vy: Math.sin(angle) * speed * ENEMY_BULLET_SPEED_SCALE, radius, damage: 1, life: 5, pierce: 0, color: enemy.kind.includes("Boss") ? "#ff5f8f" : "#69a7ff" });
   }
 
   private defeatEnemy(enemy: Enemy, fromSpecial: boolean) {
@@ -357,7 +367,7 @@ export class SkyPupEngine {
   }
 
   private draw() {
-    renderScene(this.canvas, { player: this.player, bullets: this.bullets.active(), enemies: this.enemies.active(), items: this.items.active(), particles: this.particles.active(), elapsed: this.elapsed, specialFlash: this.specialFlash, shake: this.shake });
+    renderScene(this.canvas, { player: this.player, bullets: this.bullets.active(), enemies: this.enemies.active(), items: this.items.active(), particles: this.particles.active(), elapsed: this.elapsed, specialFlash: this.specialFlash, shake: this.shake, reducedMotion: this.reducedMotion }, this.visualAssets);
   }
 }
 

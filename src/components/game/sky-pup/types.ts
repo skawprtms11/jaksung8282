@@ -34,6 +34,11 @@ export type GameResult = {
   kills: number; bossKills: number; achievements: string[];
 };
 
+export type SkyPupVisualAssets = {
+  background?: HTMLImageElement;
+  player?: HTMLImageElement;
+};
+
 export type Upgrade = { kind: UpgradeKind; title: string; description: string };
 
 export type EngineCallbacks = {
