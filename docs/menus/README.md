@@ -13,6 +13,7 @@
 | 센터마스터 | `/admin/centers` | [center-master.md](./center-master.md) |
 | 화주마스터 | `/admin/clients` | [client-master.md](./client-master.md) |
 | 사용자관리 | `/admin/users` | [user-management.md](./user-management.md) |
+| 모바일 앱 | `/mobile` | [mobile-app.md](./mobile-app.md) |
 
 공유 코드 변경 시 한 문서만 읽어서는 안 된다.
 

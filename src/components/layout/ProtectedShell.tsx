@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import type { HeaderFilterOptions } from "./Header";
@@ -18,6 +19,7 @@ export function ProtectedShell({
   filterOptions?: HeaderFilterOptions;
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
   const [isSidebarHidden, setIsSidebarHidden] = useState(false);
 
   useEffect(() => {
@@ -33,6 +35,10 @@ export function ProtectedShell({
       window.localStorage.setItem("tpl-sidebar-hidden", String(nextValue));
       return nextValue;
     });
+  }
+
+  if (pathname.startsWith("/mobile")) {
+    return <>{children}</>;
   }
 
   return (

@@ -2,12 +2,24 @@
   "name": "TPL사업부 주간자료 시스템",
   "short_name": "TPL 주간자료",
   "description": "TPL사업부 주간업무 자료 작성, 검토, 회의자료 시스템",
-  "start_url": "/notices",
+  "start_url": "/mobile",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f5f9ff",
   "theme_color": "#075be8",
   "orientation": "portrait-primary",
+  "shortcuts": [
+    {
+      "name": "화주자료",
+      "short_name": "화주자료",
+      "url": "/mobile?view=client"
+    },
+    {
+      "name": "부서자료",
+      "short_name": "부서자료",
+      "url": "/mobile?view=department"
+    }
+  ],
   "icons": [
     {
       "src": "/icons/icon-192.png",
