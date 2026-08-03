@@ -1,4 +1,4 @@
-import { ENEMY_CONFIG, GAME_HEIGHT, GAME_WIDTH, PLAYER_MAX_Y, PLAYER_MIN_Y, UPGRADES } from "./constants";
+import { ENEMY_CONFIG, GAME_HEIGHT, GAME_WIDTH, PLAYER_BASE_HP, PLAYER_MAX_HP, PLAYER_MAX_Y, PLAYER_MIN_Y, UPGRADES } from "./constants";
 import { ObjectPool } from "./pool";
 import { renderScene } from "./renderer";
 import { loadGameData, saveGameData } from "./storage";
@@ -117,13 +117,14 @@ export class SkyPupEngine {
     if (kind === "piercing") this.player.piercing += 1;
     if (kind === "damage") this.player.damage += 1;
     if (kind === "moveSpeed") this.player.speed *= 1.15;
-    if (kind === "maxHp") { this.player.maxHp = Math.min(6, this.player.maxHp + 1); this.player.hp = Math.min(this.player.maxHp, this.player.hp + 1); }
+    if (kind === "maxHp") { this.player.maxHp = Math.min(PLAYER_MAX_HP, this.player.maxHp + 1); this.player.hp = Math.min(this.player.maxHp, this.player.hp + 1); }
     if (kind === "specialCharge") this.player.specialChargeRate *= 1.25;
+    this.player.invulnerableUntil = performance.now() + 1000;
     this.status = "running"; this.lastTime = performance.now(); this.callbacks.onSound("levelup"); this.emitHud(); this.frame = requestAnimationFrame(this.tick);
   }
 
   private createPlayer(): Player {
-    return { x: GAME_WIDTH / 2, y: 500, targetX: GAME_WIDTH / 2, targetY: 500, radius: 21, hp: 3, maxHp: 3, invulnerableUntil: 0, speed: 260, fireRate: 0.31, damage: 1, shotCount: 1, piercing: 0, specialChargeRate: 1 };
+    return { x: GAME_WIDTH / 2, y: 500, targetX: GAME_WIDTH / 2, targetY: 500, radius: 21, hp: PLAYER_BASE_HP, maxHp: PLAYER_BASE_HP, invulnerableUntil: 0, speed: 260, fireRate: 0.31, damage: 1, shotCount: 1, piercing: 0, specialChargeRate: 1 };
   }
 
   private tick = (now: number) => {

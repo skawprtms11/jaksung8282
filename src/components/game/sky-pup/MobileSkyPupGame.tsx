@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { Award, Heart, Home, Pause, Play, RotateCcw, Shield, Sparkles, Star, Trophy, Volume2, VolumeX, Zap } from "lucide-react";
 import { saveMiniGameScoreAction } from "@/actions/game";
-import { ACHIEVEMENT_LABELS, GAME_HEIGHT, GAME_WIDTH } from "./constants";
+import { ACHIEVEMENT_LABELS, GAME_HEIGHT, GAME_WIDTH, PLAYER_BASE_HP } from "./constants";
 import { SkyPupAudio } from "./audio";
 import { formatPlayTime, SkyPupEngine } from "./engine";
 import { loadGameData, saveGameData } from "./storage";
 import type { GameHud, GameResult, Upgrade } from "./types";
 
-const initialHud: GameHud = { status: "idle", score: 0, bestScore: 0, hp: 3, maxHp: 3, special: 0, elapsed: 0, level: 1, combo: 0, kills: 0, bossName: "", bossHp: 0, bossMaxHp: 0 };
+const initialHud: GameHud = { status: "idle", score: 0, bestScore: 0, hp: PLAYER_BASE_HP, maxHp: PLAYER_BASE_HP, special: 0, elapsed: 0, level: 1, combo: 0, kills: 0, bossName: "", bossHp: 0, bossMaxHp: 0 };
 const MOBILE_GAME_ACTIVE_EVENT = "mobile-game-active-change";
 type RankingEntry = { id: string; userName: string; departmentName: string | null; score: number; durationSeconds: number; maxLevel: number; createdAt: string; isCurrentUser?: boolean };
 type CurrentUserRanking = RankingEntry & { rank: number };
@@ -19,6 +19,7 @@ export function MobileSkyPupGame({ currentUserName }: { currentUserName: string 
   const engineRef = useRef<SkyPupEngine | null>(null);
   const audioRef = useRef<SkyPupAudio | null>(null);
   const joystickRef = useRef<HTMLDivElement | null>(null);
+  const joystickKnobRef = useRef<HTMLSpanElement | null>(null);
   const savedResultRef = useRef("");
   const [hud, setHud] = useState(initialHud);
   const [result, setResult] = useState<GameResult | null>(null);
@@ -27,7 +28,6 @@ export function MobileSkyPupGame({ currentUserName }: { currentUserName: string 
   const [achievements, setAchievements] = useState<string[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showIntro, setShowIntro] = useState(true);
-  const [stickPosition, setStickPosition] = useState({ x: 0, y: 0 });
   const [rankings, setRankings] = useState<RankingEntry[]>([]);
   const [currentUserRanking, setCurrentUserRanking] = useState<CurrentUserRanking | null>(null);
   const [isRankingLoading, setIsRankingLoading] = useState(true);
@@ -133,12 +133,14 @@ export function MobileSkyPupGame({ currentUserName }: { currentUserName: string 
     const ratio = distance > maxDistance ? maxDistance / distance : 1;
     const x = rawX * ratio;
     const y = rawY * ratio;
-    setStickPosition({ x, y });
+    if (joystickKnobRef.current) {
+      joystickKnobRef.current.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+    }
     engineRef.current?.setJoystick(x / maxDistance, y / maxDistance);
   }
 
   function releaseJoystick() {
-    setStickPosition({ x: 0, y: 0 });
+    if (joystickKnobRef.current) joystickKnobRef.current.style.transform = "translate(-50%, -50%)";
     engineRef.current?.releaseJoystick();
   }
 
@@ -198,7 +200,7 @@ export function MobileSkyPupGame({ currentUserName }: { currentUserName: string 
           className={`absolute bottom-4 left-4 z-10 h-[106px] w-[106px] touch-none rounded-full border-2 border-white/80 bg-[#10223d]/20 shadow-[inset_0_0_22px_rgba(255,255,255,.38),0_8px_20px_rgba(16,34,61,.16)] backdrop-blur-sm ${hud.status === "running" ? "opacity-100" : "opacity-45"}`}
         >
           <span className="pointer-events-none absolute inset-2 rounded-full border border-white/55" />
-          <span className="pointer-events-none absolute left-1/2 top-1/2 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white bg-white/90 shadow-md transition-transform duration-75" style={{ transform: `translate(calc(-50% + ${stickPosition.x}px), calc(-50% + ${stickPosition.y}px))` }}><span className="h-2.5 w-2.5 rounded-full bg-[#075be8]" /></span>
+          <span ref={joystickKnobRef} className="pointer-events-none absolute left-1/2 top-1/2 flex h-11 w-11 items-center justify-center rounded-full border border-white bg-white/90 shadow-md will-change-transform" style={{ transform: "translate(-50%, -50%)" }}><span className="h-2.5 w-2.5 rounded-full bg-[#075be8]" /></span>
         </div>
 
         <button type="button" onClick={() => engineRef.current?.useSpecial()} disabled={hud.status !== "running" || hud.special < 100} className="absolute bottom-4 right-4 z-10 flex h-[70px] w-[70px] flex-col items-center justify-center rounded-full border-2 border-amber-200 bg-amber-400 text-[10px] font-black text-amber-950 shadow-[0_6px_0_#dcae26,0_10px_24px_rgba(116,83,13,.22)] active:translate-y-1 active:shadow-none disabled:border-white/70 disabled:bg-white/70 disabled:text-slate-400 disabled:shadow-sm"><Zap className="mb-0.5 h-5 w-5" aria-hidden="true" />필살기</button>

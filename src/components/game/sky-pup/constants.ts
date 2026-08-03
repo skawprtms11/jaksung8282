@@ -4,6 +4,8 @@ export const GAME_WIDTH = 390;
 export const GAME_HEIGHT = 620;
 export const PLAYER_MIN_Y = 82;
 export const PLAYER_MAX_Y = 560;
+export const PLAYER_BASE_HP = 5;
+export const PLAYER_MAX_HP = 8;
 
 export const ENEMY_CONFIG: Record<EnemyKind, { hp: number; speed: number; radius: number; score: number; fire: number }> = {
   normal: { hp: 1, speed: 72, radius: 16, score: 100, fire: 2.25 },
