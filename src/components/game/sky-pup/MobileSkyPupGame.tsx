@@ -10,6 +10,7 @@ import { loadGameData, saveGameData } from "./storage";
 import type { GameHud, GameResult, Upgrade } from "./types";
 
 const initialHud: GameHud = { status: "idle", score: 0, bestScore: 0, hp: 3, maxHp: 3, special: 0, elapsed: 0, level: 1, combo: 0, kills: 0, bossName: "", bossHp: 0, bossMaxHp: 0 };
+const MOBILE_GAME_ACTIVE_EVENT = "mobile-game-active-change";
 type RankingEntry = { id: string; userName: string; departmentName: string | null; score: number; durationSeconds: number; maxLevel: number; createdAt: string; isCurrentUser?: boolean };
 type CurrentUserRanking = RankingEntry & { rank: number };
 
@@ -76,6 +77,15 @@ export function MobileSkyPupGame({ currentUserName }: { currentUserName: string 
     const timer = window.setTimeout(() => { void loadRankings(); }, 0);
     return () => window.clearTimeout(timer);
   }, [loadRankings]);
+
+  useEffect(() => {
+    const active = hud.status === "running" || hud.status === "paused" || hud.status === "levelup";
+    window.dispatchEvent(new CustomEvent(MOBILE_GAME_ACTIVE_EVENT, { detail: { active } }));
+  }, [hud.status]);
+
+  useEffect(() => () => {
+    window.dispatchEvent(new CustomEvent(MOBILE_GAME_ACTIVE_EVENT, { detail: { active: false } }));
+  }, []);
 
   useEffect(() => {
     if (!result) return;

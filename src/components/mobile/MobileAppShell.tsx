@@ -7,6 +7,7 @@ import { Building2, FilePenLine, Gamepad2, Settings } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 export type MobileView = "client" | "department" | "game" | "settings";
+const MOBILE_GAME_ACTIVE_EVENT = "mobile-game-active-change";
 
 const navigation = [
   { value: "client" as const, label: "화주자료", icon: FilePenLine },
@@ -39,7 +40,9 @@ export function MobileAppShell({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeView, setActiveView] = useState(initialView);
+  const [isGameActive, setIsGameActive] = useState(false);
   const content = activeView === "client" ? clientView : activeView === "department" ? departmentView : activeView === "game" ? gameView : settingsView;
+  const hideBottomNavigation = activeView === "game" && isGameActive;
 
   useEffect(() => {
     function syncViewFromUrl() {
@@ -51,7 +54,17 @@ export function MobileAppShell({
     return () => window.removeEventListener("popstate", syncViewFromUrl);
   }, []);
 
+  useEffect(() => {
+    function syncGameState(event: Event) {
+      setIsGameActive((event as CustomEvent<{ active?: boolean }>).detail?.active === true);
+    }
+
+    window.addEventListener(MOBILE_GAME_ACTIVE_EVENT, syncGameState);
+    return () => window.removeEventListener(MOBILE_GAME_ACTIVE_EVENT, syncGameState);
+  }, []);
+
   function selectView(view: MobileView) {
+    setIsGameActive(false);
     setActiveView(view);
     const url = new URL(window.location.href);
     url.searchParams.set("view", view);
@@ -103,7 +116,14 @@ export function MobileAppShell({
 
       <main className="mx-auto w-full max-w-xl px-3 py-3">{content}</main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-[#d9e7f7] bg-white/96 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_28px_rgba(16,34,61,0.08)] backdrop-blur-xl" aria-label="모바일 앱 메뉴">
+      <nav
+        className={cn(
+          "fixed inset-x-0 bottom-0 z-50 border-t border-[#d9e7f7] bg-white/96 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_28px_rgba(16,34,61,0.08)] backdrop-blur-xl transition-[transform,opacity] duration-200",
+          hideBottomNavigation ? "pointer-events-none translate-y-full opacity-0" : "translate-y-0 opacity-100"
+        )}
+        aria-label="모바일 앱 메뉴"
+        aria-hidden={hideBottomNavigation}
+      >
         <div className="mx-auto grid h-[4.75rem] max-w-xl grid-cols-4 px-2">
           {navigation.map((item) => {
             const Icon = item.icon;
