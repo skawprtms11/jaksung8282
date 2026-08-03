@@ -2,7 +2,9 @@ import type { SavedClientReportRow } from "@/actions/reports";
 import { MobileAppShell, type MobileView } from "@/components/mobile/MobileAppShell";
 import { MobileClientReports } from "@/components/mobile/MobileClientReports";
 import { MobileDepartmentConfirmedReports } from "@/components/mobile/MobileDepartmentConfirmedReports";
+import { MobileDepartmentVolumeBoard } from "@/components/mobile/MobileDepartmentVolumeBoard";
 import { MobileSettings } from "@/components/mobile/MobileSettings";
+import { MobileSkyPupGame } from "@/components/game/sky-pup/MobileSkyPupGame";
 import { DepartmentSubmissionEditor, type DepartmentSubmissionEditorInitialSubmission } from "@/components/reports/DepartmentSubmissionEditor";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { canSubmitDepartment, roleLabel } from "@/lib/auth/permissions";
@@ -98,37 +100,45 @@ export default async function MobilePage({ searchParams }: { searchParams: Promi
   if (departmentOptions.length === 0) departmentOptions = [department];
   const categories = (categoryData ?? []) as Category[];
   const assignmentIds = new Set(((assignmentData ?? []) as Assignment[]).map((row) => row.client_id));
-  const linkedClients = ((linkData ?? []) as unknown as ClientLink[]).filter((row) => row.clients).map((row) => ({ id: row.clients!.id, client_name: row.clients!.client_name, department_id: row.department_id })).sort((a, b) => a.client_name.localeCompare(b.client_name, "ko"));
+  const linkedClients = Array.from(
+    new Map(
+      ((linkData ?? []) as unknown as ClientLink[])
+        .filter((row) => row.clients)
+        .map((row) => [row.clients!.id, { id: row.clients!.id, client_name: row.clients!.client_name, department_id: row.department_id }])
+    ).values()
+  ).sort((a, b) => a.client_name.localeCompare(b.client_name, "ko"));
   const clients = profile.app_role === "client_owner" ? linkedClients.filter((client) => assignmentIds.has(client.id)) : linkedClients;
   const selectedClientId = clients.some((client) => client.id === params.client_id) ? params.client_id! : clients[0]?.id ?? "";
 
-  const [{ data: reportData }, { data: confirmedDepartmentReportData }, { data: submissionData }, { data: workerData }] = await Promise.all([
+  const [{ data: reportData }, { data: departmentReportData }, { data: submissionData }, { data: workerData }] = await Promise.all([
     selectedClientId ? dataClient.from("weekly_client_reports").select(REPORT_SELECT).eq("department_id", departmentId).eq("client_id", selectedClientId).eq("week_start_date", selectedWeek.weekStartDate).is("deleted_at", null).limit(1) : Promise.resolve({ data: [] }),
-    dataClient.from("weekly_client_reports").select(REPORT_SELECT).eq("department_id", departmentId).eq("week_start_date", selectedWeek.weekStartDate).in("status", ["submitted", "approved"]).is("deleted_at", null).order("client_id"),
+    dataClient.from("weekly_client_reports").select(REPORT_SELECT).eq("department_id", departmentId).eq("week_start_date", selectedWeek.weekStartDate).is("deleted_at", null).order("client_id"),
     dataClient.from("department_weekly_submissions").select("id,department_id,week_start_date,status,finalized_at,department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content)").eq("department_id", departmentId).eq("week_start_date", selectedWeek.weekStartDate).is("deleted_at", null).maybeSingle(),
     dataClient.from("profiles").select("id,full_name").eq("department_id", departmentId).eq("is_active", true).order("full_name")
   ]);
   const reports = ((reportData ?? []) as unknown as ReportRow[]).map((report) => toSavedReport(report, report.created_by === profile.id ? profile.full_name : "-") );
   const selectedReport = reports.find((report) => report.weekStartDate === selectedWeek.weekStartDate) ?? null;
-  const confirmedDepartmentReports = ((confirmedDepartmentReportData ?? []) as unknown as ReportRow[]).map((report) => toSavedReport(report, report.created_by === profile.id ? profile.full_name : "-"));
+  const departmentReports = ((departmentReportData ?? []) as unknown as ReportRow[]).map((report) => toSavedReport(report, report.created_by === profile.id ? profile.full_name : "-"));
   const canEditDepartment = profile.app_role === "admin" || profile.app_role === "department_head" || profile.app_role === "manager";
-  const initialView = (["client", "department", "settings"] as MobileView[]).includes(params.view as MobileView) ? params.view as MobileView : "client";
+  const initialView = (["client", "department", "game", "settings"] as MobileView[]).includes(params.view as MobileView) ? params.view as MobileView : "client";
 
   const departmentView = canEditDepartment ? (
     <DepartmentSubmissionEditor
+      key={departmentId}
       departments={[department]}
       categories={categories}
       defaultDepartmentId={departmentId}
       canSubmit={canSubmitDepartment(profile)}
       canEdit
-      visibleTabs={["common", "holiday_work", "facility"]}
+      visibleTabs={["common", "volume", "holiday_work", "facility"]}
       mobileMode
       holidayClientOptions={linkedClients}
       holidayWorkerOptions={(workerData ?? []) as { id: string; full_name: string }[]}
       initialSubmission={(submissionData as unknown as DepartmentSubmissionEditorInitialSubmission | null) ?? null}
       initialLookupDepartmentId={departmentId}
       initialLookupWeekStartDate={selectedWeek.weekStartDate}
-      reviewSlot={<MobileDepartmentConfirmedReports reports={confirmedDepartmentReports} />}
+      volumeSlot={<MobileDepartmentVolumeBoard clients={linkedClients} reports={departmentReports} />}
+      reviewSlot={<MobileDepartmentConfirmedReports clients={linkedClients} reports={departmentReports} />}
     />
   ) : (
     <section className="border-y border-[#d9e7f7] bg-white px-5 py-10 text-center"><BuildingLockNotice role={roleLabel(profile.app_role)} /></section>
@@ -143,6 +153,7 @@ export default async function MobilePage({ searchParams }: { searchParams: Promi
       selectedClientId={selectedClientId}
       clientView={<MobileClientReports key={`${departmentId}-${selectedClientId}-${selectedWeek.weekStartDate}`} clients={clients} categories={categories} departmentId={departmentId} selectedClientId={selectedClientId} selectedWeekStartDate={selectedWeek.weekStartDate} selectedReport={selectedReport} />}
       departmentView={departmentView}
+      gameView={<MobileSkyPupGame currentUserName={profile.full_name} />}
       settingsView={<MobileSettings profile={profile} departmentName={department.department_name} clients={clients} />}
     />
   );

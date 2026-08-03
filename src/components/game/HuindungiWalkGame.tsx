@@ -15,6 +15,7 @@ export type MiniGameRanking = {
   maxLevel: number;
   snackCount: number;
   createdAt: string;
+  isCurrentUser?: boolean;
 };
 
 type GameStatus = "idle" | "running" | "gameover";
