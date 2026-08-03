@@ -2,7 +2,8 @@
 
 import type { ReactNode } from "react";
 import { useActionState, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { BarChart3, Building2, CalendarDays, CheckCircle2, ClipboardList, Eye, Hammer, Pencil, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { BarChart3, Building2, CalendarDays, CheckCircle2, ChevronDown, ClipboardList, Eye, Hammer, Pencil, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
@@ -447,10 +448,13 @@ export function DepartmentSubmissionEditor({
   canEdit?: boolean;
   mobileMode?: boolean;
 }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const availableTabs = visibleTabs?.length
     ? visibleTabs.flatMap((value) => departmentTabs.filter((tab) => tab.value === value))
     : departmentTabs;
   const [active, setActive] = useState<DepartmentTabValue>(availableTabs[0]?.value ?? "common");
+  const [isMobileCommonExpanded, setIsMobileCommonExpanded] = useState(true);
   const [activeDialog, setActiveDialog] = useState<ActiveDialog>(null);
   const [facilityDialogOpen, setFacilityDialogOpen] = useState(false);
   const [facilityEditingItem, setFacilityEditingItem] = useState<FacilityConstructionItem | null>(null);
@@ -660,6 +664,15 @@ export function DepartmentSubmissionEditor({
       }
       return week.weekStartDate;
     });
+    if (mobileMode) {
+      const next = new URLSearchParams(searchParams.toString());
+      next.set("view", "department");
+      next.set("report_year", String(week.year));
+      next.set("report_month", String(week.month));
+      next.set("week_of_month", String(week.weekOfMonth));
+      next.set("week_start_date", week.weekStartDate);
+      router.replace(`/mobile?${next.toString()}`, { scroll: false });
+    }
   }
 
   function updateFacilityItems(nextItems: FacilityConstructionItem[]) {
@@ -718,7 +731,7 @@ export function DepartmentSubmissionEditor({
       <div className="rounded-[1.4rem] border border-[#d9e7f7] bg-white/82 p-2 shadow-[0_14px_34px_rgba(16,34,61,0.06)]">
         <div className="space-y-2">
           <div className={cn(mobileMode ? "space-y-2" : "flex flex-wrap items-center justify-between gap-2")}>
-            <nav className={mobileMode ? "grid w-full grid-cols-3 gap-1 rounded-xl bg-[#f5f9ff] p-1" : REPORT_TAB_NAV_CLASS_NAME} role="tablist" aria-label="부서자료 화면 탭">
+            <nav className={mobileMode ? cn("grid w-full gap-1 rounded-xl bg-[#f5f9ff] p-1", availableTabs.length === 4 ? "grid-cols-4" : "grid-cols-3") : REPORT_TAB_NAV_CLASS_NAME} role="tablist" aria-label="부서자료 화면 탭">
               {availableTabs.map((section) => {
                 const Icon = section.icon;
                 const isSelected = active === section.value;
@@ -735,7 +748,7 @@ export function DepartmentSubmissionEditor({
                     )}
                   >
                     <Icon className={mobileMode ? "h-4 w-4" : REPORT_TAB_ICON_CLASS_NAME} aria-hidden="true" />
-                    <span className={mobileMode ? "break-keep text-[11px] font-black leading-none" : "text-[13px] font-bold leading-none"}>{section.label}</span>
+                    <span className={mobileMode ? "break-keep text-[13px] font-black leading-none" : "text-[13px] font-bold leading-none"}>{section.label}</span>
                     {isSelected ? (
                       <span className={REPORT_TAB_INDICATOR_CLASS_NAME} aria-hidden="true" />
                     ) : null}
@@ -821,44 +834,59 @@ export function DepartmentSubmissionEditor({
 
       <section className="rounded-2xl border border-[#d9e7f7] bg-white/86 p-3 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
         {active === "holiday_work" || active === "vacancy" || active === "volume" ? null : (
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="section-doodle-title">{active === "common" ? "부서 공통사항" : activeSectionLabel}</h2>
-            {active === "facility" ? (
+          mobileMode && active === "common" ? (
+            <div className={cn(isMobileCommonExpanded && "mb-3")}>
               <button
                 type="button"
-                onClick={() => {
-                  setFacilityEditingItem(null);
-                  setFacilityDialogOpen(true);
-                }}
-                disabled={!canEditSubmission || isSubmissionBusy}
-                className="tool-button tool-button-primary min-h-9 py-1.5 disabled:opacity-50"
+                aria-expanded={isMobileCommonExpanded}
+                aria-controls="mobile-department-common-content"
+                onClick={() => setIsMobileCommonExpanded((current) => !current)}
+                className="flex min-h-9 w-full items-center justify-between gap-3 text-left"
               >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                등록
+                <h2 className="section-doodle-title">부서 공통사항</h2>
+                <ChevronDown className={cn("h-5 w-5 shrink-0 text-slate-500 transition-transform", isMobileCommonExpanded && "rotate-180")} aria-hidden="true" />
               </button>
-            ) : (
-              <div className="flex flex-wrap gap-2">
+            </div>
+          ) : (
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="section-doodle-title">{active === "common" ? "부서 공통사항" : activeSectionLabel}</h2>
+              {active === "facility" ? (
                 <button
                   type="button"
-                  onClick={() => isDepartmentContentSection(active) && setActiveDialog({ section: active, period: "current" })}
+                  onClick={() => {
+                    setFacilityEditingItem(null);
+                    setFacilityDialogOpen(true);
+                  }}
                   disabled={!canEditSubmission || isSubmissionBusy}
-                  className="tool-button min-h-9 py-1.5 disabled:opacity-50"
+                  className="tool-button tool-button-primary min-h-9 py-1.5 disabled:opacity-50"
                 >
-                  금주 실시사항 작성
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  등록
                 </button>
-                <button
-                  type="button"
-                  onClick={() => isDepartmentContentSection(active) && setActiveDialog({ section: active, period: "next" })}
-                  disabled={!canEditSubmission || isSubmissionBusy}
-                  className="tool-button min-h-9 py-1.5 disabled:opacity-50"
-                >
-                  차주 예정사항 작성
-                </button>
-              </div>
-            )}
-          </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => isDepartmentContentSection(active) && setActiveDialog({ section: active, period: "current" })}
+                    disabled={!canEditSubmission || isSubmissionBusy}
+                    className="tool-button min-h-9 py-1.5 disabled:opacity-50"
+                  >
+                    금주 실시사항 작성
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => isDepartmentContentSection(active) && setActiveDialog({ section: active, period: "next" })}
+                    disabled={!canEditSubmission || isSubmissionBusy}
+                    className="tool-button min-h-9 py-1.5 disabled:opacity-50"
+                  >
+                    차주 예정사항 작성
+                  </button>
+                </div>
+              )}
+            </div>
+          )
         )}
-        {active === "volume" ? (
+        {mobileMode && active === "common" && !isMobileCommonExpanded ? null : active === "volume" ? (
           volumeSlot ?? (
             <div className="rounded-2xl border border-dashed border-[#b9cce6] px-4 py-6 text-center text-sm font-bold text-slate-500">
               선택한 주차의 물동량 자료가 없습니다.
@@ -915,6 +943,7 @@ export function DepartmentSubmissionEditor({
               categories={categories}
               categoryName={categories.find((category) => category.id === activeContent.current_work_category_id)?.category_name ?? "기타"}
               disabled={!canEditSubmission || isSubmissionBusy}
+              actionLabel={mobileMode ? "작성" : "수정"}
               onEdit={() => setActiveDialog({ section: active, period: "current" })}
             />
             <PreviewBlock
@@ -927,6 +956,7 @@ export function DepartmentSubmissionEditor({
               categories={categories}
               categoryName={categories.find((category) => category.id === activeContent.next_work_category_id)?.category_name ?? "기타"}
               disabled={!canEditSubmission || isSubmissionBusy}
+              actionLabel={mobileMode ? "작성" : "수정"}
               onEdit={() => setActiveDialog({ section: active, period: "next" })}
             />
           </div>
@@ -2511,6 +2541,7 @@ function PreviewBlock({
   categories,
   categoryName,
   disabled,
+  actionLabel = "수정",
   onEdit
 }: {
   title: string;
@@ -2522,6 +2553,7 @@ function PreviewBlock({
   categories: Category[];
   categoryName: string;
   disabled?: boolean;
+  actionLabel?: string;
   onEdit: () => void;
 }) {
   const structuredItems = structured
@@ -2533,8 +2565,9 @@ function PreviewBlock({
     <div className="rounded-2xl border border-slate-200 bg-white p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="text-xs font-black text-slate-500">{title}</p>
-        <button type="button" onClick={onEdit} disabled={disabled} className="section-chip disabled:opacity-50">
-          수정
+        <button type="button" onClick={onEdit} disabled={disabled} aria-label={`${title} ${actionLabel}`} className="section-chip inline-flex items-center gap-1 disabled:opacity-50">
+          <Pencil className="h-3 w-3" aria-hidden="true" />
+          {actionLabel}
         </button>
       </div>
       <div className="min-h-24 rounded-2xl bg-[#f5f9ff] px-3 py-2 text-sm leading-6 text-slate-700">

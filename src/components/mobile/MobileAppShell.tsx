@@ -3,14 +3,15 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Building2, FilePenLine, Settings } from "lucide-react";
+import { Building2, FilePenLine, Gamepad2, Settings } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
-export type MobileView = "client" | "department" | "settings";
+export type MobileView = "client" | "department" | "game" | "settings";
 
 const navigation = [
   { value: "client" as const, label: "화주자료", icon: FilePenLine },
   { value: "department" as const, label: "부서자료", icon: Building2 },
+  { value: "game" as const, label: "미니게임", icon: Gamepad2 },
   { value: "settings" as const, label: "설정", icon: Settings }
 ];
 
@@ -22,6 +23,7 @@ export function MobileAppShell({
   selectedClientId = "",
   clientView,
   departmentView,
+  gameView,
   settingsView
 }: {
   initialView: MobileView;
@@ -31,17 +33,18 @@ export function MobileAppShell({
   selectedClientId: string;
   clientView: ReactNode;
   departmentView: ReactNode;
+  gameView: ReactNode;
   settingsView: ReactNode;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeView, setActiveView] = useState(initialView);
-  const content = activeView === "client" ? clientView : activeView === "department" ? departmentView : settingsView;
+  const content = activeView === "client" ? clientView : activeView === "department" ? departmentView : activeView === "game" ? gameView : settingsView;
 
   useEffect(() => {
     function syncViewFromUrl() {
       const view = new URL(window.location.href).searchParams.get("view");
-      setActiveView(view === "department" || view === "settings" ? view : "client");
+      setActiveView(view === "department" || view === "game" || view === "settings" ? view : "client");
     }
 
     window.addEventListener("popstate", syncViewFromUrl);
@@ -101,7 +104,7 @@ export function MobileAppShell({
       <main className="mx-auto w-full max-w-xl px-3 py-3">{content}</main>
 
       <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-[#d9e7f7] bg-white/96 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_28px_rgba(16,34,61,0.08)] backdrop-blur-xl" aria-label="모바일 앱 메뉴">
-        <div className="mx-auto grid h-[4.75rem] max-w-xl grid-cols-3 px-2">
+        <div className="mx-auto grid h-[4.75rem] max-w-xl grid-cols-4 px-2">
           {navigation.map((item) => {
             const Icon = item.icon;
             const selected = activeView === item.value;
