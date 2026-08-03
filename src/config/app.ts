@@ -4,6 +4,7 @@ export const appConfig = {
 } as const;
 
 export const protectedRoutes = [
+  "/mobile",
   "/notices",
   "/meeting-materials",
   "/department-reports",
