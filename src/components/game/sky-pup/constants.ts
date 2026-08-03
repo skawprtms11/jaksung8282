@@ -6,7 +6,8 @@ export const PLAYER_MIN_Y = 82;
 export const PLAYER_MAX_Y = 560;
 export const PLAYER_BASE_HP = 5;
 export const PLAYER_MAX_HP = 8;
-export const PLAYER_BASE_SPEED = 320;
+export const PLAYER_BASE_SPEED = 360;
+export const DIFFICULTY_TIME_SCALE = 0.7;
 
 export const ENEMY_CONFIG: Record<EnemyKind, { hp: number; speed: number; radius: number; score: number; fire: number }> = {
   normal: { hp: 1, speed: 72, radius: 16, score: 100, fire: 2.25 },

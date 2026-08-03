@@ -1,4 +1,4 @@
-import { ENEMY_CONFIG, GAME_HEIGHT, GAME_WIDTH, PLAYER_BASE_HP, PLAYER_BASE_SPEED, PLAYER_MAX_HP, PLAYER_MAX_Y, PLAYER_MIN_Y, UPGRADES } from "./constants";
+import { DIFFICULTY_TIME_SCALE, ENEMY_CONFIG, GAME_HEIGHT, GAME_WIDTH, PLAYER_BASE_HP, PLAYER_BASE_SPEED, PLAYER_MAX_HP, PLAYER_MAX_Y, PLAYER_MIN_Y, UPGRADES } from "./constants";
 import { ObjectPool } from "./pool";
 import { renderScene } from "./renderer";
 import { loadGameData, saveGameData } from "./storage";
@@ -95,7 +95,7 @@ export class SkyPupEngine {
     }
     const directionX = x / length;
     const directionY = y / length;
-    const response = Math.min(1, 0.3 + Math.min(1, length) * 0.7);
+    const response = Math.min(1, 0.42 + Math.min(1, length) * 0.58);
     this.moveX = directionX * response;
     this.moveY = directionY * response;
   }
@@ -165,17 +165,18 @@ export class SkyPupEngine {
     else if (this.elapsed >= this.nextMiniBoss) { this.spawnEnemy("miniBoss"); this.nextMiniBoss += 90; this.callbacks.onSound("boss"); }
     this.spawnTimer -= delta;
     if (this.spawnTimer <= 0 && !this.enemies.active().some((enemy) => enemy.kind === "mainBoss")) {
-      const difficulty = 1 + this.elapsed / 75;
+      const difficultyElapsed = this.elapsed * DIFFICULTY_TIME_SCALE;
+      const difficulty = 1 + difficultyElapsed / 75;
       const roll = Math.random();
-      const kind: EnemyKind = this.elapsed < 10
+      const kind: EnemyKind = difficultyElapsed < 10
         ? "normal"
-        : this.elapsed < 18
+        : difficultyElapsed < 18
           ? (roll > 0.72 ? "fast" : "normal")
-        : this.elapsed < 25
+          : difficultyElapsed < 25
           ? (roll > 0.84 ? "tank" : roll > 0.55 ? "fast" : "normal")
           : roll > 0.89 ? "tank" : roll > 0.7 ? "tracker" : roll > 0.46 ? "fast" : "normal";
       this.spawnEnemy(kind);
-      if (this.elapsed > 120 && Math.random() < 0.18) this.spawnEnemy(Math.random() > 0.5 ? "normal" : "fast");
+      if (difficultyElapsed > 120 && Math.random() < 0.18) this.spawnEnemy(Math.random() > 0.5 ? "normal" : "fast");
       this.spawnTimer = Math.max(0.3, 1.08 / difficulty) * (0.82 + Math.random() * 0.35);
     }
     this.healTimer -= delta;
@@ -184,7 +185,7 @@ export class SkyPupEngine {
 
   private spawnEnemy(kind: EnemyKind) {
     const enemy = this.enemies.acquire(); if (!enemy) return;
-    const config = ENEMY_CONFIG[kind]; const difficulty = 1 + this.elapsed / 170;
+    const config = ENEMY_CONFIG[kind]; const difficulty = 1 + this.elapsed * DIFFICULTY_TIME_SCALE / 170;
     let spawnX = 48 + Math.random() * (GAME_WIDTH - 96);
     if (this.elapsed < 15 && Math.abs(spawnX - this.player.x) < 70) spawnX = this.player.x < GAME_WIDTH / 2 ? GAME_WIDTH - 58 : 58;
     Object.assign(enemy, { kind, x: spawnX, y: -config.radius - Math.random() * 25, vx: 0, vy: config.speed * difficulty, radius: config.radius, hp: Math.ceil(config.hp * (kind.includes("Boss") ? difficulty : 1)), maxHp: Math.ceil(config.hp * (kind.includes("Boss") ? difficulty : 1)), score: config.score, fireTimer: 0.5 + Math.random() * config.fire, age: 0, phase: Math.random() * TAU, flash: 0 });
@@ -192,7 +193,8 @@ export class SkyPupEngine {
   }
 
   private updateEnemies(delta: number) {
-    const difficulty = 1 + this.elapsed / 120;
+    const difficultyElapsed = this.elapsed * DIFFICULTY_TIME_SCALE;
+    const difficulty = 1 + difficultyElapsed / 120;
     for (const enemy of this.enemies.active()) {
       enemy.age += delta; enemy.flash = Math.max(0, enemy.flash - delta * 8); enemy.fireTimer -= delta;
       if (enemy.kind === "tracker") {
@@ -207,8 +209,8 @@ export class SkyPupEngine {
       }
       enemy.x = clamp(enemy.x + enemy.vx * delta, enemy.radius + 8, GAME_WIDTH - enemy.radius - 8); enemy.y += enemy.vy * delta;
       if (enemy.fireTimer <= 0) {
-        if (this.elapsed > 12) this.fireEnemy(enemy, difficulty);
-        enemy.fireTimer = this.elapsed > 12
+        if (difficultyElapsed > 12) this.fireEnemy(enemy, difficulty);
+        enemy.fireTimer = difficultyElapsed > 12
           ? ENEMY_CONFIG[enemy.kind].fire / difficulty * (0.9 + Math.random() * 0.42)
           : 0.35 + Math.random() * 0.3;
       }
