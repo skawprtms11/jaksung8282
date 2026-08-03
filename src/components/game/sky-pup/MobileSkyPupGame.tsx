@@ -128,11 +128,13 @@ export function MobileSkyPupGame({ currentUserName }: { currentUserName: string 
     }
 
     window.addEventListener("pointermove", moveActivePointer, { passive: false });
+    window.addEventListener("pointerrawupdate", moveActivePointer as EventListener, { passive: false });
     window.addEventListener("pointerup", releaseActivePointer);
     window.addEventListener("pointercancel", releaseActivePointer);
     window.addEventListener("blur", releaseOnBlur);
     return () => {
       window.removeEventListener("pointermove", moveActivePointer);
+      window.removeEventListener("pointerrawupdate", moveActivePointer as EventListener);
       window.removeEventListener("pointerup", releaseActivePointer);
       window.removeEventListener("pointercancel", releaseActivePointer);
       window.removeEventListener("blur", releaseOnBlur);
