@@ -22,7 +22,9 @@
 
 탭 링크는 선택 주차와 범위 params를 보존한다. 주차는 `week_start_date`가 유효하면 우선하고, 그렇지 않으면 연·월·주차 조합을 해석하며 실패하면 현재 주차로 돌아간다.
 
-각 탭 전환은 링크 기반 Server Component 전환이다. 탭 링크는 배포 환경에서 전체 RSC payload를 백그라운드 프리페치하고 Next.js 기본 링크 전환을 사용한다. 클릭을 별도 `router.push`로 가로채 중복 전환을 만들지 않는다. `Suspense` key는 탭, 주차, 부서, 화주 범위로 구성하고 탭별 loading 문구를 표시한다.
+최초 진입과 직접 URL 접근은 기존 Server Component 경로를 사용한다. 화면이 열린 뒤의 탭 전환은 `MeetingMaterialsWorkspace`가 URL history를 보존하면서 `/api/meeting-materials/tab`에서 활성 탭 payload만 받아 본문을 교체한다. API 실패 시 해당 탭의 기존 서버 URL로 이동해 legacy fallback을 그대로 사용할 수 있어야 한다.
+
+탭 payload는 60초 동안 범위별로 캐시하고, 초기 화면이 안정된 뒤 다른 탭을 순차 준비한다. 동시에 여러 탭 RPC를 실행하지 않으며 새 탭 선택 시 진행 중인 사용자 요청만 취소한다. 뒤로가기·앞으로가기는 history의 탭과 캐시를 복원한다.
 
 관리자에게 선택 부서가 없는 경우 탭 네비게이션을 만들기 위한 부서 선행 조회를 실행하지 않는다. `materials`의 기본 부서 결정은 RPC 또는 fallback 콘텐츠 조회 안에서 처리해 상단 탭과 loading 경계가 먼저 응답할 수 있어야 한다.
 
@@ -144,7 +146,9 @@ RPC는 `security invoker`이며 활성 프로필, 허용 역할, 범위, 유효�
 | 구분 | 위치 |
 | --- | --- |
 | 탭·RPC·fallback·집계 | `src/app/(protected)/meeting-materials/page.tsx` |
-| 탭 네비게이션 | `MeetingMaterialsTabNav.tsx`, `MeetingMaterialsWeekFilter.tsx` |
+| 탭 전환 shell·API | `MeetingMaterialsWorkspace.tsx`, `src/app/api/meeting-materials/tab/route.ts` |
+| 탭 payload 모델 | `src/lib/reports/meeting-materials-tab-data.ts` |
+| 탭 네비게이션·화면 | `MeetingMaterialsTabNav.tsx`, `MeetingMaterialsTabContent.tsx`, `MeetingMaterialsWeekFilter.tsx` |
 | 회의자료 표·상세 | `MeetingMaterialsTable.tsx` |
 | 취합 주요 이슈 | `MeetingPriorityPanel.tsx` |
 | 물동량 차트 | `src/components/charts/VolumeComparisonChart.tsx` |
@@ -162,8 +166,10 @@ RPC는 `security invoker`이며 활성 프로필, 허용 역할, 범위, 유효�
 - 관리자 전체 상세 회의자료를 기본으로 한 번에 500건 읽지 않도록 기본 부서 제한을 유지한다.
 - dynamic import와 Suspense 경계를 유지한다.
 - 탭 전환 시 공통 header filters를 매번 새로 조회하지 않는다.
-- 탭의 전체 RSC 프리페치는 초기 탭 렌더를 막지 않는 백그라운드 동작이어야 하며, 각 프리페치 요청도 해당 탭 데이터만 조회한다.
-- 사이드바와 탭 링크는 Next.js `Link`의 기본 전환을 사용한다. `preventDefault` 후 별도 `router.push`를 중복 호출하지 않는다.
+- 최초 화면은 서버에서 활성 탭만 조회하고, 나머지 탭 API prefetch는 초기 렌더 후 순차 실행한다.
+- 로컬 탭 전환 API도 `getCurrentUserProfile`과 `canViewMeetingMaterials`를 다시 검사하고 RPC의 RLS 범위를 우회하지 않는다.
+- 로컬 탭 전환 실패 시 서버 URL fallback, 직접 URL 접근, 새로고침 경로를 유지한다.
+- 요청 등록·수정·삭제 뒤 `materials`와 `collection` 캐시를 무효화한다.
 - 관계별 후속 N+1 쿼리를 추가하지 않는다.
 - RPC 변경 시 타입 가드와 fallback 결과가 같은 화면 모델을 생성하는지 비교한다.
 

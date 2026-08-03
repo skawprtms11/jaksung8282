@@ -61,6 +61,20 @@ export function formatDateTime(value?: string | null) {
   }).format(new Date(value));
 }
 
+export function formatCompactDate(value?: string | null) {
+  if (!value) {
+    return "-";
+  }
+  const parts = new Intl.DateTimeFormat("en-US", {
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "Asia/Seoul"
+  }).formatToParts(new Date(value));
+  const datePart = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${datePart("year")}${datePart("month")}${datePart("day")}`;
+}
+
 export function formatWeekLabel(year: number, month: number, weekOfMonth: number, start: string, end: string) {
   return `${year}년 ${month}월 ${weekOfMonth}주차 · ${start.replaceAll("-", ".")} ~ ${end.replaceAll("-", ".")}`;
 }
