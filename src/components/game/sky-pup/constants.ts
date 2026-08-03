@@ -7,13 +7,18 @@ export const PLAYER_MAX_Y = 560;
 export const PLAYER_BASE_HP = 5;
 export const PLAYER_MAX_HP = 8;
 export const PLAYER_BASE_SPEED = 360;
-export const DIFFICULTY_TIME_SCALE = 0.35;
+export const DIFFICULTY_TIME_SCALE = 0.4;
 export const LATE_DIFFICULTY_START_SECONDS = 90;
-export const LATE_DIFFICULTY_ACCELERATION = 0.15;
-export const ENEMY_SPAWN_INTERVAL_SCALE = 1.25;
+export const LATE_DIFFICULTY_ACCELERATION = 0.18;
+export const ENEMY_SPAWN_INTERVAL_SCALE = 1.15;
 export const ENEMY_FIRE_INTERVAL_SCALE = 1.25;
-export const ENEMY_MOVE_SPEED_SCALE = 0.85;
+export const ENEMY_MOVE_SPEED_SCALE = 0.9;
 export const ENEMY_BULLET_SPEED_SCALE = 0.8;
+export const BOSS_BULLET_SPEED_SCALE = 0.7;
+export const MAIN_BOSS_DIFFICULTY = 1.3;
+export const MINI_BOSS_SHOT_COUNT = 1;
+export const MAIN_BOSS_SHOT_COUNT = 3;
+export const MAX_UPGRADE_LEVEL = 3;
 
 export const ENEMY_CONFIG: Record<EnemyKind, { hp: number; speed: number; radius: number; score: number; fire: number }> = {
   normal: { hp: 1, speed: 72, radius: 16, score: 100, fire: 2.25 },
@@ -21,7 +26,7 @@ export const ENEMY_CONFIG: Record<EnemyKind, { hp: number; speed: number; radius
   tank: { hp: 5, speed: 42, radius: 23, score: 500, fire: 2.8 },
   tracker: { hp: 3, speed: 76, radius: 17, score: 300, fire: 1.9 },
   miniBoss: { hp: 40, speed: 28, radius: 40, score: 5000, fire: 1.05 },
-  mainBoss: { hp: 120, speed: 20, radius: 54, score: 10000, fire: 0.68 }
+  mainBoss: { hp: 40, speed: 28, radius: 44, score: 10000, fire: 1.05 }
 };
 export const UPGRADES: Upgrade[] = [
   { kind: "fireRate", title: "번개 발사", description: "공격속도 18% 증가" },

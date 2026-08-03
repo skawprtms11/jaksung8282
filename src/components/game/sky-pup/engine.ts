@@ -1,4 +1,4 @@
-import { DIFFICULTY_TIME_SCALE, ENEMY_BULLET_SPEED_SCALE, ENEMY_CONFIG, ENEMY_FIRE_INTERVAL_SCALE, ENEMY_MOVE_SPEED_SCALE, ENEMY_SPAWN_INTERVAL_SCALE, GAME_HEIGHT, GAME_WIDTH, LATE_DIFFICULTY_ACCELERATION, LATE_DIFFICULTY_START_SECONDS, PLAYER_BASE_HP, PLAYER_BASE_SPEED, PLAYER_MAX_HP, PLAYER_MAX_Y, PLAYER_MIN_Y, UPGRADES } from "./constants";
+import { BOSS_BULLET_SPEED_SCALE, DIFFICULTY_TIME_SCALE, ENEMY_BULLET_SPEED_SCALE, ENEMY_CONFIG, ENEMY_FIRE_INTERVAL_SCALE, ENEMY_MOVE_SPEED_SCALE, ENEMY_SPAWN_INTERVAL_SCALE, GAME_HEIGHT, GAME_WIDTH, LATE_DIFFICULTY_ACCELERATION, LATE_DIFFICULTY_START_SECONDS, MAIN_BOSS_DIFFICULTY, MAIN_BOSS_SHOT_COUNT, MAX_UPGRADE_LEVEL, MINI_BOSS_SHOT_COUNT, PLAYER_BASE_HP, PLAYER_BASE_SPEED, PLAYER_MAX_HP, PLAYER_MAX_Y, PLAYER_MIN_Y, UPGRADES } from "./constants";
 import { ObjectPool } from "./pool";
 import { renderScene } from "./renderer";
 import { loadGameData, saveGameData } from "./storage";
@@ -12,6 +12,15 @@ const difficultyElapsed = (elapsed: number) => (
   elapsed * DIFFICULTY_TIME_SCALE
   + Math.max(0, elapsed - LATE_DIFFICULTY_START_SECONDS) * LATE_DIFFICULTY_ACCELERATION
 );
+const createUpgradeLevels = (): Record<UpgradeKind, number> => ({
+  fireRate: 0,
+  extraShot: 0,
+  piercing: 0,
+  damage: 0,
+  moveSpeed: 0,
+  maxHp: 0,
+  specialCharge: 0
+});
 
 export class SkyPupEngine {
   private readonly canvas: HTMLCanvasElement;
@@ -49,6 +58,7 @@ export class SkyPupEngine {
   private storedBest = 0;
   private moveX = 0;
   private moveY = 0;
+  private upgradeLevels = createUpgradeLevels();
   private reducedMotion = false;
 
   constructor(canvas: HTMLCanvasElement, callbacks: EngineCallbacks) {
@@ -72,6 +82,7 @@ export class SkyPupEngine {
     this.nextMiniBoss = 90; this.nextMainBoss = 300; this.special = 0; this.specialFreeze = 0;
     this.specialFlash = 0; this.shake = 0; this.damageTaken = 0; this.lastTime = performance.now(); this.lastHudAt = 0;
     this.moveX = 0; this.moveY = 0;
+    this.upgradeLevels = createUpgradeLevels();
     this.emitHud(); this.frame = requestAnimationFrame(this.tick);
   }
 
@@ -129,6 +140,7 @@ export class SkyPupEngine {
 
   applyUpgrade(kind: UpgradeKind) {
     if (this.status !== "levelup") return;
+    if (this.upgradeLevels[kind] >= MAX_UPGRADE_LEVEL) return;
     if (kind === "fireRate") this.player.fireRate *= 0.82;
     if (kind === "extraShot") this.player.shotCount = Math.min(3, this.player.shotCount + 1);
     if (kind === "piercing") this.player.piercing += 1;
@@ -136,6 +148,7 @@ export class SkyPupEngine {
     if (kind === "moveSpeed") this.player.speed *= 1.15;
     if (kind === "maxHp") { this.player.maxHp = Math.min(PLAYER_MAX_HP, this.player.maxHp + 1); this.player.hp = Math.min(this.player.maxHp, this.player.hp + 1); }
     if (kind === "specialCharge") this.player.specialChargeRate *= 1.25;
+    this.upgradeLevels[kind] += 1;
     this.player.invulnerableUntil = performance.now() + 1000;
     this.status = "running"; this.lastTime = performance.now(); this.callbacks.onSound("levelup"); this.emitHud(); this.frame = requestAnimationFrame(this.tick);
   }
@@ -195,7 +208,8 @@ export class SkyPupEngine {
 
   private spawnEnemy(kind: EnemyKind) {
     const enemy = this.enemies.acquire(); if (!enemy) return;
-    const config = ENEMY_CONFIG[kind]; const difficulty = 1 + difficultyElapsed(this.elapsed) / 170;
+    const config = ENEMY_CONFIG[kind];
+    const difficulty = kind === "mainBoss" ? MAIN_BOSS_DIFFICULTY : 1 + difficultyElapsed(this.elapsed) / 170;
     let spawnX = 48 + Math.random() * (GAME_WIDTH - 96);
     if (this.elapsed < 15 && Math.abs(spawnX - this.player.x) < 70) spawnX = this.player.x < GAME_WIDTH / 2 ? GAME_WIDTH - 58 : 58;
     Object.assign(enemy, { kind, x: spawnX, y: -config.radius - Math.random() * 25, vx: 0, vy: config.speed * difficulty * ENEMY_MOVE_SPEED_SCALE, radius: config.radius, hp: Math.ceil(config.hp * (kind.includes("Boss") ? difficulty : 1)), maxHp: Math.ceil(config.hp * (kind.includes("Boss") ? difficulty : 1)), score: config.score, fireTimer: 0.5 + Math.random() * config.fire, age: 0, phase: Math.random() * TAU, flash: 0 });
@@ -219,9 +233,10 @@ export class SkyPupEngine {
       }
       enemy.x = clamp(enemy.x + enemy.vx * delta, enemy.radius + 8, GAME_WIDTH - enemy.radius - 8); enemy.y += enemy.vy * delta;
       if (enemy.fireTimer <= 0) {
-        if (scaledElapsed > 12) this.fireEnemy(enemy, difficulty);
+        const attackDifficulty = enemy.kind === "mainBoss" ? MAIN_BOSS_DIFFICULTY : difficulty;
+        if (scaledElapsed > 12) this.fireEnemy(enemy, attackDifficulty);
         enemy.fireTimer = scaledElapsed > 12
-          ? ENEMY_CONFIG[enemy.kind].fire / difficulty * (0.9 + Math.random() * 0.42) * ENEMY_FIRE_INTERVAL_SCALE
+          ? ENEMY_CONFIG[enemy.kind].fire / attackDifficulty * (0.9 + Math.random() * 0.42) * ENEMY_FIRE_INTERVAL_SCALE
           : 0.35 + Math.random() * 0.3;
       }
       if (enemy.y > GAME_HEIGHT + enemy.radius * 2) enemy.active = false;
@@ -281,13 +296,12 @@ export class SkyPupEngine {
 
   private fireEnemy(enemy: Enemy, difficulty: number) {
     const boss = enemy.kind === "miniBoss" || enemy.kind === "mainBoss";
-    if (enemy.kind === "mainBoss" && Math.floor(enemy.age) % 9 === 0 && Math.random() < 0.3) { this.spawnEnemy("fast"); this.spawnEnemy("tracker"); }
     const baseAngle = Math.atan2(this.player.y - enemy.y, this.player.x - enemy.x);
-    const count = boss ? (enemy.kind === "mainBoss" ? (Math.floor(enemy.age) % 3 === 0 ? 9 : 5) : 3) : enemy.kind === "tank" ? 3 : 1;
-    if (boss && Math.floor(enemy.age) % 7 === 0) {
-      for (let i = 0; i < 12; i += 1) this.spawnEnemyBullet(enemy, i / 12 * TAU, 105 * difficulty, 6);
-      return;
-    }
+    const count = enemy.kind === "miniBoss"
+      ? MINI_BOSS_SHOT_COUNT
+      : enemy.kind === "mainBoss"
+        ? MAIN_BOSS_SHOT_COUNT
+        : enemy.kind === "tank" ? 3 : 1;
     for (let i = 0; i < count; i += 1) {
       const spread = count === 1 ? 0 : (i - (count - 1) / 2) * 0.18;
       this.spawnEnemyBullet(enemy, baseAngle + spread, (enemy.kind === "fast" ? 190 : boss ? 145 : 125) * difficulty, boss ? 6 : 5);
@@ -296,7 +310,8 @@ export class SkyPupEngine {
 
   private spawnEnemyBullet(enemy: Enemy, angle: number, speed: number, radius: number) {
     const bullet = this.bullets.acquire(); if (!bullet) return;
-    Object.assign(bullet, { friendly: false, x: enemy.x - enemy.radius * 0.65, y: enemy.y, vx: Math.cos(angle) * speed * ENEMY_BULLET_SPEED_SCALE, vy: Math.sin(angle) * speed * ENEMY_BULLET_SPEED_SCALE, radius, damage: 1, life: 5, pierce: 0, color: enemy.kind.includes("Boss") ? "#ff5f8f" : "#69a7ff" });
+    const bossSpeedScale = enemy.kind === "miniBoss" || enemy.kind === "mainBoss" ? BOSS_BULLET_SPEED_SCALE : 1;
+    Object.assign(bullet, { friendly: false, x: enemy.x - enemy.radius * 0.65, y: enemy.y, vx: Math.cos(angle) * speed * ENEMY_BULLET_SPEED_SCALE * bossSpeedScale, vy: Math.sin(angle) * speed * ENEMY_BULLET_SPEED_SCALE * bossSpeedScale, radius, damage: 1, life: 5, pierce: 0, color: enemy.kind.includes("Boss") ? "#ff5f8f" : "#69a7ff" });
   }
 
   private defeatEnemy(enemy: Enemy, fromSpecial: boolean) {
@@ -317,12 +332,25 @@ export class SkyPupEngine {
     this.xp -= this.xpTarget; this.level += 1; this.xpTarget = Math.ceil(this.xpTarget * 1.28 + 2);
     this.status = "levelup"; cancelAnimationFrame(this.frame);
     const extraShot = UPGRADES.find((upgrade) => upgrade.kind === "extraShot");
-    const regularUpgrades = UPGRADES.filter((upgrade) => upgrade.kind !== "extraShot").sort(() => Math.random() - 0.5);
-    const canLearnExtraShot = this.level % 5 === 0 && this.player.shotCount < 3 && extraShot;
-    const shuffled = canLearnExtraShot
+    const regularUpgrades = UPGRADES.filter((upgrade) => (
+      upgrade.kind !== "extraShot" && this.upgradeLevels[upgrade.kind] < MAX_UPGRADE_LEVEL
+    )).sort(() => Math.random() - 0.5);
+    const canLearnExtraShot = this.level % 5 === 0
+      && this.player.shotCount < 3
+      && this.upgradeLevels.extraShot < MAX_UPGRADE_LEVEL
+      && extraShot;
+    const choices = canLearnExtraShot
       ? [extraShot, ...regularUpgrades.slice(0, 2)].sort(() => Math.random() - 0.5)
       : regularUpgrades.slice(0, 3);
-    this.emitHud(); this.callbacks.onLevelUp(shuffled);
+    if (!choices.length) {
+      this.status = "running"; this.lastTime = performance.now(); this.emitHud(); this.frame = requestAnimationFrame(this.tick);
+      return;
+    }
+    const leveledChoices = choices.map((upgrade) => ({
+      ...upgrade,
+      title: `${upgrade.title} Lv.${this.upgradeLevels[upgrade.kind] + 1}`
+    }));
+    this.emitHud(); this.callbacks.onLevelUp(leveledChoices);
   }
 
   private damagePlayer() {
