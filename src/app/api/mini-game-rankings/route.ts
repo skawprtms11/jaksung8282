@@ -35,7 +35,7 @@ export async function GET() {
       .order("score", { ascending: false })
       .order("duration_seconds", { ascending: false })
       .order("created_at", { ascending: true })
-      .limit(20);
+      .limit(1000);
 
     if (error) {
       return NextResponse.json({
@@ -44,7 +44,8 @@ export async function GET() {
       });
     }
 
-    const rankings: MiniGameRanking[] = ((data ?? []) as unknown as ScoreQueryRow[]).map((row) => ({
+    const allRows = (data ?? []) as unknown as ScoreQueryRow[];
+    const allRankings: MiniGameRanking[] = allRows.map((row) => ({
       id: row.id,
       userName: row.profiles?.full_name || "사용자",
       departmentName: row.profiles?.departments?.department_name ?? null,
@@ -52,10 +53,15 @@ export async function GET() {
       durationSeconds: row.duration_seconds,
       maxLevel: row.max_level,
       snackCount: row.snack_count,
-      createdAt: row.created_at
+      createdAt: row.created_at,
+      isCurrentUser: row.user_id === profile.id
     }));
+    const currentUserIndex = allRows.findIndex((row) => row.user_id === profile.id);
+    const currentUserRanking = currentUserIndex >= 0
+      ? { rank: currentUserIndex + 1, ...allRankings[currentUserIndex] }
+      : null;
 
-    return NextResponse.json({ rankings, setupMessage: "" });
+    return NextResponse.json({ rankings: allRankings.slice(0, 20), currentUserRanking, setupMessage: "" });
   } catch {
     return NextResponse.json({
       rankings: [],
