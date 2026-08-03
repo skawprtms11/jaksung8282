@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useActionState, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { BarChart3, Building2, CalendarDays, CheckCircle2, ClipboardList, Hammer, Pencil, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
+import { BarChart3, Building2, CalendarDays, CheckCircle2, ClipboardList, Eye, Hammer, Pencil, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
@@ -23,7 +23,7 @@ import {
 } from "@/actions/reports";
 import { ActionMessage } from "@/components/common/ActionMessage";
 import { cn } from "@/lib/utils/cn";
-import { getCurrentWeekOption, type WeekOption } from "@/lib/dates/week";
+import { getCurrentWeekOption, getReportMonthByThursday, getWeekEndDate, getWeekOfMonth, type WeekOption } from "@/lib/dates/week";
 import { WeekSelect } from "./WeekSelect";
 import {
   DEPARTMENT_COMMON_CONTENT_FORMAT,
@@ -177,6 +177,23 @@ function normalizeLoadedContents(firstCategoryId: string, loadedContents: Loaded
 
 function isEditableSubmissionStatus(status: DepartmentSubmissionStatus | null) {
   return status === null || status === "draft" || status === "division_rejected";
+}
+
+function makeWeekOption(weekStartDate?: string): WeekOption {
+  if (!weekStartDate || !/^\d{4}-\d{2}-\d{2}$/.test(weekStartDate)) {
+    return getCurrentWeekOption();
+  }
+  const { year, month } = getReportMonthByThursday(weekStartDate);
+  const weekOfMonth = getWeekOfMonth(weekStartDate);
+  const weekEndDate = getWeekEndDate(weekStartDate);
+  return {
+    year,
+    month,
+    weekOfMonth,
+    weekStartDate,
+    weekEndDate,
+    label: `${year}년 ${month}월 ${weekOfMonth}주차`
+  };
 }
 
 function isDepartmentContentSection(value: DepartmentTabValue): value is SectionValue {
@@ -402,7 +419,10 @@ export function DepartmentSubmissionEditor({
   initialSubmission,
   initialLookupDepartmentId,
   initialLookupWeekStartDate,
-  requireExplicitDepartmentSelection = false
+  requireExplicitDepartmentSelection = false,
+  visibleTabs,
+  canEdit = true,
+  mobileMode = false
 }: {
   departments: Department[];
   categories: Category[];
@@ -423,8 +443,14 @@ export function DepartmentSubmissionEditor({
   initialLookupDepartmentId?: string | null;
   initialLookupWeekStartDate?: string;
   requireExplicitDepartmentSelection?: boolean;
+  visibleTabs?: DepartmentTabValue[];
+  canEdit?: boolean;
+  mobileMode?: boolean;
 }) {
-  const [active, setActive] = useState<DepartmentTabValue>("common");
+  const availableTabs = visibleTabs?.length
+    ? visibleTabs.flatMap((value) => departmentTabs.filter((tab) => tab.value === value))
+    : departmentTabs;
+  const [active, setActive] = useState<DepartmentTabValue>(availableTabs[0]?.value ?? "common");
   const [activeDialog, setActiveDialog] = useState<ActiveDialog>(null);
   const [facilityDialogOpen, setFacilityDialogOpen] = useState(false);
   const [facilityEditingItem, setFacilityEditingItem] = useState<FacilityConstructionItem | null>(null);
@@ -432,7 +458,7 @@ export function DepartmentSubmissionEditor({
   const [holidayWorkEditingItem, setHolidayWorkEditingItem] = useState<HolidayWorkItem | null>(null);
   const [vacancyDialog, setVacancyDialog] = useState<VacancyDialogState>(null);
   const firstCategoryId = categories[0]?.id ?? "";
-  const currentWeek = getCurrentWeekOption();
+  const currentWeek = makeWeekOption(initialLookupWeekStartDate);
   const departmentId = defaultDepartmentId ?? (requireExplicitDepartmentSelection ? "" : departments[0]?.id ?? "");
   const [selectedWeekOption, setSelectedWeekOption] = useState<WeekOption>(currentWeek);
   const [weekStartDate, setWeekStartDate] = useState(currentWeek.weekStartDate);
@@ -505,8 +531,9 @@ export function DepartmentSubmissionEditor({
   const activeSectionLabel = departmentTabs.find((section) => section.value === active)?.label ?? "공통사항";
   const effectiveStatus = loadedStatus;
   const effectiveSubmissionId = submissionId;
-  const canEditSubmission = isEditableSubmissionStatus(effectiveStatus);
+  const canEditSubmission = canEdit && isEditableSubmissionStatus(effectiveStatus);
   const isSubmittedToDivision = effectiveStatus === "submitted_to_division";
+  const isDivisionApproved = effectiveStatus === "division_approved";
   const isCancelWindowExpired = isSubmittedToDivision && isPastConfirmationCancelWindow(loadedFinalizedAt);
   const isSubmissionBusy = isLoadingSubmission || isSavingSubmission || isCancellingSubmission;
   const showOverviewAndReview = active === "common";
@@ -550,7 +577,7 @@ export function DepartmentSubmissionEditor({
           });
       });
     },
-    [departmentId, selectedWeekOption.month, selectedWeekOption.year]
+    [departmentId, selectedWeekOption.month, selectedWeekOption.year, setVacancyRecords, setVacancyState, setVacancyTrend, startVacancyTransition]
   );
 
   useEffect(() => {
@@ -690,9 +717,9 @@ export function DepartmentSubmissionEditor({
 
       <div className="rounded-[1.4rem] border border-[#d9e7f7] bg-white/82 p-2 shadow-[0_14px_34px_rgba(16,34,61,0.06)]">
         <div className="space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <nav className={REPORT_TAB_NAV_CLASS_NAME} role="tablist" aria-label="부서자료 화면 탭">
-              {departmentTabs.map((section) => {
+          <div className={cn(mobileMode ? "space-y-2" : "flex flex-wrap items-center justify-between gap-2")}>
+            <nav className={mobileMode ? "grid w-full grid-cols-3 gap-1 rounded-xl bg-[#f5f9ff] p-1" : REPORT_TAB_NAV_CLASS_NAME} role="tablist" aria-label="부서자료 화면 탭">
+              {availableTabs.map((section) => {
                 const Icon = section.icon;
                 const isSelected = active === section.value;
                 return (
@@ -703,12 +730,12 @@ export function DepartmentSubmissionEditor({
                     aria-selected={isSelected}
                     onClick={() => setActive(section.value)}
                     className={cn(
-                      REPORT_TAB_ITEM_CLASS_NAME,
+                      mobileMode ? "relative flex h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 font-black" : REPORT_TAB_ITEM_CLASS_NAME,
                       isSelected ? REPORT_TAB_ACTIVE_CLASS_NAME : REPORT_TAB_IDLE_CLASS_NAME
                     )}
                   >
-                    <Icon className={REPORT_TAB_ICON_CLASS_NAME} aria-hidden="true" />
-                    <span className="text-[13px] font-bold leading-none">{section.label}</span>
+                    <Icon className={mobileMode ? "h-4 w-4" : REPORT_TAB_ICON_CLASS_NAME} aria-hidden="true" />
+                    <span className={mobileMode ? "break-keep text-[11px] font-black leading-none" : "text-[13px] font-bold leading-none"}>{section.label}</span>
                     {isSelected ? (
                       <span className={REPORT_TAB_INDICATOR_CLASS_NAME} aria-hidden="true" />
                     ) : null}
@@ -716,22 +743,32 @@ export function DepartmentSubmissionEditor({
                 );
               })}
             </nav>
-            <div className="shrink-0">
-              <div className="rounded-full border border-[#dbe8fb] bg-white/90 px-2 py-1.5 shadow-[0_10px_22px_rgba(16,34,61,0.05)]">
+            <div className={mobileMode ? "w-full" : "shrink-0"}>
+              <div className={cn("border border-[#dbe8fb] bg-white/90 px-2 py-1.5 shadow-[0_10px_22px_rgba(16,34,61,0.05)]", mobileMode ? "flex items-end gap-2 rounded-md" : "rounded-full")}>
                 <WeekSelect
+                  defaultWeekStartDate={weekStartDate}
                   compactWeekLabel
                   onSelectionChange={handleWeekSelectionChange}
-                  className="flex flex-wrap items-center gap-1.5"
-                  labelClassName="flex items-center gap-1 text-[11px] font-black text-slate-500"
-                  weekLabelClassName="flex items-center gap-1 text-[11px] font-black text-slate-500"
-                  controlClassName="h-8 w-[78px] rounded-full border border-[#d7e4f6] bg-[#f5f9ff] px-2 text-sm font-black text-[#10223d] outline-none"
+                  className={mobileMode ? "grid min-w-0 flex-1 grid-cols-3 gap-1.5" : "flex flex-wrap items-center gap-1.5"}
+                  labelClassName={mobileMode ? "min-w-0 text-sm font-black text-slate-500" : "flex items-center gap-1 text-[11px] font-black text-slate-500"}
+                  weekLabelClassName={mobileMode ? "min-w-0 text-sm font-black text-slate-500" : "flex items-center gap-1 text-[11px] font-black text-slate-500"}
+                  controlClassName={mobileMode ? "mt-1 h-10 min-w-0 w-full rounded-md border border-[#d7e4f6] bg-[#f5f9ff] px-1 !text-sm !font-black text-[#10223d] outline-none" : "h-8 w-[78px] rounded-full border border-[#d7e4f6] bg-[#f5f9ff] px-2 text-sm font-black text-[#10223d] outline-none"}
                 />
+                {mobileMode ? (
+                  isSubmittedToDivision ? (
+                    <button type="submit" formAction={cancelAction} disabled={!canSubmit || isSubmissionBusy || isCancelWindowExpired} className="tool-button h-10 shrink-0 px-2 text-[11px] text-[#075be8] disabled:opacity-50" title={isCancelWindowExpired ? "확정 후 3일이 지난 부서자료는 확정취소할 수 없습니다." : undefined}><RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />{isCancellingSubmission ? "취소 중" : "확정취소"}</button>
+                  ) : isDivisionApproved ? (
+                    <span className="inline-flex h-10 shrink-0 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 text-[11px] font-black text-emerald-700"><CheckCircle2 className="h-4 w-4" aria-hidden="true" />승인완료</span>
+                  ) : (
+                    <button type="submit" name="status" value="submitted_to_division" disabled={!canSubmit || !canEditSubmission || isSubmissionBusy} className="tool-button tool-button-primary h-10 shrink-0 px-3 text-xs disabled:opacity-50" title={!canSubmit ? "부서 최종 제출은 부서장과 관리자만 가능합니다." : undefined}><CheckCircle2 className="h-4 w-4" aria-hidden="true" />{isSavingSubmission ? "확정 중" : "확정"}</button>
+                  )
+                ) : null}
               </div>
             </div>
           </div>
           <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
             {active === "common" && commonSearchSlot ? commonSearchSlot : <span className="flex-1" />}
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 lg:pt-4">
+            <div className={cn("shrink-0 flex-wrap items-center justify-end gap-2 lg:pt-4", mobileMode ? "hidden" : "flex")}>
               <button
                 type="submit"
                 name="status"
@@ -831,6 +868,7 @@ export function DepartmentSubmissionEditor({
           <FacilityConstructionTable
             items={facilityItems}
             disabled={!canEditSubmission || isSubmissionBusy}
+            mobileMode={mobileMode}
             onItemsChange={updateFacilityItems}
             onEditItem={(item) => {
               setFacilityEditingItem(item);
@@ -841,6 +879,7 @@ export function DepartmentSubmissionEditor({
           <HolidayWorkTable
             items={holidayWorkItems}
             disabled={!canEditSubmission || isSubmissionBusy}
+            mobileMode={mobileMode}
             onItemsChange={updateHolidayWorkItems}
             onCreateItem={() => {
               setHolidayWorkEditingItem(null);
@@ -1562,17 +1601,20 @@ function NumberField({ label, value, onChange }: { label: string; value: string;
 function FacilityConstructionTable({
   items,
   disabled,
+  mobileMode,
   onItemsChange,
   onEditItem
 }: {
   items: FacilityConstructionItem[];
   disabled?: boolean;
+  mobileMode?: boolean;
   onItemsChange: (items: FacilityConstructionItem[]) => void;
   onEditItem: (item: FacilityConstructionItem) => void;
 }) {
   const [searchKeyword, setSearchKeyword] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<FacilityConstructionStatus[]>(["planned", "in_progress", "completed"]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [detailItem, setDetailItem] = useState<FacilityConstructionItem | null>(null);
   const [message, setMessage] = useState("");
   const allStatusesSelected = selectedStatuses.length === facilityStatusOptions.length;
   const normalizedKeyword = searchKeyword.trim().toLowerCase();
@@ -1631,6 +1673,7 @@ function FacilityConstructionTable({
   };
 
   return (
+    <>
     <div className="rounded-2xl border border-[#d9e7f7] bg-white/88 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e5eef9] px-3 py-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -1655,8 +1698,8 @@ function FacilityConstructionTable({
             </label>
           ))}
         </div>
-        <div className="flex flex-wrap items-end justify-end gap-2">
-          <label className="min-w-[260px] text-xs font-black text-slate-500">
+        <div className={cn("flex flex-wrap items-end justify-end gap-2", mobileMode && "w-full")}>
+          <label className={cn("text-xs font-black text-slate-500", mobileMode ? "w-full" : "min-w-[260px]")}>
             검색
             <input
               value={searchKeyword}
@@ -1665,14 +1708,14 @@ function FacilityConstructionTable({
               placeholder="공사명, 공사내용, 진행업체"
             />
           </label>
-          <button type="button" onClick={editSelectedItem} disabled={disabled} className="tool-button min-h-10 py-2 disabled:opacity-50">
+          {!mobileMode ? <button type="button" onClick={editSelectedItem} disabled={disabled} className="tool-button min-h-10 py-2 disabled:opacity-50">
             <Pencil className="h-4 w-4" aria-hidden="true" />
             수정
-          </button>
-          <button type="button" onClick={deleteSelectedItems} disabled={disabled} className="tool-button min-h-10 py-2 text-rose-600 disabled:opacity-50">
+          </button> : null}
+          {!mobileMode ? <button type="button" onClick={deleteSelectedItems} disabled={disabled} className="tool-button min-h-10 py-2 text-rose-600 disabled:opacity-50">
             <Trash2 className="h-4 w-4" aria-hidden="true" />
             삭제
-          </button>
+          </button> : null}
         </div>
       </div>
       {message ? (
@@ -1681,6 +1724,42 @@ function FacilityConstructionTable({
         </p>
       ) : null}
       <div className="overflow-x-hidden">
+        {mobileMode ? (
+          <table className="w-full table-fixed text-left text-[11px]">
+            <colgroup>
+              <col className="w-[22%]" />
+              <col className="w-[36%]" />
+              <col className="w-[24%]" />
+              <col className="w-[18%]" />
+            </colgroup>
+            <thead className="bg-[#f1f6fd] text-[#10223d]">
+              <tr>
+                <th className="px-2 py-2.5">시작일</th>
+                <th className="px-2 py-2.5">공사내용</th>
+                <th className="px-2 py-2.5">진행업체</th>
+                <th className="px-1 py-2.5 text-center">상세</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.length === 0 ? (
+                <tr><td colSpan={4} className="px-3 py-10 text-center text-xs font-bold text-slate-400">등록된 시설공사 내역이 없습니다.</td></tr>
+              ) : filteredItems.length === 0 ? (
+                <tr><td colSpan={4} className="px-3 py-10 text-center text-xs font-bold text-slate-400">선택한 조건의 시설공사 내역이 없습니다.</td></tr>
+              ) : filteredItems.map((item) => (
+                <tr key={item.id} className="border-t border-slate-100 align-middle">
+                  <td className="break-words px-2 py-3 font-bold">{item.start_date || "-"}</td>
+                  <td className="px-2 py-3"><p className="max-h-10 overflow-hidden break-words leading-5 text-slate-600">{item.construction_content || "-"}</p></td>
+                  <td className="break-words px-2 py-3 font-bold">{item.contractor || "-"}</td>
+                  <td className="px-1 py-3 text-center">
+                    <button type="button" onClick={() => setDetailItem(item)} className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-[#bfd4f5] bg-white px-2 text-[10px] font-black text-[#075be8]">
+                      <Eye className="h-3.5 w-3.5" aria-hidden="true" />상세
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
         <table className="table-sticky w-full table-fixed text-left text-xs">
           <colgroup>
             <col className="w-[4%]" />
@@ -1768,8 +1847,70 @@ function FacilityConstructionTable({
             )}
           </tbody>
         </table>
+        )}
       </div>
     </div>
+    {detailItem ? (
+      <FacilityConstructionDetailDialog
+        item={detailItem}
+        canEdit={!disabled}
+        onClose={() => setDetailItem(null)}
+        onEdit={() => {
+          setDetailItem(null);
+          onEditItem(detailItem);
+        }}
+      />
+    ) : null}
+    </>
+  );
+}
+
+function FacilityConstructionDetailDialog({
+  item,
+  canEdit,
+  onClose,
+  onEdit
+}: {
+  item: FacilityConstructionItem;
+  canEdit: boolean;
+  onClose: () => void;
+  onEdit: () => void;
+}) {
+  const statusLabel = facilityStatusOptions.find((option) => option.value === item.status)?.label ?? "예정";
+  const details = [
+    ["시작일", item.start_date || "-"],
+    ["완료일", item.completion_date || "-"],
+    ["공사명", item.construction_name || "-"],
+    ["공사내용", item.construction_content || "-"],
+    ["진행업체", item.contractor || "-"],
+    ["공사금액", item.construction_amount || "-"],
+    ["상태", statusLabel],
+    ["비고", item.note || "-"]
+  ];
+
+  return (
+    <ModalPortal>
+      <div className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/72 p-3 backdrop-blur-md sm:items-center" role="dialog" aria-modal="true" aria-labelledby="facility-detail-title">
+        <div className="max-h-[88vh] w-full max-w-lg overflow-hidden rounded-xl border border-white/80 bg-white shadow-[0_28px_80px_rgba(16,34,61,0.24)]">
+          <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
+            <div className="min-w-0"><h2 id="facility-detail-title" className="text-base font-black text-slate-900">시설공사 상세</h2><p className="mt-0.5 truncate text-xs font-bold text-slate-500">{item.construction_name || "시설공사"}</p></div>
+            <button type="button" onClick={onClose} className="icon-tool-button shrink-0" aria-label="상세 팝업 닫기"><X className="h-4 w-4" aria-hidden="true" /></button>
+          </div>
+          <dl className="max-h-[66vh] divide-y divide-slate-100 overflow-y-auto px-4">
+            {details.map(([label, value]) => (
+              <div key={label} className="grid grid-cols-[76px_minmax(0,1fr)] gap-3 py-3">
+                <dt className="text-xs font-black text-slate-500">{label}</dt>
+                <dd className="whitespace-pre-wrap break-words text-sm font-bold leading-5 text-[#10223d]">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="flex justify-end gap-2 border-t border-slate-200 px-4 py-3">
+            <button type="button" onClick={onClose} className="tool-button">닫기</button>
+            {canEdit ? <button type="button" onClick={onEdit} className="tool-button tool-button-primary"><Pencil className="h-4 w-4" aria-hidden="true" />수정</button> : null}
+          </div>
+        </div>
+      </div>
+    </ModalPortal>
   );
 }
 
@@ -1923,17 +2064,20 @@ function FacilityConstructionDialog({
 function HolidayWorkTable({
   items,
   disabled,
+  mobileMode,
   onItemsChange,
   onCreateItem,
   onEditItem
 }: {
   items: HolidayWorkItem[];
   disabled?: boolean;
+  mobileMode?: boolean;
   onItemsChange: (items: HolidayWorkItem[]) => void;
   onCreateItem: () => void;
   onEditItem: (item: HolidayWorkItem) => void;
 }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [detailItem, setDetailItem] = useState<HolidayWorkItem | null>(null);
   const [message, setMessage] = useState("");
   const allSelected = items.length > 0 && selectedIds.length === items.length;
   const toggleRow = (itemId: string) => {
@@ -1967,20 +2111,21 @@ function HolidayWorkTable({
   };
 
   return (
+    <>
     <div className="rounded-2xl border border-[#d9e7f7] bg-white/88 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
       <div className="flex flex-wrap items-center justify-end gap-2 border-b border-[#e5eef9] px-3 py-3">
         <button type="button" onClick={onCreateItem} disabled={disabled} className="tool-button tool-button-primary min-h-10 py-2 disabled:opacity-50">
           <Plus className="h-4 w-4" aria-hidden="true" />
           등록
         </button>
-        <button type="button" onClick={editSelectedItem} disabled={disabled} className="tool-button min-h-10 py-2 disabled:opacity-50">
+        {!mobileMode ? <button type="button" onClick={editSelectedItem} disabled={disabled} className="tool-button min-h-10 py-2 disabled:opacity-50">
           <Pencil className="h-4 w-4" aria-hidden="true" />
           수정
-        </button>
-        <button type="button" onClick={deleteSelectedItems} disabled={disabled} className="tool-button min-h-10 py-2 text-rose-600 disabled:opacity-50">
+        </button> : null}
+        {!mobileMode ? <button type="button" onClick={deleteSelectedItems} disabled={disabled} className="tool-button min-h-10 py-2 text-rose-600 disabled:opacity-50">
           <Trash2 className="h-4 w-4" aria-hidden="true" />
           삭제
-        </button>
+        </button> : null}
       </div>
       {message ? (
         <p className="mx-3 mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">
@@ -1988,6 +2133,43 @@ function HolidayWorkTable({
         </p>
       ) : null}
       <div className="overflow-x-hidden">
+        {mobileMode ? (
+          <table className="w-full table-fixed text-left text-[10px]">
+            <colgroup>
+              <col className="w-[20%]" />
+              <col className="w-[20%]" />
+              <col className="w-[24%]" />
+              <col className="w-[18%]" />
+              <col className="w-[18%]" />
+            </colgroup>
+            <thead className="bg-[#f1f6fd] text-[#10223d]">
+              <tr>
+                <th className="px-1.5 py-2.5">일자</th>
+                <th className="px-1.5 py-2.5">화주</th>
+                <th className="px-1.5 py-2.5">근무자</th>
+                <th className="px-1 py-2.5 text-center">도급인원</th>
+                <th className="px-1 py-2.5 text-center">상세</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.length === 0 ? (
+                <tr><td colSpan={5} className="px-3 py-10 text-center text-xs font-bold text-slate-400">등록된 공휴일근무 내역이 없습니다.</td></tr>
+              ) : items.map((item) => (
+                <tr key={item.id} className="border-t border-slate-100 align-middle">
+                  <td className="whitespace-nowrap px-1.5 py-3 font-bold">{item.work_date ? item.work_date.slice(2).replaceAll("-", ".") : "-"}</td>
+                  <td className="break-words px-1.5 py-3 font-black text-[#10223d]">{item.client_name || "-"}</td>
+                  <td className="break-words px-1.5 py-3 font-bold leading-4">{item.worker_names.length ? item.worker_names.join(", ") : "-"}</td>
+                  <td className="px-1 py-3 text-center font-black">{item.contract_worker_count || "0"}</td>
+                  <td className="px-1 py-3 text-center">
+                    <button type="button" onClick={() => setDetailItem(item)} className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-[#bfd4f5] bg-white px-1.5 text-[10px] font-black text-[#075be8]">
+                      <Eye className="h-3.5 w-3.5" aria-hidden="true" />상세
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
         <table className="table-sticky w-full table-fixed text-left text-xs">
           <colgroup>
             <col className="w-[4%]" />
@@ -2073,8 +2255,68 @@ function HolidayWorkTable({
             )}
           </tbody>
         </table>
+        )}
       </div>
     </div>
+    {detailItem ? (
+      <HolidayWorkDetailDialog
+        item={detailItem}
+        canEdit={!disabled}
+        onClose={() => setDetailItem(null)}
+        onEdit={() => {
+          setDetailItem(null);
+          onEditItem(detailItem);
+        }}
+      />
+    ) : null}
+    </>
+  );
+}
+
+function HolidayWorkDetailDialog({
+  item,
+  canEdit,
+  onClose,
+  onEdit
+}: {
+  item: HolidayWorkItem;
+  canEdit: boolean;
+  onClose: () => void;
+  onEdit: () => void;
+}) {
+  const details = [
+    ["일자", item.work_date || "-"],
+    ["화주", item.client_name || "-"],
+    ["근무자", item.worker_names.length ? item.worker_names.join(", ") : "-"],
+    ["도급인원", item.contract_worker_count || "0"],
+    ["근무사유", item.work_reason || "-"],
+    ["청구여부", item.is_billed ? "청구" : "미청구"],
+    ["비고", item.note || "-"]
+  ];
+
+  return (
+    <ModalPortal>
+      <div className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/72 p-3 backdrop-blur-md sm:items-center" role="dialog" aria-modal="true" aria-labelledby="holiday-work-detail-title">
+        <div className="max-h-[88vh] w-full max-w-lg overflow-hidden rounded-xl border border-white/80 bg-white shadow-[0_28px_80px_rgba(16,34,61,0.24)]">
+          <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
+            <div className="min-w-0"><h2 id="holiday-work-detail-title" className="text-base font-black text-slate-900">공휴일근무 상세</h2><p className="mt-0.5 truncate text-xs font-bold text-slate-500">{item.work_date || "일자 미등록"} · {item.client_name || "화주 미등록"}</p></div>
+            <button type="button" onClick={onClose} className="icon-tool-button shrink-0" aria-label="상세 팝업 닫기"><X className="h-4 w-4" aria-hidden="true" /></button>
+          </div>
+          <dl className="max-h-[66vh] divide-y divide-slate-100 overflow-y-auto px-4">
+            {details.map(([label, value]) => (
+              <div key={label} className="grid grid-cols-[76px_minmax(0,1fr)] gap-3 py-3">
+                <dt className="text-xs font-black text-slate-500">{label}</dt>
+                <dd className="whitespace-pre-wrap break-words text-sm font-bold leading-5 text-[#10223d]">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="flex justify-end gap-2 border-t border-slate-200 px-4 py-3">
+            <button type="button" onClick={onClose} className="tool-button">닫기</button>
+            {canEdit ? <button type="button" onClick={onEdit} className="tool-button tool-button-primary"><Pencil className="h-4 w-4" aria-hidden="true" />수정</button> : null}
+          </div>
+        </div>
+      </div>
+    </ModalPortal>
   );
 }
 

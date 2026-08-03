@@ -138,12 +138,14 @@ export function MeetingMaterialsTable({
   reports,
   currentUserId,
   canManageAllRequests,
-  emptyTitle = "선택한 주차의 회의자료가 없습니다."
+  emptyTitle = "선택한 주차의 회의자료가 없습니다.",
+  onDataChanged
 }: {
   reports: MeetingMaterialsReport[];
   currentUserId: string;
   canManageAllRequests: boolean;
   emptyTitle?: string;
+  onDataChanged?: () => void;
 }) {
   const [reportRows, setReportRows] = useState(reports);
   const [selected, setSelected] = useState<MeetingItemDetailSelection | null>(null);
@@ -179,6 +181,7 @@ export function MeetingMaterialsTable({
         }
       };
     });
+    onDataChanged?.();
   }
 
   function handleRequestDeleted(requestId: string) {
@@ -194,6 +197,7 @@ export function MeetingMaterialsTable({
           }
         : current
     );
+    onDataChanged?.();
   }
 
   return (

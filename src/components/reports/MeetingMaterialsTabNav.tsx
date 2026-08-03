@@ -13,7 +13,7 @@ import {
   REPORT_TAB_NAV_CLASS_NAME
 } from "@/components/reports/report-tab-styles";
 
-type MeetingTabValue = "collection" | "materials" | "volumes" | "holiday" | "facility";
+export type MeetingTabValue = "collection" | "materials" | "volumes" | "holiday" | "facility";
 
 type MeetingTabItem = {
   value: MeetingTabValue;
@@ -46,9 +46,9 @@ function prewarmMeetingTabModules() {
   ]);
 }
 
-function MeetingTabIcon({ icon: Icon }: { icon: typeof ClipboardCheck }) {
+function MeetingTabIcon({ icon: Icon, pending: pendingOverride }: { icon: typeof ClipboardCheck; pending?: boolean }) {
   const { pending } = useLinkStatus();
-  return pending ? (
+  return pendingOverride || pending ? (
     <LoaderCircle className={cn(REPORT_TAB_ICON_CLASS_NAME, "animate-spin")} aria-hidden="true" />
   ) : (
     <Icon className={REPORT_TAB_ICON_CLASS_NAME} aria-hidden="true" />
@@ -57,10 +57,16 @@ function MeetingTabIcon({ icon: Icon }: { icon: typeof ClipboardCheck }) {
 
 export function MeetingMaterialsTabNav({
   tabs,
-  activeTab
+  activeTab,
+  pendingTab,
+  onTabSelect,
+  onTabIntent
 }: {
   tabs: MeetingTabItem[];
   activeTab: MeetingTabValue;
+  pendingTab?: MeetingTabValue | null;
+  onTabSelect?: (tab: MeetingTabValue, href: string) => void;
+  onTabIntent?: (tab: MeetingTabValue, href: string) => void;
 }) {
   useEffect(() => {
     const startPrefetch = () => {
@@ -89,10 +95,21 @@ export function MeetingMaterialsTabNav({
           <Link
             key={tab.value}
             href={tab.href}
-            prefetch
+            prefetch={!onTabSelect}
             scroll={false}
-            onFocus={prewarmMeetingTabModules}
-            onMouseEnter={prewarmMeetingTabModules}
+            onClick={(event) => {
+              if (!onTabSelect || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              event.preventDefault();
+              onTabSelect(tab.value, tab.href);
+            }}
+            onFocus={() => {
+              prewarmMeetingTabModules();
+              onTabIntent?.(tab.value, tab.href);
+            }}
+            onMouseEnter={() => {
+              prewarmMeetingTabModules();
+              onTabIntent?.(tab.value, tab.href);
+            }}
             onTouchStart={prewarmMeetingTabModules}
             className={cn(
               REPORT_TAB_ITEM_CLASS_NAME,
@@ -100,7 +117,7 @@ export function MeetingMaterialsTabNav({
             )}
             aria-current={isSelected ? "page" : undefined}
           >
-            <MeetingTabIcon icon={Icon} />
+            <MeetingTabIcon icon={Icon} pending={pendingTab === tab.value} />
             {tab.label}
             {isSelected ? (
               <span className={REPORT_TAB_INDICATOR_CLASS_NAME} aria-hidden="true" />

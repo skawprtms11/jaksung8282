@@ -7,6 +7,7 @@ import {
   ArrowUp,
   Boxes,
   ClipboardList,
+  Pencil,
   Plus,
   Save,
   Trash2,
@@ -15,6 +16,7 @@ import {
 import { saveClientReportAction, type SavedClientReportRow } from "@/actions/reports";
 import { ActionMessage } from "@/components/common/ActionMessage";
 import { getCurrentWeekOption, getReportMonthByThursday, getWeekEndDate, getWeekOfMonth } from "@/lib/dates/week";
+import { cn } from "@/lib/utils/cn";
 import type { ClientReportStatus, Importance, ItemPeriod, VolumeType, VolumeUnit } from "@/types/enums";
 
 type Department = { id: string; department_name: string };
@@ -60,6 +62,13 @@ const importanceOptions: { value: Importance; label: string }[] = [
   { value: "low", label: "낮음" }
 ];
 
+function importanceIconClassName(importance: Importance) {
+  if (importance === "very_high") return "border-red-100 bg-red-50 text-red-600";
+  if (importance === "high") return "border-orange-100 bg-orange-50 text-orange-500";
+  if (importance === "medium") return "border-emerald-100 bg-emerald-50 text-emerald-600";
+  return "border-slate-200 bg-slate-50 text-slate-500";
+}
+
 const volumeTypeOptions: { value: VolumeType; label: string }[] = [
   { value: "inbound", label: "입고" },
   { value: "outbound", label: "출고" },
@@ -98,6 +107,7 @@ export function ClientReportEditor({
   autoSaveExistingReport,
   currentReportStatus,
   initialDialog,
+  mobileMode = false,
   onSaved,
   onEditDialogClosed
 }: {
@@ -111,6 +121,7 @@ export function ClientReportEditor({
   autoSaveExistingReport?: boolean;
   currentReportStatus?: ClientReportStatus | null;
   initialDialog?: ActiveDialog;
+  mobileMode?: boolean;
   onSaved?: (report?: SavedClientReportRow) => void;
   onEditDialogClosed?: () => void;
 }) {
@@ -239,7 +250,7 @@ export function ClientReportEditor({
     <form
       id="client-report-editor-form"
       action={action}
-      className="sketch-panel space-y-3 rounded-md p-3"
+      className={mobileMode ? "space-y-2" : "sketch-panel space-y-3 rounded-md p-3"}
     >
       <input type="hidden" name="items" value={serializedItems} />
       <input type="hidden" name="volumes" value={serializedVolumes} />
@@ -256,7 +267,7 @@ export function ClientReportEditor({
       </button>
 
       <section className="space-y-3">
-        <div className="grid gap-3 lg:grid-cols-3">
+        {!mobileMode ? <div className="grid gap-3 lg:grid-cols-3">
           <EditorLaunchCard
             title="금주 실시사항"
             count={currentItems.length}
@@ -282,6 +293,20 @@ export function ClientReportEditor({
             onOpen={openVolumeDialog}
           />
         </div>
+        : null}
+        {mobileMode ? (
+          <MobileReportPreview
+            clientName={selectedClient?.client_name ?? "화주 미선택"}
+            currentItems={currentItems}
+            nextItems={nextItems}
+            volumes={volumes}
+            categories={categories}
+            disabled={isConfirmedReport}
+            onOpenCurrent={() => openItemDialog("current")}
+            onOpenNext={() => openItemDialog("next")}
+            onOpenVolumes={openVolumeDialog}
+          />
+        ) : null}
       </section>
 
       <ActionMessage state={selectionMessage ?? state} />
@@ -321,12 +346,71 @@ export function ClientReportEditor({
   );
 }
 
+function MobileReportPreview({
+  clientName,
+  currentItems,
+  nextItems,
+  volumes,
+  categories,
+  disabled,
+  onOpenCurrent,
+  onOpenNext,
+  onOpenVolumes
+}: {
+  clientName: string;
+  currentItems: ItemDraft[];
+  nextItems: ItemDraft[];
+  volumes: VolumeDraft[];
+  categories: Category[];
+  disabled: boolean;
+  onOpenCurrent: () => void;
+  onOpenNext: () => void;
+  onOpenVolumes: () => void;
+}) {
+  return (
+    <section className="overflow-hidden rounded-md border border-[#cddbee] bg-white shadow-[0_8px_20px_rgba(16,34,61,0.04)]">
+      <div className="flex min-h-12 items-center border-b border-[#cddbee] bg-white px-3 py-2.5">
+        <div className="min-w-0">
+          <p className="text-[10px] font-black text-slate-500">화주</p>
+          <h2 className="truncate text-base font-black text-[#10223d]">{clientName}</h2>
+        </div>
+      </div>
+      <MobileItemPreviewSection title="금주 실시사항" items={currentItems} categories={categories} disabled={disabled} onEdit={onOpenCurrent} />
+      <MobileItemPreviewSection title="차주 예정사항" items={nextItems} categories={categories} disabled={disabled} onEdit={onOpenNext} withTopBorder />
+      <section className="border-t border-[#cddbee] bg-white">
+        <div className="flex min-h-11 items-center gap-2 border-b border-[#e5eef9] bg-[#f5f9ff] px-3 py-2"><Boxes className="h-4 w-4 text-[#075be8]" aria-hidden="true" /><h2 className="text-sm font-black text-[#10223d]">물동량</h2><span className="text-[10px] font-black text-slate-500">{volumes.length}건</span><button type="button" onClick={onOpenVolumes} disabled={disabled} className="icon-tool-button ml-auto h-8 w-8 text-[#075be8] disabled:opacity-45" aria-label="물동량 작성" title={disabled ? "확정된 자료입니다." : "물동량 작성"}><Pencil className="h-4 w-4" aria-hidden="true" /></button></div>
+        {volumes.length ? <div className="divide-y divide-slate-100">{volumes.map((volume, index) => (
+          <div key={`${volume.volume_type}-${index}`} className="flex items-start justify-between gap-3 px-3 py-2.5">
+            <div className="min-w-0"><p className="text-xs font-black text-[#10223d]">{volumeTypeOptions.find((option) => option.value === volume.volume_type)?.label ?? "기타"}</p>{volume.note ? <p className="mt-0.5 break-words text-[11px] leading-4 text-slate-500">{volume.note}</p> : null}</div>
+            <p className="shrink-0 text-xs font-black text-[#075be8]">{Number(volume.quantity || 0).toLocaleString("ko-KR")} {volume.custom_unit || volume.unit}</p>
+          </div>
+        ))}</div> : <p className="px-3 py-5 text-center text-[11px] font-bold text-slate-400">등록된 물동량이 없습니다.</p>}
+      </section>
+    </section>
+  );
+}
+
+function MobileItemPreviewSection({ title, items, categories, disabled, onEdit, withTopBorder = false }: { title: string; items: ItemDraft[]; categories: Category[]; disabled: boolean; onEdit: () => void; withTopBorder?: boolean }) {
+  return (
+    <section className={cn("bg-white", withTopBorder && "border-t border-[#cddbee]")}>
+      <div className="flex min-h-11 items-center gap-2 border-b border-[#e5eef9] bg-[#f5f9ff] px-3 py-2"><ClipboardList className="h-4 w-4 text-[#075be8]" aria-hidden="true" /><h2 className="text-sm font-black text-[#10223d]">{title}</h2><span className="text-[10px] font-black text-slate-500">{items.length}건</span><button type="button" onClick={onEdit} disabled={disabled} className="icon-tool-button ml-auto h-8 w-8 text-[#075be8] disabled:opacity-45" aria-label={`${title} 작성`} title={disabled ? "확정된 자료입니다." : `${title} 작성`}><Pencil className="h-4 w-4" aria-hidden="true" /></button></div>
+      {items.length ? <div className="divide-y divide-slate-100">{items.map((item, index) => (
+        <article key={`${item.title}-${index}`} className="flex gap-2 px-3 py-2.5">
+          <span className={cn("mt-0.5 inline-flex h-7 min-w-11 shrink-0 items-center justify-center rounded-xl border px-2 text-[10px] font-black", importanceIconClassName(item.importance))} title={`중요도 ${importanceOptions.find((option) => option.value === item.importance)?.label ?? "낮음"}`}>{categories.find((category) => category.id === item.work_category_id)?.category_name ?? "기타"}</span>
+          <div className="min-w-0"><h3 className="break-words text-xs font-black text-[#10223d]">{item.title || "제목 없음"}</h3><p className="mt-1 whitespace-pre-wrap break-words text-[11px] leading-5 text-slate-600">{item.content || "내용 없음"}</p></div>
+        </article>
+      ))}</div> : <p className="px-3 py-5 text-center text-[11px] font-bold text-slate-400">등록된 내용이 없습니다.</p>}
+    </section>
+  );
+}
+
 function EditorLaunchCard({
   title,
   count,
   icon,
   buttonLabel,
   disabled,
+  mobileMode,
   onOpen
 }: {
   title: string;
@@ -334,9 +418,30 @@ function EditorLaunchCard({
   icon: "current" | "next" | "volumes";
   buttonLabel: string;
   disabled?: boolean;
+  mobileMode?: boolean;
   onOpen: () => void;
 }) {
   const Icon = icon === "volumes" ? Boxes : ClipboardList;
+
+  if (mobileMode) {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        disabled={disabled}
+        title={disabled ? "확정된 자료는 확정취소 후 수정할 수 있습니다." : undefined}
+        className="flex h-[92px] min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 text-center text-[#10223d] transition-colors hover:bg-[#f5f9ff] disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <Icon className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
+        <span className="max-w-full break-keep text-[11px] font-black leading-4">{title}</span>
+        <span className="text-[10px] font-black text-slate-500">{count}건</span>
+        <span className="mt-0.5 inline-flex h-6 items-center justify-center gap-1 rounded-md border border-[#bfd4f5] bg-[#f5f9ff] px-2 text-[10px] font-black text-[#075be8]">
+          {disabled ? <Save className="h-3 w-3" aria-hidden="true" /> : <Plus className="h-3 w-3" aria-hidden="true" />}
+          {disabled ? "확정완료" : "작성"}
+        </span>
+      </button>
+    );
+  }
 
   return (
     <article className="metric-card p-3">

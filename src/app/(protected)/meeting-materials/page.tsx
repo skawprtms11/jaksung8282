@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import dynamic from "next/dynamic";
 import type { VolumeChartRow } from "@/components/charts/VolumeComparisonChart";
 import { TableShell } from "@/components/common/TableShell";
-import { MeetingMaterialsTabNav } from "@/components/reports/MeetingMaterialsTabNav";
+import { MeetingMaterialsWorkspace } from "@/components/reports/MeetingMaterialsWorkspace";
 import type {
   MeetingDepartmentVolumeRow,
   MeetingDepartmentVolumeValue
@@ -31,7 +31,7 @@ import {
   type ClientReportSearchFilters
 } from "@/lib/reports/client-report-search";
 import { cn } from "@/lib/utils/cn";
-import { formatDateTime } from "@/lib/utils/labels";
+import { formatCompactDate } from "@/lib/utils/labels";
 import type { DepartmentSubmissionStatus, Importance, ItemPeriod, VolumeType, VolumeUnit } from "@/types/enums";
 
 type MeetingTab = "collection" | "materials" | "volumes" | "holiday" | "facility";
@@ -755,26 +755,20 @@ export default async function MeetingMaterialsPage({
   ].join("-");
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-[1.4rem] border border-[#d9e7f7] bg-white/82 p-2 shadow-[0_14px_34px_rgba(16,34,61,0.06)]">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <MeetingMaterialsTabNav
-            activeTab={activeTab}
-            tabs={tabs.map((tab) => ({
-              ...tab,
-              href: buildTabHref(tab.value, params, selectedWeek, defaultDepartmentId)
-            }))}
-          />
-          <MeetingMaterialsWeekFilter defaultWeekStartDate={selectedWeek.weekStartDate} />
-        </div>
-      </div>
-
+    <MeetingMaterialsWorkspace
+      initialTab={activeTab}
+      currentUserId={profile.id}
+      canManageAllRequests={isAdmin(profile)}
+      tabs={tabs.map((tab) => ({
+        ...tab,
+        href: buildTabHref(tab.value, params, selectedWeek, defaultDepartmentId)
+      }))}
+      weekFilter={<MeetingMaterialsWeekFilter defaultWeekStartDate={selectedWeek.weekStartDate} />}
+    >
       <Suspense key={contentKey} fallback={<PanelLoading label={meetingTabLoadingLabels[activeTab]} />}>
-        <div data-meeting-tab-content={activeTab}>
-          <MeetingMaterialsContent params={params} activeTab={activeTab} selectedWeek={selectedWeek} profile={profile} />
-        </div>
+        <MeetingMaterialsContent params={params} activeTab={activeTab} selectedWeek={selectedWeek} profile={profile} />
       </Suspense>
-    </div>
+    </MeetingMaterialsWorkspace>
   );
 }
 
@@ -1279,7 +1273,7 @@ function CollectionView({
                         {status.label}
                       </span>
                     </td>
-                    <td className="truncate px-2 py-1.5">{formatDateTime(submission?.finalized_at).split(" ")[0]}</td>
+                    <td className="truncate px-2 py-1.5">{formatCompactDate(submission?.finalized_at)}</td>
                   </tr>
                 );
               })}

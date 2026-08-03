@@ -26,6 +26,7 @@
 | 센터마스터 `/admin/centers` | `docs/menus/center-master.md` |
 | 화주마스터 `/admin/clients` | `docs/menus/client-master.md` |
 | 사용자관리 `/admin/users` 및 가입·계정 흐름 | `docs/menus/user-management.md` |
+| 모바일 앱 `/mobile` | `docs/menus/mobile-app.md`와 화주자료·부서자료 문서 |
 
 공유 코드 변경은 영향받는 문서를 모두 읽는다.
 
@@ -80,6 +81,7 @@ src/app/(protected)            인증된 사용자의 서버 페이지와 공통
 src/app/api                    인증이 필요한 경량 조회 API
 src/actions                    서버 액션과 쓰기 유스케이스
 src/components/layout          사이드바, 헤더, 전역 범위 필터
+src/components/mobile          모바일 전용 앱 셸, 화주자료, 설정 UI
 src/components/reports         화주자료, 부서자료, 회의자료 UI
 src/components/notices         공지 목록, 상세, 댓글, 자료취합 UI
 src/components/masters         부서, 센터, 화주, 사용자 관리 UI
@@ -168,6 +170,7 @@ tests                          순수 로직과 권한 계약 단위 테스트
 - 기본 저장은 `draft`, 확정은 `submitted`다. `approved` 상태는 확정취소 또는 권한 있는 상태 전이 전까지 수정하지 않는다.
 - 일반 검색과 상세검색은 일치한 항목만 화면에 남긴다. 공통 검색 구현은 `src/lib/reports/client-report-search.ts`를 재사용한다.
 - 검색 기간이 없으면 선택 주차만 조회하고, 기간 검색 시 선택 주차를 포함하도록 조회 범위를 확장한다.
+- `/mobile`의 화주자료 화면도 같은 서버 액션, 상태 전이, 화주 배정 범위를 사용한다.
 
 ### `/department-reports` - 부서자료
 
@@ -179,6 +182,12 @@ tests                          순수 로직과 권한 계약 단위 테스트
 - 공통사항, 시설공사, 공휴일근무는 `department_weekly_contents`에 저장한다. 공실은 `department_vacancy_records`에 별도로 저장한다.
 - 시설공사와 공휴일근무, 다건 공통사항은 버전이 있는 JSON 문자열이다. 기존 평문 데이터 파서 호환을 유지한다.
 - 매니저는 초안을 작성할 수 있지만 사업부 확정 제출은 관리자와 부서장만 할 수 있다.
+- `/mobile`에서는 공통사항, 공휴일근무, 시설공사만 노출하고 동일한 권한과 저장 계약을 유지한다.
+
+### `/mobile` - 모바일 앱
+
+- 인증된 사용자의 화주자료 작성, 제한된 부서자료 작성, 계정·관리 화주 확인을 모바일 하단 메뉴로 제공한다.
+- 자세한 레이아웃, 권한, 데이터 재사용 계약은 `docs/menus/mobile-app.md`를 따른다.
 
 ### `/meeting-materials` - 회의자료
 
