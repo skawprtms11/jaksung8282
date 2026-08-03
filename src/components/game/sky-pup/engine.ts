@@ -1,4 +1,4 @@
-import { ENEMY_CONFIG, GAME_HEIGHT, GAME_WIDTH, PLAYER_BASE_HP, PLAYER_MAX_HP, PLAYER_MAX_Y, PLAYER_MIN_Y, UPGRADES } from "./constants";
+import { ENEMY_CONFIG, GAME_HEIGHT, GAME_WIDTH, PLAYER_BASE_HP, PLAYER_BASE_SPEED, PLAYER_MAX_HP, PLAYER_MAX_Y, PLAYER_MIN_Y, UPGRADES } from "./constants";
 import { ObjectPool } from "./pool";
 import { renderScene } from "./renderer";
 import { loadGameData, saveGameData } from "./storage";
@@ -89,8 +89,15 @@ export class SkyPupEngine {
 
   setJoystick(x: number, y: number) {
     const length = Math.hypot(x, y);
-    this.moveX = length > 1 ? x / length : x;
-    this.moveY = length > 1 ? y / length : y;
+    if (length < 0.015) {
+      this.moveX = 0; this.moveY = 0;
+      return;
+    }
+    const directionX = x / length;
+    const directionY = y / length;
+    const response = Math.min(1, 0.3 + Math.min(1, length) * 0.7);
+    this.moveX = directionX * response;
+    this.moveY = directionY * response;
   }
 
   releaseJoystick() {
@@ -124,7 +131,7 @@ export class SkyPupEngine {
   }
 
   private createPlayer(): Player {
-    return { x: GAME_WIDTH / 2, y: 500, targetX: GAME_WIDTH / 2, targetY: 500, radius: 21, hp: PLAYER_BASE_HP, maxHp: PLAYER_BASE_HP, invulnerableUntil: 0, speed: 260, fireRate: 0.31, damage: 1, shotCount: 1, piercing: 0, specialChargeRate: 1 };
+    return { x: GAME_WIDTH / 2, y: 500, targetX: GAME_WIDTH / 2, targetY: 500, radius: 21, hp: PLAYER_BASE_HP, maxHp: PLAYER_BASE_HP, invulnerableUntil: 0, speed: PLAYER_BASE_SPEED, fireRate: 0.31, damage: 1, shotCount: 1, piercing: 0, specialChargeRate: 1 };
   }
 
   private tick = (now: number) => {

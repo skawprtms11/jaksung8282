@@ -20,6 +20,7 @@ export function MobileSkyPupGame({ currentUserName }: { currentUserName: string 
   const audioRef = useRef<SkyPupAudio | null>(null);
   const joystickRef = useRef<HTMLDivElement | null>(null);
   const joystickKnobRef = useRef<HTMLSpanElement | null>(null);
+  const activeJoystickPointerRef = useRef<number | null>(null);
   const savedResultRef = useRef("");
   const [hud, setHud] = useState(initialHud);
   const [result, setResult] = useState<GameResult | null>(null);
@@ -45,6 +46,23 @@ export function MobileSkyPupGame({ currentUserName }: { currentUserName: string 
       setRankings([]); setCurrentUserRanking(null);
     } finally {
       setIsRankingLoading(false);
+    }
+  }, []);
+
+  const applyJoystickPoint = useCallback((clientX: number, clientY: number) => {
+    if (engineRef.current?.getStatus() !== "running") return;
+    const rect = joystickRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const rawX = clientX - (rect.left + rect.width / 2);
+    const rawY = clientY - (rect.top + rect.height / 2);
+    const maxDistance = rect.width * 0.28;
+    const distance = Math.hypot(rawX, rawY);
+    const ratio = distance > maxDistance ? maxDistance / distance : 1;
+    const x = rawX * ratio;
+    const y = rawY * ratio;
+    engineRef.current.setJoystick(x / maxDistance, y / maxDistance);
+    if (joystickKnobRef.current) {
+      joystickKnobRef.current.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
     }
   }, []);
 
@@ -88,6 +106,40 @@ export function MobileSkyPupGame({ currentUserName }: { currentUserName: string 
   }, []);
 
   useEffect(() => {
+    function moveActivePointer(event: PointerEvent) {
+      if (activeJoystickPointerRef.current !== event.pointerId) return;
+      if (event.cancelable) event.preventDefault();
+      applyJoystickPoint(event.clientX, event.clientY);
+    }
+
+    function resetJoystick() {
+      activeJoystickPointerRef.current = null;
+      if (joystickKnobRef.current) joystickKnobRef.current.style.transform = "translate(-50%, -50%)";
+      engineRef.current?.releaseJoystick();
+    }
+
+    function releaseActivePointer(event: PointerEvent) {
+      if (activeJoystickPointerRef.current !== event.pointerId) return;
+      resetJoystick();
+    }
+
+    function releaseOnBlur() {
+      if (activeJoystickPointerRef.current !== null) resetJoystick();
+    }
+
+    window.addEventListener("pointermove", moveActivePointer, { passive: false });
+    window.addEventListener("pointerup", releaseActivePointer);
+    window.addEventListener("pointercancel", releaseActivePointer);
+    window.addEventListener("blur", releaseOnBlur);
+    return () => {
+      window.removeEventListener("pointermove", moveActivePointer);
+      window.removeEventListener("pointerup", releaseActivePointer);
+      window.removeEventListener("pointercancel", releaseActivePointer);
+      window.removeEventListener("blur", releaseOnBlur);
+    };
+  }, [applyJoystickPoint]);
+
+  useEffect(() => {
     if (!result) return;
     const key = `${result.score}-${result.duration}-${result.level}-${result.kills}`;
     if (savedResultRef.current === key) return;
@@ -120,28 +172,15 @@ export function MobileSkyPupGame({ currentUserName }: { currentUserName: string 
     audioRef.current?.setEnabled(next); if (next && hud.status === "running") audioRef.current?.startBgm();
   }
 
-  function moveJoystick(event: React.PointerEvent<HTMLDivElement>) {
+  function startJoystick(event: React.PointerEvent<HTMLDivElement>) {
     if (hud.status !== "running") return;
-    if (event.type === "pointerdown") event.currentTarget.setPointerCapture(event.pointerId);
-    if (event.type === "pointermove" && event.pointerType !== "touch" && event.buttons === 0) return;
-    const rect = joystickRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const rawX = event.clientX - (rect.left + rect.width / 2);
-    const rawY = event.clientY - (rect.top + rect.height / 2);
-    const maxDistance = rect.width * 0.28;
-    const distance = Math.hypot(rawX, rawY);
-    const ratio = distance > maxDistance ? maxDistance / distance : 1;
-    const x = rawX * ratio;
-    const y = rawY * ratio;
-    if (joystickKnobRef.current) {
-      joystickKnobRef.current.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+    activeJoystickPointerRef.current = event.pointerId;
+    try {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Window-level tracking remains active on browsers without pointer capture support.
     }
-    engineRef.current?.setJoystick(x / maxDistance, y / maxDistance);
-  }
-
-  function releaseJoystick() {
-    if (joystickKnobRef.current) joystickKnobRef.current.style.transform = "translate(-50%, -50%)";
-    engineRef.current?.releaseJoystick();
+    applyJoystickPoint(event.clientX, event.clientY);
   }
 
   function selectUpgrade(upgrade: Upgrade) {
@@ -193,10 +232,7 @@ export function MobileSkyPupGame({ currentUserName }: { currentUserName: string 
           ref={joystickRef}
           role="application"
           aria-label="이동 조이스틱"
-          onPointerDown={moveJoystick}
-          onPointerMove={moveJoystick}
-          onPointerUp={releaseJoystick}
-          onPointerCancel={releaseJoystick}
+          onPointerDown={startJoystick}
           className={`absolute bottom-4 left-4 z-10 h-[106px] w-[106px] touch-none rounded-full border-2 border-white/80 bg-[#10223d]/20 shadow-[inset_0_0_22px_rgba(255,255,255,.38),0_8px_20px_rgba(16,34,61,.16)] backdrop-blur-sm ${hud.status === "running" ? "opacity-100" : "opacity-45"}`}
         >
           <span className="pointer-events-none absolute inset-2 rounded-full border border-white/55" />
