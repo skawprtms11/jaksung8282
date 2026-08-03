@@ -1,25 +1,36 @@
 import { GAME_HEIGHT, GAME_WIDTH } from "./constants";
-import type { Bullet, Enemy, HealItem, Particle, Player } from "./types";
+import type { Bullet, Enemy, HealItem, Particle, Player, SkyPupVisualAssets } from "./types";
 
 const TAU = Math.PI * 2;
 
 type Scene = {
   player: Player; bullets: Bullet[]; enemies: Enemy[]; items: HealItem[]; particles: Particle[];
-  elapsed: number; specialFlash: number; shake: number;
+  elapsed: number; specialFlash: number; shake: number; reducedMotion: boolean;
 };
 
-export function renderScene(canvas: HTMLCanvasElement, scene: Scene) {
+function isDrawableImage(image?: HTMLImageElement): image is HTMLImageElement {
+  return Boolean(image?.complete && image.naturalWidth > 0 && image.naturalHeight > 0);
+}
+
+export function renderScene(canvas: HTMLCanvasElement, scene: Scene, assets: SkyPupVisualAssets = {}) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(canvas.width / GAME_WIDTH, 0, 0, canvas.height / GAME_HEIGHT, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  drawBackground(ctx, scene.reducedMotion ? 0 : scene.elapsed, assets.background);
   ctx.save();
-  ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-  if (scene.shake > 0) ctx.translate((Math.random() - 0.5) * scene.shake, (Math.random() - 0.5) * scene.shake);
-  drawBackground(ctx, scene.elapsed);
+  if (!scene.reducedMotion && scene.shake > 0) ctx.translate((Math.random() - 0.5) * scene.shake, (Math.random() - 0.5) * scene.shake);
   scene.items.forEach((item) => drawItem(ctx, item));
   scene.bullets.forEach((bullet) => drawBullet(ctx, bullet));
   scene.enemies.forEach((enemy) => drawEnemy(ctx, enemy));
-  scene.particles.forEach((particle) => drawParticle(ctx, particle));
-  drawDog(ctx, scene.player, scene.elapsed);
+  if (!scene.reducedMotion) scene.particles.forEach((particle) => drawParticle(ctx, particle));
+  drawDog(ctx, scene.player, scene.elapsed, assets.player);
+  ctx.restore();
   if (scene.specialFlash > 0) {
     ctx.fillStyle = `rgba(255,247,168,${scene.specialFlash * 0.48})`;
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
@@ -29,10 +40,21 @@ export function renderScene(canvas: HTMLCanvasElement, scene: Scene) {
     ctx.arc(scene.player.x, scene.player.y, 36 + (1 - scene.specialFlash) * 410, 0, Math.PI * 2);
     ctx.stroke();
   }
-  ctx.restore();
 }
 
-function drawBackground(ctx: CanvasRenderingContext2D, elapsed: number) {
+function drawBackground(ctx: CanvasRenderingContext2D, elapsed: number, image?: HTMLImageElement) {
+  if (isDrawableImage(image)) {
+    ctx.drawImage(image, 0, 0, GAME_WIDTH, GAME_HEIGHT);
+    const readabilityVeil = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
+    readabilityVeil.addColorStop(0, "rgba(105,82,158,.055)");
+    readabilityVeil.addColorStop(0.55, "rgba(118,94,170,.025)");
+    readabilityVeil.addColorStop(0.7, "rgba(255,250,246,.06)");
+    readabilityVeil.addColorStop(1, "rgba(255,244,250,.24)");
+    ctx.fillStyle = readabilityVeil;
+    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    return;
+  }
+
   const sky = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
   sky.addColorStop(0, "#8ed8ff");
   sky.addColorStop(0.62, "#dff5ff");
@@ -86,12 +108,28 @@ function drawTree(ctx: CanvasRenderingContext2D, x: number, y: number) {
   ctx.fillStyle = "rgba(255,255,255,.2)"; ctx.beginPath(); ctx.arc(x + 14, y + 6, 8, 0, Math.PI * 2); ctx.fill();
 }
 
-function drawDog(ctx: CanvasRenderingContext2D, player: Player, elapsed: number) {
+function drawDog(ctx: CanvasRenderingContext2D, player: Player, elapsed: number, image?: HTMLImageElement) {
   const bob = Math.sin(elapsed * 9) * 2.5;
   ctx.save(); ctx.translate(player.x, player.y + bob);
-  if (player.invulnerableUntil > performance.now() && Math.floor(performance.now() / 80) % 2 === 0) ctx.globalAlpha = 0.35;
+  const now = performance.now();
+  if (player.invulnerableUntil > now && Math.floor(now / 80) % 2 === 0) ctx.globalAlpha = 0.55;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
+
+  const halo = ctx.createRadialGradient(0, 0, 9, 0, 0, 52);
+  halo.addColorStop(0, "rgba(255,255,255,.48)");
+  halo.addColorStop(0.52, "rgba(213,191,255,.28)");
+  halo.addColorStop(1, "rgba(189,164,255,0)");
+  ctx.fillStyle = halo;
+  ctx.beginPath(); ctx.arc(0, 0, 52, 0, TAU); ctx.fill();
+
+  if (isDrawableImage(image)) {
+    ctx.shadowColor = "rgba(111,79,169,.3)";
+    ctx.shadowBlur = 12;
+    ctx.drawImage(image, -42, -50, 84, 98);
+    ctx.restore();
+    return;
+  }
 
   ctx.fillStyle = "rgba(63,102,166,.14)";
   ctx.beginPath(); ctx.ellipse(0, 31, 28, 9, 0, 0, TAU); ctx.fill();
@@ -213,9 +251,14 @@ function drawEnemy(ctx: CanvasRenderingContext2D, enemy: Enemy) {
 }
 
 function drawBullet(ctx: CanvasRenderingContext2D, bullet: Bullet) {
-  ctx.save(); ctx.shadowBlur = 10; ctx.shadowColor = bullet.color; ctx.fillStyle = bullet.color;
+  ctx.save(); ctx.shadowBlur = 14; ctx.shadowColor = bullet.color; ctx.fillStyle = bullet.color;
+  ctx.strokeStyle = "rgba(58,43,99,.9)";
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(bullet.x, bullet.y, bullet.radius + 1.5, 0, Math.PI * 2); ctx.stroke();
   ctx.beginPath(); ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2); ctx.fill();
-  if (bullet.friendly) { ctx.strokeStyle = "rgba(255,255,255,.9)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(bullet.x, bullet.y + 12); ctx.lineTo(bullet.x, bullet.y + 3); ctx.stroke(); }
+  ctx.fillStyle = "rgba(255,255,255,.9)";
+  ctx.beginPath(); ctx.arc(bullet.x - bullet.radius * 0.25, bullet.y - bullet.radius * 0.25, Math.max(1.2, bullet.radius * 0.28), 0, Math.PI * 2); ctx.fill();
+  if (bullet.friendly) { ctx.strokeStyle = "rgba(92,65,145,.75)"; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(bullet.x, bullet.y + 13); ctx.lineTo(bullet.x, bullet.y + 3); ctx.stroke(); ctx.strokeStyle = "rgba(255,255,255,.95)"; ctx.lineWidth = 1.5; ctx.stroke(); }
   ctx.restore();
 }
 
