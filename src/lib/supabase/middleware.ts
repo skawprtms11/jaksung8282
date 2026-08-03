@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import type { Database } from "@/types/database";
 import { protectedRoutes } from "@/config/app";
+import { normalizeAuthRedirect } from "@/lib/auth/redirect";
 
 function startsWithAny(pathname: string, prefixes: readonly string[]) {
   return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
@@ -53,13 +54,18 @@ export async function updateSession(request: NextRequest) {
   if (!hasSession && isProtected) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
-    redirectUrl.searchParams.set("redirectTo", pathname);
+    redirectUrl.search = "";
+    redirectUrl.searchParams.set("redirectTo", `${pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(redirectUrl);
   }
 
   if (hasSession && pathname === "/login") {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/notices";
+    const redirectTo = normalizeAuthRedirect(request.nextUrl.searchParams.get("redirectTo"));
+    const destination = new URL(redirectTo, request.url);
+    redirectUrl.pathname = destination.pathname;
+    redirectUrl.search = destination.search;
+    redirectUrl.hash = destination.hash;
     return NextResponse.redirect(redirectUrl);
   }
 

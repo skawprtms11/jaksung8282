@@ -6,8 +6,10 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type DepartmentOption = { id: string; department_name: string };
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ redirectTo?: string }> }) {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ redirectTo?: string; mode?: string }> }) {
   const params = await searchParams;
+  const redirectTo = normalizeAuthRedirect(params.redirectTo);
+  const isMobileLogin = params.mode === "mobile" || redirectTo.startsWith("/mobile");
   let departments: DepartmentOption[] = [];
   try {
     const admin = createSupabaseAdminClient();
@@ -21,15 +23,17 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     departments = [];
   }
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-10">
-      <section className="grid w-full max-w-6xl overflow-hidden rounded-[2rem] border border-white/80 bg-white/78 p-3 shadow-[0_30px_90px_rgba(16,34,61,0.16)] backdrop-blur-2xl md:grid-cols-[1fr_420px]">
-        <LogisticsIllustration />
-        <div className="flex flex-col justify-center rounded-[1.5rem] bg-white/90 p-7 backdrop-blur">
-          <p className="text-xs font-black uppercase tracking-[0.32em] text-[#075be8]">TPL Logistics</p>
-          <h1 className="mt-3 text-3xl font-black tracking-normal text-[#10223d]">{appConfig.name}</h1>
-          <p className="mt-3 text-sm leading-6 text-slate-500">주간 업무, 물동량, 승인 흐름을 한 곳에서 연결합니다.</p>
-          <div className="mt-6">
-            <LoginForm redirectTo={normalizeAuthRedirect(params.redirectTo)} departments={departments} />
+    <main className={isMobileLogin ? "min-h-dvh bg-white" : "min-h-dvh bg-white md:flex md:min-h-screen md:items-center md:justify-center md:bg-transparent md:px-4 md:py-10"}>
+      <section className={isMobileLogin ? "mx-auto w-full max-w-md overflow-hidden bg-white" : "w-full overflow-hidden bg-white md:grid md:max-w-6xl md:grid-cols-[1fr_420px] md:rounded-[2rem] md:border md:border-white/80 md:bg-white/78 md:p-3 md:shadow-[0_30px_90px_rgba(16,34,61,0.16)] md:backdrop-blur-2xl"}>
+        <LogisticsIllustration mobileMode={isMobileLogin} />
+        <div className={isMobileLogin ? "flex flex-col justify-center bg-white px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-6" : "flex flex-col justify-center bg-white px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-6 md:rounded-[1.5rem] md:bg-white/90 md:p-7 md:backdrop-blur"}>
+          <div className={isMobileLogin ? "hidden" : "hidden md:block"}>
+            <p className="text-xs font-black uppercase tracking-[0.32em] text-[#075be8]">TPL Logistics</p>
+            <h1 className="mt-3 text-3xl font-black tracking-normal text-[#10223d]">{appConfig.name}</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-500">주간 업무, 물동량, 승인 흐름을 한 곳에서 연결합니다.</p>
+          </div>
+          <div className={isMobileLogin ? "" : "md:mt-6"}>
+            <LoginForm redirectTo={redirectTo} departments={departments} />
           </div>
         </div>
       </section>

@@ -155,10 +155,14 @@ export async function requestUserRegistrationAction(_: ActionResult | null, form
   return { ok: true, message: "사용자 등록 요청이 접수되었습니다. 관리자 또는 부서 승인 후 로그인할 수 있습니다." };
 }
 
-export async function signOutAction() {
+export async function signOutAction(formData: FormData) {
+  const redirectTo = normalizeAuthRedirect(formData.get("redirectTo"), "");
   const supabase = await createSupabaseServerClient();
   if (supabase) {
     await supabase.auth.signOut();
+  }
+  if (redirectTo.startsWith("/mobile")) {
+    redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}&mode=mobile`);
   }
   redirect("/login");
 }

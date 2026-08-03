@@ -29,7 +29,7 @@ export function MobileSettings({ profile, departmentName, clients }: {
       </div>
     </section>
 
-    <form action={signOutAction} className="px-1 pt-2"><button type="submit" className="h-11 w-full rounded-md border border-rose-200 bg-white text-sm font-black text-rose-600">로그아웃</button></form>
+    <form action={signOutAction} className="px-1 pt-2"><input type="hidden" name="redirectTo" value="/mobile" /><button type="submit" className="h-11 w-full rounded-md border border-rose-200 bg-white text-sm font-black text-rose-600">로그아웃</button></form>
   </div>;
 }
 
