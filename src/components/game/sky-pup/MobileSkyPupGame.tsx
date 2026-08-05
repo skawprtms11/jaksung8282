@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { Award, Heart, Home, Pause, Play, RotateCcw, Shield, Sparkles, Star, Trophy, Volume2, VolumeX, Zap } from "lucide-react";
 import { saveMiniGameScoreAction } from "@/actions/game";
+import { clampMiniGameScore } from "@/lib/game/score";
 import { ACHIEVEMENT_LABELS, GAME_HEIGHT, GAME_WIDTH, PLAYER_BASE_HP } from "./constants";
 import { loadSkyPupVisualAssets } from "./assets";
 import { SkyPupAudio } from "./audio";
@@ -160,7 +161,7 @@ export function MobileSkyPupGame({ currentUserName }: { currentUserName: string 
     savedResultRef.current = key;
     startSaving(async () => {
       const saveResult = await saveMiniGameScoreAction({
-        score: Math.min(999999, result.score),
+        score: clampMiniGameScore(result.score),
         duration_seconds: Math.min(3600, result.duration),
         max_level: Math.min(999, result.level),
         snack_count: Math.min(999, result.bossKills)
@@ -211,13 +212,13 @@ export function MobileSkyPupGame({ currentUserName }: { currentUserName: string 
         <button type="button" onClick={togglePause} disabled={hud.status !== "running" && hud.status !== "paused"} className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/90 bg-white/80 text-[#7256a2] shadow-sm transition active:scale-95 disabled:opacity-35" aria-label={hud.status === "paused" ? "계속하기" : "일시정지"}>{hud.status === "paused" ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}</button>
       </header>
 
-      <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-2 gap-y-1 border-b border-[#f0e4f5] bg-white/90 px-3 py-2 text-[10px] font-black">
-        <div className="flex items-center gap-1" aria-label={`에너지 ${hud.hp}/${hud.maxHp}`}>
+      <div className="grid grid-cols-2 items-center gap-x-3 gap-y-1 border-b border-[#f0e4f5] bg-white/90 px-3 py-2 text-[10px] font-black">
+        <div className="col-span-2 flex items-center gap-1" aria-label={`에너지 ${hud.hp}/${hud.maxHp}`}>
           {Array.from({ length: hud.maxHp }, (_, index) => <Heart key={index} className={`h-4 w-4 ${index < hud.hp ? "fill-rose-500 text-rose-500" : "fill-slate-100 text-slate-300"}`} aria-hidden="true" />)}
         </div>
-        <span className="text-[#4b3b68]">점수 {hud.score.toLocaleString("ko-KR")}</span>
-        <span className="text-[#8b63c7]">최고 {hud.bestScore.toLocaleString("ko-KR")}</span>
-        <div className="col-span-3 flex items-center gap-2">
+        <span className="whitespace-nowrap tabular-nums text-[#4b3b68]">점수 {hud.score.toLocaleString("ko-KR")}</span>
+        <span className="whitespace-nowrap text-right tabular-nums text-[#8b63c7]">최고 {hud.bestScore.toLocaleString("ko-KR")}</span>
+        <div className="col-span-2 flex items-center gap-2">
           <span className="shrink-0 text-amber-600">필살기</span>
           <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#f2eafa]"><span className="block h-full rounded-full bg-gradient-to-r from-[#ffd878] via-[#ffb8d2] to-[#b99cf0] transition-[width]" style={{ width: `${hud.special}%` }} /></div>
           <span className="w-8 text-right text-slate-500">{hud.special}%</span>

@@ -3,6 +3,7 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
+import { getInitialPassword } from "@/lib/auth/initial-password";
 import { canRegisterDepartmentClients, isAdmin } from "@/lib/auth/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createLaborSupabaseClient } from "@/lib/supabase/labor";
@@ -1010,6 +1011,57 @@ export async function deleteUsersAction(_: ActionResult | null, formData: FormDa
 
   revalidateMasterPath("/admin/users");
   return { ok: true, message: "선택한 사용자를 미사용 처리했습니다." };
+}
+
+export async function resetUserPasswordAction(_: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  const { error: authError } = await requireAdmin();
+  if (authError) {
+    return { ok: false, message: authError };
+  }
+
+  const parsedUserId = idSchema.safeParse(String(formData.get("user_id") ?? "").trim());
+  if (!parsedUserId.success) {
+    return { ok: false, message: "비밀번호를 초기화할 사용자를 확인하세요." };
+  }
+
+  let admin: ReturnType<typeof createSupabaseAdminClient>;
+  try {
+    admin = createSupabaseAdminClient();
+  } catch {
+    return { ok: false, message: "SUPABASE_SERVICE_ROLE_KEY를 서버 환경변수에 설정하세요." };
+  }
+
+  const { data: targetUser, error: targetError } = await admin
+    .from("profiles")
+    .select("id,employee_no")
+    .eq("id", parsedUserId.data)
+    .maybeSingle();
+  if (targetError || !targetUser) {
+    return { ok: false, message: "비밀번호를 초기화할 사용자 정보를 찾을 수 없습니다." };
+  }
+
+  const employeeNo = targetUser.employee_no.trim();
+  if (!employeeNo) {
+    return { ok: false, message: "등록된 사번이 없어 비밀번호를 초기화할 수 없습니다." };
+  }
+
+  const initialPassword = getInitialPassword(employeeNo);
+  const { error } = await admin.auth.admin.updateUserById(targetUser.id, { password: initialPassword });
+  if (error) {
+    return {
+      ok: false,
+      message: error.message.toLowerCase().includes("password")
+        ? "등록된 사번이 Supabase 비밀번호 정책을 충족하지 않습니다. 사번과 Auth 비밀번호 정책을 확인하세요."
+        : "비밀번호 초기화에 실패했습니다. Auth 사용자 연결 상태를 확인하세요."
+    };
+  }
+
+  return {
+    ok: true,
+    message: initialPassword === employeeNo
+      ? "비밀번호를 등록된 사번으로 초기화했습니다."
+      : "비밀번호를 사번 뒤에 0을 붙인 6자리 초기 비밀번호로 변경했습니다."
+  };
 }
 
 async function requireUserRegistrationApprover(departmentId: string) {

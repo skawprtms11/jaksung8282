@@ -2,7 +2,7 @@
 
 import { type ClipboardEvent, useActionState, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowRight, Building2, FileSpreadsheet, PackagePlus, Pencil, Plus, RotateCcw, Save, Search, Trash2, UserRoundCheck, X } from "lucide-react";
+import { ArrowRight, Building2, FileSpreadsheet, KeyRound, PackagePlus, Pencil, Plus, RotateCcw, Save, Search, Trash2, UserRoundCheck, X } from "lucide-react";
 import {
   approveUserRegistrationRequestAction,
   deleteClientsAction,
@@ -10,6 +10,7 @@ import {
   deleteUsersAction,
   importLaborCentersAction,
   rejectUserRegistrationRequestAction,
+  resetUserPasswordAction,
   saveClientAction,
   saveClientAssignmentsAction,
   saveClientsBulkImportAction,
@@ -23,6 +24,7 @@ import { ActionMessage } from "@/components/common/ActionMessage";
 import { EmptyState } from "@/components/common/EmptyState";
 import { SubmitButton } from "@/components/common/SubmitButton";
 import { TableShell } from "@/components/common/TableShell";
+import { getInitialPassword, isInitialPasswordAdjusted } from "@/lib/auth/initial-password";
 import { roleLabel } from "@/lib/auth/permissions";
 import type { AppRole } from "@/types/enums";
 
@@ -1629,6 +1631,51 @@ function UserEditDialog({
   );
 }
 
+function UserPasswordResetDialog({ user, onClose }: { user: UserMasterValue; onClose: () => void }) {
+  const [state, action] = useActionState(resetUserPasswordAction, null);
+  const initialPassword = getInitialPassword(user.employee_no);
+  const isAdjusted = isInitialPasswordAdjusted(user.employee_no);
+
+  return (
+    <ModalPortal>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby={`user-password-reset-${user.id}`}>
+        <form action={action} className="w-full max-w-md overflow-hidden rounded-[1.5rem] border border-[#d9e4f2] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
+          <input type="hidden" name="user_id" value={user.id} />
+          <div className="flex items-start justify-between gap-4 border-b border-[#d9e4f2] px-5 py-4">
+            <div>
+              <h2 id={`user-password-reset-${user.id}`} className="text-lg font-black text-[#10223d]">비밀번호 초기화</h2>
+              <p className="mt-1 text-sm font-bold text-slate-500">{user.full_name} · {user.employee_no}</p>
+            </div>
+            <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="p-5">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm font-bold leading-6 text-amber-900">
+              비밀번호를 초기화 하시겠습니까? 초기화시 비밀번호는 사번과 동일합니다
+              {isAdjusted ? (
+                <p className="mt-2 border-t border-amber-200 pt-2 text-amber-950">
+                  단, 6자리 미만 사번은 뒤에 0을 추가합니다. 이 계정의 초기 비밀번호는 {initialPassword}입니다.
+                </p>
+              ) : null}
+            </div>
+            <div className="mt-3">
+              <ActionMessage state={state} />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-[#d9e4f2] px-5 py-4">
+            <button type="button" onClick={onClose} className="tool-button">취소</button>
+            <SubmitButton variant="danger">
+              <KeyRound className="h-4 w-4" aria-hidden="true" />
+              초기화
+            </SubmitButton>
+          </div>
+        </form>
+      </div>
+    </ModalPortal>
+  );
+}
+
 export function UserMasterControls({
   departments,
   users,
@@ -1644,11 +1691,13 @@ export function UserMasterControls({
 }) {
   const [checkedUserIds, setCheckedUserIds] = useState<string[]>([]);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [passwordResetUserId, setPasswordResetUserId] = useState<string | null>(null);
   const [deleteState, deleteAction] = useActionState(deleteUsersAction, null);
   const [approveState, approveAction] = useActionState(approveUserRegistrationRequestAction, null);
   const [rejectState, rejectAction] = useActionState(rejectUserRegistrationRequestAction, null);
   const selectedUsers = users.filter((user) => checkedUserIds.includes(user.id));
   const editingUser = users.find((user) => user.id === editingUserId) ?? null;
+  const passwordResetUser = users.find((user) => user.id === passwordResetUserId) ?? null;
   const allChecked = users.length > 0 && selectedUsers.length === users.length;
 
   function toggleUser(userId: string, checked: boolean) {
@@ -1766,7 +1815,7 @@ export function UserMasterControls({
         <EmptyState title="사용자 정보가 없습니다." />
       ) : (
         <TableShell>
-          <table className="table-sticky min-w-[980px] w-full text-left text-sm">
+          <table className="table-sticky min-w-[1100px] w-full text-left text-sm">
             <thead>
               <tr>
                 <th className="w-12 px-3 py-3">
@@ -1784,6 +1833,7 @@ export function UserMasterControls({
                 <th className="px-3 py-3">부서</th>
                 <th className="px-3 py-3">관리권한</th>
                 <th className="px-3 py-3">사용여부</th>
+                {canManageUsers ? <th className="px-3 py-3 text-center">비밀번호 초기화</th> : null}
                 <th className="px-3 py-3">확인일</th>
               </tr>
             </thead>
@@ -1809,6 +1859,19 @@ export function UserMasterControls({
                       {user.is_active ? "사용" : "미사용"}
                     </span>
                   </td>
+                  {canManageUsers ? (
+                    <td className="px-3 py-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => setPasswordResetUserId(user.id)}
+                        className="focus-ring inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 text-xs font-black text-amber-800 transition hover:bg-amber-100"
+                        aria-label={`${user.full_name} 비밀번호 초기화`}
+                      >
+                        <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
+                        초기화
+                      </button>
+                    </td>
+                  ) : null}
                   <td className="px-3 py-3">{formatDateOnly(user.updated_at || user.created_at)}</td>
                 </tr>
               ))}
@@ -1818,6 +1881,7 @@ export function UserMasterControls({
       )}
 
       {editingUser ? <UserEditDialog user={editingUser} departments={departments} onClose={() => setEditingUserId(null)} /> : null}
+      {passwordResetUser ? <UserPasswordResetDialog user={passwordResetUser} onClose={() => setPasswordResetUserId(null)} /> : null}
     </section>
   );
 }

@@ -2,11 +2,12 @@
 
 import { z } from "zod";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
+import { MAX_MINI_GAME_SCORE } from "@/lib/game/score";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { safeErrorMessage, type ActionResult } from "@/lib/utils/form";
 
 const miniGameScoreSchema = z.object({
-  score: z.coerce.number().int().min(0).max(999999),
+  score: z.coerce.number().int().min(0).max(MAX_MINI_GAME_SCORE),
   duration_seconds: z.coerce.number().int().min(0).max(3600),
   max_level: z.coerce.number().int().min(1).max(999),
   snack_count: z.coerce.number().int().min(0).max(999)

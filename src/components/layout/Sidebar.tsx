@@ -9,7 +9,6 @@ import {
   ChartNoAxesCombined,
   ClipboardCheck,
   FilePenLine,
-  Gamepad2,
   Headphones,
   Home,
   LoaderCircle,
@@ -26,8 +25,7 @@ const noticeMenu = { href: "/notices", label: "공지사항", icon: Home };
 const meetingMaterialsMenu = { href: "/meeting-materials", label: "회의자료", icon: ChartNoAxesCombined };
 const baseMenus = [
   { href: "/department-reports", label: "부서자료", icon: ClipboardCheck },
-  { href: "/client-reports", label: "화주자료", icon: FilePenLine },
-  { href: "/mini-game", label: "미니게임", icon: Gamepad2 }
+  { href: "/client-reports", label: "화주자료", icon: FilePenLine }
 ];
 
 const fullPrefetchMenuHrefs = new Set([
