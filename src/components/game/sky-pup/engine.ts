@@ -2,6 +2,7 @@ import { BOSS_BULLET_SPEED_SCALE, DIFFICULTY_TIME_SCALE, ENEMY_BULLET_SPEED_SCAL
 import { ObjectPool } from "./pool";
 import { renderScene } from "./renderer";
 import { loadGameData, saveGameData } from "./storage";
+import { clampMiniGameScore } from "@/lib/game/score";
 import { normalizeJoystickInput } from "./controls";
 import type { Bullet, Enemy, EnemyKind, EngineCallbacks, GameHud, GameResult, GameStatus, HealItem, ItemKind, Particle, Player, SkyPupVisualAssets, Upgrade, UpgradeKind } from "./types";
 
@@ -65,7 +66,7 @@ export class SkyPupEngine {
     this.canvas = canvas;
     this.callbacks = callbacks;
     const stored = loadGameData();
-    this.storedBest = stored.bestScore;
+    this.storedBest = clampMiniGameScore(stored.bestScore);
     stored.achievements.forEach((id) => this.unlocked.add(id));
     this.emitHud();
     this.draw();
@@ -272,7 +273,7 @@ export class SkyPupEngine {
       item.age += delta; item.x += item.vx * delta;
       if (item.x < -30) item.active = false;
       else if (distanceSquared(item.x, item.y, this.player.x, this.player.y) < (item.radius + this.player.radius) ** 2) {
-        item.active = false; this.player.hp = Math.min(this.player.maxHp, this.player.hp + 1); this.score += 250; this.burst(item.x, item.y, 18, "#fff3a3"); this.callbacks.onSound("heal"); this.emitHud();
+        item.active = false; this.player.hp = Math.min(this.player.maxHp, this.player.hp + 1); this.score = clampMiniGameScore(this.score + 250); this.burst(item.x, item.y, 18, "#fff3a3"); this.callbacks.onSound("heal"); this.emitHud();
       }
     }
   }
@@ -318,7 +319,7 @@ export class SkyPupEngine {
     if (!enemy.active) return;
     enemy.active = false; this.kills += 1; this.combo += 1; this.comboTimer = 2.4;
     const multiplier = this.combo >= 50 ? 4 : this.combo >= 20 ? 3 : this.combo >= 10 ? 2 : this.combo >= 5 ? 1.5 : 1;
-    this.score += Math.round(enemy.score * multiplier);
+    this.score = clampMiniGameScore(this.score + Math.round(enemy.score * multiplier));
     if (!fromSpecial) this.special = clamp(this.special + 6.5 * this.player.specialChargeRate, 0, 100);
     this.xp += enemy.kind === "miniBoss" ? 10 : enemy.kind === "mainBoss" ? 20 : 1;
     if (enemy.kind === "miniBoss" || enemy.kind === "mainBoss") { this.bossKills += 1; this.unlock("bossKill"); }
@@ -376,7 +377,7 @@ export class SkyPupEngine {
   private finishGame() {
     if (this.status === "gameover") return;
     this.status = "gameover"; cancelAnimationFrame(this.frame); this.callbacks.onSound("gameover");
-    const previousBest = this.storedBest; const finalScore = Math.min(999999, Math.floor(this.score));
+    const previousBest = this.storedBest; const finalScore = clampMiniGameScore(this.score);
     if (finalScore > previousBest) { this.storedBest = finalScore; this.unlock("highScore"); }
     const stored = saveGameData({ bestScore: this.storedBest, achievements: Array.from(this.unlocked) });
     const result: GameResult = { score: finalScore, bestScore: stored.bestScore, duration: Math.floor(this.elapsed), level: this.level, kills: this.kills, bossKills: this.bossKills, achievements: stored.achievements };
@@ -390,7 +391,7 @@ export class SkyPupEngine {
 
   private emitHud() {
     const boss = this.enemies.active().find((enemy) => enemy.kind === "mainBoss" || enemy.kind === "miniBoss");
-    const hud: GameHud = { status: this.status, score: Math.floor(this.score), bestScore: this.storedBest, hp: this.player.hp, maxHp: this.player.maxHp, special: Math.floor(this.special), elapsed: Math.floor(this.elapsed), level: this.level, combo: this.combo, kills: this.kills, bossName: boss ? (boss.kind === "mainBoss" ? "메인보스" : "미니보스") : "", bossHp: boss?.hp ?? 0, bossMaxHp: boss?.maxHp ?? 0 };
+    const hud: GameHud = { status: this.status, score: clampMiniGameScore(this.score), bestScore: clampMiniGameScore(this.storedBest), hp: this.player.hp, maxHp: this.player.maxHp, special: Math.floor(this.special), elapsed: Math.floor(this.elapsed), level: this.level, combo: this.combo, kills: this.kills, bossName: boss ? (boss.kind === "mainBoss" ? "메인보스" : "미니보스") : "", bossHp: boss?.hp ?? 0, bossMaxHp: boss?.maxHp ?? 0 };
     this.callbacks.onHud(hud);
   }
 
