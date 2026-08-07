@@ -24,6 +24,8 @@
 
 최초 진입과 직접 URL 접근은 기존 Server Component 경로를 사용한다. 화면이 열린 뒤의 탭 전환은 `MeetingMaterialsWorkspace`가 URL history를 보존하면서 `/api/meeting-materials/tab`에서 활성 탭 payload만 받아 본문을 교체한다. API 실패 시 해당 탭의 기존 서버 URL로 이동해 legacy fallback을 그대로 사용할 수 있어야 한다.
 
+상단 부서·화주 필터 또는 주차가 변경되면 범위 키(`탭-주차-부서-화주`)가 바뀌며, `MeetingMaterialsWorkspace`와 기존 탭 캐시는 새 범위로 즉시 재초기화된다. 이전 범위의 `activeData`를 새 필터 화면에 재사용하지 않는다.
+
 탭 payload는 60초 동안 범위별로 캐시하고, 초기 화면이 안정된 뒤 다른 탭을 순차 준비한다. 동시에 여러 탭 RPC를 실행하지 않으며 새 탭 선택 시 진행 중인 사용자 요청만 취소한다. 뒤로가기·앞으로가기는 history의 탭과 캐시를 복원한다.
 
 관리자에게 선택 부서가 없는 경우 탭 네비게이션을 만들기 위한 부서 선행 조회를 실행하지 않는다. `materials`의 기본 부서 결정은 RPC 또는 fallback 콘텐츠 조회 안에서 처리해 상단 탭과 loading 경계가 먼저 응답할 수 있어야 한다.
