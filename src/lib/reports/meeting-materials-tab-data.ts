@@ -1,7 +1,8 @@
 import type { VolumeChartRow } from "@/components/charts/VolumeComparisonChart";
 import type { MeetingDepartmentVolumeRow, MeetingDepartmentVolumeValue } from "@/components/reports/MeetingDepartmentVolumeBoard";
 import type { MeetingOpenRequestItem, MeetingPriorityItem } from "@/components/reports/MeetingPriorityPanel";
-import type { MeetingMaterialsReport } from "@/components/reports/MeetingMaterialsTable";
+import type { DepartmentOpenRequestItem } from "@/components/reports/DepartmentOpenRequestBoard";
+import type { MeetingMaterialsReport, MeetingReportItemRequest } from "@/components/reports/MeetingMaterialsTable";
 import {
   filterClientReportSearchItems,
   hasClientReportSearchFilters,
@@ -102,6 +103,7 @@ export type OpenRequestQueryRow = ReportItemRequestRow & {
     importance: Importance;
     work_categories: { category_name: string } | null;
     weekly_client_reports: {
+      id: string;
       department_id: string;
       client_id: string;
       week_start_date: string;
@@ -150,6 +152,7 @@ export type CollectionTabData = {
 export type MaterialsTabData = {
   tab: "materials";
   reports: MeetingReportRow[];
+  confirmationRequestItems: DepartmentOpenRequestItem[];
   workCategories: WorkCategoryRow[];
   filters: ClientReportSearchFilters;
   hasSearchFilters: boolean;
@@ -272,52 +275,139 @@ function makePriorityItems(reports: MeetingReportRow[]): MeetingPriorityItem[] {
       : left.importance === "very_high" ? -1 : 1);
 }
 
-export function makeOpenRequestItems(rows: OpenRequestQueryRow[], categories: WorkCategoryRow[], departmentFilter?: string): MeetingOpenRequestItem[] {
+export function makeConfirmationRequestItems(
+  rows: OpenRequestQueryRow[],
+  categories: WorkCategoryRow[],
+  departmentFilter?: string,
+  clientFilter?: string
+): DepartmentOpenRequestItem[] {
   const categoryNames = new Map(categories.map((row) => [row.id, row.category_name]));
-  return rows.map((request) => {
-    if (request.target_type === "client_item" && request.weekly_client_report_items?.weekly_client_reports) {
-      const item = request.weekly_client_report_items;
-      const report = item.weekly_client_reports;
-      if (!report) return null;
-      return { id: request.id, departmentId: report.department_id, requestDate: request.created_at,
-        monthLabel: `${String(report.report_year).slice(2)}/${String(report.report_month).padStart(2, "0")}`,
-        weekLabel: `${report.week_of_month}주차`, departmentName: report.departments?.department_name ?? "-",
-        clientName: report.clients?.client_name ?? "-", categoryName: item.work_categories?.category_name ?? "기타",
-        title: item.title?.trim() || item.content.split("\n")[0]?.trim() || "제목 없음", content: item.content,
-        requestContent: request.request_content, resultContent: request.result_content };
-    }
-    const submission = request.department_weekly_submissions;
-    if (request.target_type !== "department_common" || !submission || !request.item_period || typeof request.item_sort_order !== "number") return null;
-    const content = submission.department_weekly_contents.find((row) => row.section_type === "common");
-    if (!content) return null;
-    const items = parseDepartmentCommonContentItems(
-      request.item_period === "current" ? content.current_week_content : content.next_week_content,
-      request.item_period === "current" ? content.current_importance : content.next_importance,
-      (request.item_period === "current" ? content.current_work_category_id : content.next_work_category_id) ?? "", "공통사항"
-    );
-    const item = items.find((row) => row.sort_order === request.item_sort_order) ?? items[0];
-    return { id: request.id, departmentId: submission.department_id, requestDate: request.created_at,
-      monthLabel: `${String(submission.report_year).slice(2)}/${String(submission.report_month).padStart(2, "0")}`,
-      weekLabel: `${submission.week_of_month}주차`, departmentName: submission.departments?.department_name ?? "-",
-      clientName: "공통사항", categoryName: item?.work_category_id ? categoryNames.get(item.work_category_id) ?? "기타" : "기타",
-      title: item?.title?.trim() || item?.content.split("\n")[0]?.trim() || "제목 없음", content: item?.content ?? "-",
-      requestContent: request.request_content, resultContent: request.result_content };
-  }).filter((item): item is NonNullable<typeof item> => Boolean(item))
-    .filter((item) => !departmentFilter || item.departmentId === departmentFilter)
-    .sort((left, right) => right.requestDate.localeCompare(left.requestDate))
-    .map((item) => ({
-      id: item.id,
-      requestDate: item.requestDate,
-      monthLabel: item.monthLabel,
-      weekLabel: item.weekLabel,
-      departmentName: item.departmentName,
-      clientName: item.clientName,
-      categoryName: item.categoryName,
-      title: item.title,
-      content: item.content,
-      requestContent: item.requestContent,
-      resultContent: item.resultContent
-    }));
+  const requestsByTarget = rows.reduce((map, request) => {
+    const targetRequests = map.get(request.target_key) ?? [];
+    targetRequests.push(request);
+    map.set(request.target_key, targetRequests);
+    return map;
+  }, new Map<string, MeetingReportItemRequest[]>());
+
+  return rows
+    .filter((request) => !request.closed_at && !request.deleted_at)
+    .map((request): DepartmentOpenRequestItem | null => {
+      const targetRequests = requestsByTarget.get(request.target_key) ?? [request];
+      if (request.target_type === "client_item") {
+        const item = request.weekly_client_report_items;
+        const report = item?.weekly_client_reports;
+        if (!item || !report || (departmentFilter && report.department_id !== departmentFilter) || (clientFilter && report.client_id !== clientFilter)) {
+          return null;
+        }
+        const departmentName = report.departments?.department_name ?? "-";
+        const clientName = report.clients?.client_name ?? "-";
+        const categoryName = item.work_categories?.category_name ?? "기타";
+        const title = item.title?.trim() || item.content.split("\n")[0]?.trim() || "제목 없음";
+        return {
+          requestId: request.id,
+          requestCreatedAt: request.created_at,
+          weekLabel: `${report.report_year}.${String(report.report_month).padStart(2, "0")} ${report.week_of_month}주차 · ${item.item_period === "current" ? "금주" : "차주"}`,
+          sourceLabel: `${departmentName} · ${clientName}`,
+          categoryName,
+          title,
+          requestContent: request.request_content,
+          resultContent: request.result_content,
+          selection: {
+            reportId: report.id,
+            clientName,
+            departmentName,
+            isCommon: false,
+            item: {
+              id: item.id,
+              item_period: item.item_period,
+              title,
+              content: item.content,
+              importance: item.importance,
+              work_categories: { category_name: categoryName },
+              weekly_report_item_requests: targetRequests,
+              request_target_key: request.target_key,
+              request_target_type: "client_item",
+              request_department_submission_id: null,
+              request_item_sort_order: null
+            }
+          }
+        };
+      }
+
+      const submission = request.department_weekly_submissions;
+      if (
+        request.target_type !== "department_common" ||
+        !submission ||
+        clientFilter ||
+        (departmentFilter && submission.department_id !== departmentFilter) ||
+        !request.item_period ||
+        typeof request.item_sort_order !== "number"
+      ) {
+        return null;
+      }
+      const content = submission.department_weekly_contents.find((row) => row.section_type === "common");
+      if (!content) return null;
+      const items = parseDepartmentCommonContentItems(
+        request.item_period === "current" ? content.current_week_content : content.next_week_content,
+        request.item_period === "current" ? content.current_importance : content.next_importance,
+        (request.item_period === "current" ? content.current_work_category_id : content.next_work_category_id) ?? "",
+        "공통사항"
+      );
+      const item = items.find((row) => row.sort_order === request.item_sort_order) ?? items[0];
+      const departmentName = submission.departments?.department_name ?? "-";
+      const categoryName = item?.work_category_id ? categoryNames.get(item.work_category_id) ?? "기타" : "기타";
+      const title = item?.title?.trim() || item?.content.split("\n")[0]?.trim() || "제목 없음";
+      return {
+        requestId: request.id,
+        requestCreatedAt: request.created_at,
+        weekLabel: `${submission.report_year}.${String(submission.report_month).padStart(2, "0")} ${submission.week_of_month}주차 · ${request.item_period === "current" ? "금주" : "차주"}`,
+        sourceLabel: `${departmentName} · 부서 공통사항`,
+        categoryName,
+        title,
+        requestContent: request.request_content,
+        resultContent: request.result_content,
+        selection: {
+          reportId: submission.id,
+          clientName: "공통사항",
+          departmentName,
+          isCommon: true,
+          item: {
+            id: request.target_key,
+            item_period: request.item_period,
+            title,
+            content: item?.content ?? "-",
+            importance: item?.importance ?? (request.item_period === "current" ? content.current_importance : content.next_importance),
+            work_categories: { category_name: categoryName },
+            weekly_report_item_requests: targetRequests,
+            request_target_key: request.target_key,
+            request_target_type: "department_common",
+            request_department_submission_id: submission.id,
+            request_item_sort_order: request.item_sort_order
+          }
+        }
+      };
+    })
+    .filter((request): request is DepartmentOpenRequestItem => Boolean(request))
+    .sort((left, right) => right.requestCreatedAt.localeCompare(left.requestCreatedAt));
+}
+
+export function makePriorityOpenRequestItems(items: DepartmentOpenRequestItem[]): MeetingOpenRequestItem[] {
+  return items.map((request) => {
+    const weekMatch = /^(\d{4})\.(\d{2})\s+(\d+)주차/.exec(request.weekLabel);
+    return {
+      id: request.requestId,
+      requestDate: request.requestCreatedAt,
+      monthLabel: weekMatch ? `${weekMatch[1].slice(2)}/${weekMatch[2]}` : "-",
+      weekLabel: weekMatch ? `${weekMatch[3]}주차` : request.weekLabel,
+      departmentName: request.selection.departmentName,
+      clientName: request.selection.clientName,
+      categoryName: request.categoryName,
+      title: request.title,
+      content: request.selection.item.content,
+      requestContent: request.requestContent,
+      resultContent: request.resultContent
+    };
+  });
 }
 
 function makeChartRows(reports: VolumeTrendReportRow[], lastWeek: number): VolumeChartRow[] {
@@ -383,8 +473,9 @@ export function buildMeetingTabData({ tab, payload, params, selectedWeek, openRe
     const written = new Map<string, Set<string>>();
     payload.clients.forEach((client) => { clientCounts[client.department_id] = (clientCounts[client.department_id] ?? 0) + 1; });
     reports.forEach((report) => written.set(report.department_id, new Set([...(written.get(report.department_id) ?? []), report.client_id])));
+    const confirmationRequests = makeConfirmationRequestItems(openRequests, payload.workCategories, payload.resolvedDepartmentId ?? undefined, params.client_id);
     return { tab, departments, submissions, priorityItems: makePriorityItems(reports),
-      openRequestItems: makeOpenRequestItems(openRequests, payload.workCategories, payload.resolvedDepartmentId ?? undefined),
+      openRequestItems: makePriorityOpenRequestItems(confirmationRequests),
       clientCounts, writtenClientCounts: Object.fromEntries(Array.from(written, ([key, value]) => [key, value.size])) };
   }
   if (tab === "materials") {
@@ -392,6 +483,7 @@ export function buildMeetingTabData({ tab, payload, params, selectedWeek, openRe
     const common = attachCommonRequests(makeCommonRows(submissions, departments, payload.workCategories), payload.commonMaterialRequests);
     const materialRows = [...common, ...reports];
     return { tab, reports: hasClientReportSearchFilters(filters) ? filterMaterialRows(materialRows, selectedWeek.weekStartDate, filters, payload.workCategories) : materialRows,
+      confirmationRequestItems: makeConfirmationRequestItems(openRequests, payload.workCategories, payload.resolvedDepartmentId ?? undefined, params.client_id),
       workCategories: payload.workCategories, filters, hasSearchFilters: hasClientReportSearchFilters(filters) };
   }
   if (tab === "volumes") return { tab, chartRows: makeChartRows(payload.volumeTrendReports, selectedWeek.weekOfMonth),

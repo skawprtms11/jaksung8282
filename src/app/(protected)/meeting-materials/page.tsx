@@ -10,6 +10,7 @@ import type {
 import type { MeetingOpenRequestItem, MeetingPriorityItem } from "@/components/reports/MeetingPriorityPanel";
 import { MeetingMaterialsWeekFilter } from "@/components/reports/MeetingMaterialsWeekFilter";
 import { DepartmentCommonSearchToolbar } from "@/components/reports/DepartmentCommonSearchToolbar";
+import type { DepartmentOpenRequestItem } from "@/components/reports/DepartmentOpenRequestBoard";
 import { pickDefaultDepartmentId } from "@/lib/auth/default-scope";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { canViewMeetingMaterials, isAdmin, type ProfileSummary } from "@/lib/auth/permissions";
@@ -30,6 +31,7 @@ import {
   parseDepartmentCommonContentItems,
   type ClientReportSearchFilters
 } from "@/lib/reports/client-report-search";
+import { makeConfirmationRequestItems, makePriorityOpenRequestItems } from "@/lib/reports/meeting-materials-tab-data";
 import { cn } from "@/lib/utils/cn";
 import { formatCompactDate } from "@/lib/utils/labels";
 import type { DepartmentSubmissionStatus, Importance, ItemPeriod, VolumeType, VolumeUnit } from "@/types/enums";
@@ -138,6 +140,7 @@ type OpenRequestQueryRow = ReportItemRequestRow & {
     importance: Importance;
     work_categories: { category_name: string } | null;
     weekly_client_reports: {
+      id: string;
       department_id: string;
       client_id: string;
       week_start_date: string;
@@ -257,13 +260,17 @@ function attachCommonMaterialRequests(rows: MeetingReportRow[], requests: Report
 
 const MEETING_REPORT_LIMIT = 500;
 const OPEN_REQUEST_COMPATIBILITY_SELECT =
-  "id,target_type,target_key,report_item_id,department_submission_id,section_type,item_period,item_sort_order,request_content,request_author_name,request_author_department_name,result_content,result_author_name,result_author_department_name,result_created_by,result_created_at,result_updated_at,closed_by,closed_author_name,closed_author_department_name,closed_at,created_by,created_at,updated_at,deleted_at,weekly_client_report_items(id,item_period,title,content,importance,work_categories(category_name),weekly_client_reports(department_id,client_id,week_start_date,report_year,report_month,week_of_month,departments(department_name),clients(client_name))),department_weekly_submissions(id,department_id,week_start_date,report_year,report_month,week_of_month,departments(department_name),department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content))";
+  "id,target_type,target_key,report_item_id,department_submission_id,section_type,item_period,item_sort_order,request_content,request_author_name,request_author_department_name,result_content,result_author_name,result_author_department_name,result_created_by,result_created_at,result_updated_at,closed_by,closed_author_name,closed_author_department_name,closed_at,created_by,created_at,updated_at,deleted_at,weekly_client_report_items(id,item_period,title,content,importance,work_categories(category_name),weekly_client_reports(id,department_id,client_id,week_start_date,report_year,report_month,week_of_month,departments(department_name),clients(client_name))),department_weekly_submissions(id,department_id,week_start_date,report_year,report_month,week_of_month,departments(department_name),department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content))";
 const MeetingPriorityPanel = dynamic(() => import("@/components/reports/MeetingPriorityPanel").then((mod) => mod.MeetingPriorityPanel), {
   loading: () => <PanelLoading label="핵심 이슈를 불러오는 중입니다." />
 });
 const MeetingMaterialsTable = dynamic(() => import("@/components/reports/MeetingMaterialsTable").then((mod) => mod.MeetingMaterialsTable), {
   loading: () => <PanelLoading label="회의자료를 불러오는 중입니다." />
 });
+const DepartmentOpenRequestBoard = dynamic(
+  () => import("@/components/reports/DepartmentOpenRequestBoard").then((mod) => mod.DepartmentOpenRequestBoard),
+  { loading: () => <PanelLoading label="확인요청현황을 불러오는 중입니다." /> }
+);
 const MeetingHolidayWorkBoard = dynamic(() => import("@/components/reports/MeetingHolidayWorkBoard").then((mod) => mod.MeetingHolidayWorkBoard), {
   loading: () => <PanelLoading label="공휴일 근무현황을 불러오는 중입니다." />
 });
@@ -523,84 +530,6 @@ function makePriorityItems(reports: MeetingReportRow[]): MeetingPriorityItem[] {
     });
 }
 
-function makeOpenRequestItems(
-  rows: OpenRequestQueryRow[],
-  categories: WorkCategoryRow[],
-  departmentFilter?: string
-): MeetingOpenRequestItem[] {
-  const categoryNameMap = new Map(categories.map((category) => [category.id, category.category_name]));
-  return rows
-    .map((request) => {
-      if (request.target_type === "client_item" && request.weekly_client_report_items?.weekly_client_reports) {
-        const item = request.weekly_client_report_items;
-        const report = item.weekly_client_reports;
-        if (!report) {
-          return null;
-        }
-        return {
-          id: request.id,
-          departmentId: report.department_id,
-          requestDate: request.created_at,
-          monthLabel: `${String(report.report_year).slice(2)}/${String(report.report_month).padStart(2, "0")}`,
-          weekLabel: `${report.week_of_month}주차`,
-          departmentName: report.departments?.department_name ?? "-",
-          clientName: report.clients?.client_name ?? "-",
-          categoryName: item.work_categories?.category_name ?? "기타",
-          title: item.title?.trim() || item.content.split("\n")[0]?.trim() || "제목 없음",
-          content: item.content,
-          requestContent: request.request_content,
-          resultContent: request.result_content
-        };
-      }
-
-      const submission = request.department_weekly_submissions;
-      if (request.target_type !== "department_common" || !submission || !request.item_period || typeof request.item_sort_order !== "number") {
-        return null;
-      }
-      const commonContent = submission.department_weekly_contents.find((content) => content.section_type === "common");
-      if (!commonContent) {
-        return null;
-      }
-      const commonItems = parseDepartmentCommonContentItems(
-        request.item_period === "current" ? commonContent.current_week_content : commonContent.next_week_content,
-        request.item_period === "current" ? commonContent.current_importance : commonContent.next_importance,
-        (request.item_period === "current" ? commonContent.current_work_category_id : commonContent.next_work_category_id) ?? "",
-        "공통사항"
-      );
-      const commonItem = commonItems.find((item) => item.sort_order === request.item_sort_order) ?? commonItems[0];
-      return {
-        id: request.id,
-        departmentId: submission.department_id,
-        requestDate: request.created_at,
-        monthLabel: `${String(submission.report_year).slice(2)}/${String(submission.report_month).padStart(2, "0")}`,
-        weekLabel: `${submission.week_of_month}주차`,
-        departmentName: submission.departments?.department_name ?? "-",
-        clientName: "공통사항",
-        categoryName: commonItem?.work_category_id ? categoryNameMap.get(commonItem.work_category_id) ?? "기타" : "기타",
-        title: commonItem?.title?.trim() || commonItem?.content.split("\n")[0]?.trim() || "제목 없음",
-        content: commonItem?.content ?? "-",
-        requestContent: request.request_content,
-        resultContent: request.result_content
-      };
-    })
-    .filter((item): item is MeetingOpenRequestItem & { departmentId: string } => Boolean(item))
-    .filter((item) => !departmentFilter || item.departmentId === departmentFilter)
-    .sort((left, right) => right.requestDate.localeCompare(left.requestDate))
-    .map((item) => ({
-      id: item.id,
-      requestDate: item.requestDate,
-      monthLabel: item.monthLabel,
-      weekLabel: item.weekLabel,
-      departmentName: item.departmentName,
-      clientName: item.clientName,
-      categoryName: item.categoryName,
-      title: item.title,
-      content: item.content,
-      requestContent: item.requestContent,
-      resultContent: item.resultContent
-    }));
-}
-
 function countByDepartment(clients: ClientSummaryRow[], reports: MeetingReportRow[]) {
   const clientCountMap = new Map<string, number>();
   clients.forEach((client) => {
@@ -790,6 +719,7 @@ async function MeetingMaterialsContent({
   let departments: DepartmentRow[] = [];
   let clients: ClientSummaryRow[] = [];
   let reports: MeetingReportRow[] = [];
+  let confirmationRequestItems: DepartmentOpenRequestItem[] = [];
   let openRequestItems: MeetingOpenRequestItem[] = [];
   let submissions: SubmissionRow[] = [];
   let workCategories: WorkCategoryRow[] = [];
@@ -799,7 +729,7 @@ async function MeetingMaterialsContent({
 
   if (supabase && profile) {
     const compatibilityRequestPromise = (async (): Promise<OpenRequestQueryRow[] | null> => {
-      if (activeTab !== "collection") {
+      if (activeTab !== "collection" && activeTab !== "materials") {
         return null;
       }
       try {
@@ -841,7 +771,7 @@ async function MeetingMaterialsContent({
       volumeTrendReports = rpcData.volumeTrendReports;
       previousVolumeTrendReports = rpcData.previousVolumeTrendReports;
       let openRequestRows = rpcData.openRequests;
-      if (activeTab === "collection" && compatibilityRequestData) {
+      if ((activeTab === "collection" || activeTab === "materials") && compatibilityRequestData) {
         const departmentFilter = rpcData.resolvedDepartmentId;
         openRequestRows = compatibilityRequestData.filter((request) => {
           if (request.target_type === "client_item") {
@@ -860,7 +790,17 @@ async function MeetingMaterialsContent({
           );
         });
       }
-      openRequestItems = makeOpenRequestItems(openRequestRows, workCategories, rpcData.resolvedDepartmentId ?? undefined);
+      if (activeTab === "collection" || activeTab === "materials") {
+        confirmationRequestItems = makeConfirmationRequestItems(
+          openRequestRows as unknown as import("@/lib/reports/meeting-materials-tab-data").OpenRequestQueryRow[],
+          workCategories,
+          rpcData.resolvedDepartmentId ?? undefined,
+          params.client_id
+        );
+        if (activeTab === "collection") {
+          openRequestItems = makePriorityOpenRequestItems(confirmationRequestItems);
+        }
+      }
       commonReports = activeTab === "materials" ? makeCommonMeetingRows(submissions, departments, workCategories) : [];
       if (activeTab === "materials") {
         commonReports = attachCommonMaterialRequests(commonReports, rpcData.commonMaterialRequests);
@@ -967,12 +907,12 @@ async function MeetingMaterialsContent({
             return query;
           })()
         : Promise.resolve({ data: [], error: null }),
-      activeTab === "collection"
+      activeTab === "collection" || activeTab === "materials"
         ? (() => {
             let clientRequestQuery = dataClient
               .from("weekly_report_item_requests")
               .select(
-                "id,target_type,target_key,report_item_id,department_submission_id,section_type,item_period,item_sort_order,request_content,request_author_name,request_author_department_name,result_content,result_author_name,result_author_department_name,result_created_by,result_created_at,result_updated_at,closed_by,closed_author_name,closed_author_department_name,closed_at,created_by,created_at,updated_at,deleted_at,weekly_client_report_items!inner(id,item_period,title,content,importance,work_categories(category_name),weekly_client_reports!inner(department_id,client_id,week_start_date,report_year,report_month,week_of_month,departments(department_name),clients(client_name)))"
+                "id,target_type,target_key,report_item_id,department_submission_id,section_type,item_period,item_sort_order,request_content,request_author_name,request_author_department_name,result_content,result_author_name,result_author_department_name,result_created_by,result_created_at,result_updated_at,closed_by,closed_author_name,closed_author_department_name,closed_at,created_by,created_at,updated_at,deleted_at,weekly_client_report_items!inner(id,item_period,title,content,importance,work_categories(category_name),weekly_client_reports!inner(id,department_id,client_id,week_start_date,report_year,report_month,week_of_month,departments(department_name),clients(client_name)))"
               )
               .eq("target_type", "client_item")
               .is("deleted_at", null)
@@ -1091,11 +1031,17 @@ async function MeetingMaterialsContent({
       department_id: link.department_id
     }));
     reports = normalizeMeetingReports((reportResult.error ? [] : reportResult.data ?? []) as unknown as MeetingReportRow[]);
-    openRequestItems = makeOpenRequestItems(
-      (openRequestResult.data ?? []) as unknown as OpenRequestQueryRow[],
-      (categoryResult.data ?? []) as WorkCategoryRow[],
-      departmentFilter ?? undefined
-    );
+    if (activeTab === "collection" || activeTab === "materials") {
+      confirmationRequestItems = makeConfirmationRequestItems(
+        (openRequestResult.data ?? []) as unknown as import("@/lib/reports/meeting-materials-tab-data").OpenRequestQueryRow[],
+        (categoryResult.data ?? []) as WorkCategoryRow[],
+        departmentFilter ?? undefined,
+        params.client_id
+      );
+      if (activeTab === "collection") {
+        openRequestItems = makePriorityOpenRequestItems(confirmationRequestItems);
+      }
+    }
     submissions = ((submissionResult.data ?? []) as unknown as SubmissionRow[]).map((submission) => ({
       ...submission,
       department_weekly_contents: submission.department_weekly_contents ?? []
@@ -1143,7 +1089,7 @@ async function MeetingMaterialsContent({
       ) : null}
       {activeTab === "materials" ? (
         <div className="space-y-2">
-          <div className="rounded-md border border-[#d9e7f7] bg-white/90 p-3 shadow-[0_10px_26px_rgba(16,34,61,0.05)]">
+          <div className="rounded-md border border-[#d9e7f7] bg-white/90 px-2 py-0.5 shadow-[0_10px_26px_rgba(16,34,61,0.05)]">
             <DepartmentCommonSearchToolbar
               key={Object.values(searchFilters).join("|")}
               categories={workCategories}
@@ -1152,8 +1098,17 @@ async function MeetingMaterialsContent({
               detailsId="meeting-materials-detailed-search"
               unifiedDataSearch
               showQuickReset
+              inlineQuickSearch
             />
           </div>
+          <DepartmentOpenRequestBoard
+            requests={confirmationRequestItems}
+            currentUserId={profile.id}
+            canManageAllRequests={isAdmin(profile)}
+            title="확인요청현황"
+            emptyMessage="진행 중인 확인요청이 없습니다."
+            compact
+          />
           <MeetingMaterialsTable
             key={`materials-${selectedWeek.weekStartDate}-${params.department_id ?? "all"}-${params.client_id ?? "all"}-${Object.values(searchFilters).join("-")}`}
             reports={filteredMaterialRows}
