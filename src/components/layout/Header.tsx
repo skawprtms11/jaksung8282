@@ -194,7 +194,7 @@ function HeaderScopeFilter({
       }),
     [activeOptions.clients, assignedClientIdSet, effectiveDepartmentId, isClientWritePage, profile.app_role]
   );
-  const requiresClientSelection = isClientWritePage || isDepartmentReportPage;
+  const requiresClientSelection = isClientWritePage;
   const fallbackClientId = requiresClientSelection && effectiveDepartmentId ? pickDefaultClientId(departmentScopedClients, profile.app_role) : "";
   const effectiveClientId = selectedClientId || fallbackClientId;
 

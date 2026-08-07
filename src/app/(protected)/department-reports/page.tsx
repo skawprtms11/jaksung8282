@@ -15,7 +15,7 @@ import type {
 import { EmptyState } from "@/components/common/EmptyState";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { TableShell } from "@/components/common/TableShell";
-import { pickDefaultClientId, pickDefaultDepartmentId } from "@/lib/auth/default-scope";
+import { pickDefaultDepartmentId } from "@/lib/auth/default-scope";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { canSubmitDepartment, isAdmin } from "@/lib/auth/permissions";
 import {
@@ -63,7 +63,6 @@ type ClientReviewRow = {
   weekly_volumes: { volume_type: VolumeType; quantity: number; unit: VolumeUnit }[];
 };
 type DepartmentDefaultRow = { id: string; department_name: string };
-type DefaultClientLinkRow = { clients: { id: string; client_name: string } | null };
 type DepartmentSubmissionInitialRow = {
   id: string;
   department_id: string;
@@ -462,25 +461,7 @@ export default async function DepartmentReportsPage({
     }
     const departmentFilter = isAdmin(profile) ? params.department_id ?? adminDefaultDepartmentId : profile.department_id;
     const selectedDepartmentFilter = departmentFilter ?? params.department_id;
-    let defaultClientId: string | undefined;
-    if (!params.client_id && selectedDepartmentFilter) {
-      const { data: defaultClientLinks } = await dataClient
-        .from("department_client_links")
-        .select("clients(id,client_name)")
-        .eq("department_id", selectedDepartmentFilter)
-        .eq("is_active", true)
-        .order("client_id", { ascending: true });
-      const defaultClients = ((defaultClientLinks ?? []) as unknown as DefaultClientLinkRow[])
-        .filter((link) => link.clients)
-        .map((link) => ({
-          id: link.clients?.id ?? "",
-          client_name: link.clients?.client_name ?? ""
-        }))
-        .filter((client) => client.id && client.client_name)
-        .sort((left, right) => left.client_name.localeCompare(right.client_name, "ko"));
-      defaultClientId = pickDefaultClientId(defaultClients, profile.app_role) || undefined;
-    }
-    const selectedClientFilter = params.client_id ?? defaultClientId;
+    const selectedClientFilter = params.client_id;
     initialLookupDepartmentId = selectedDepartmentFilter ?? null;
     const [
       { data: departmentData },
