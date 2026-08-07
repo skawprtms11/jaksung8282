@@ -1,6 +1,6 @@
 "use client";
 
-import { type ClipboardEvent, useActionState, useMemo, useState } from "react";
+import { type ClipboardEvent, type KeyboardEvent, useActionState, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowRight, Building2, FileSpreadsheet, KeyRound, PackagePlus, Pencil, Plus, RotateCcw, Save, Search, Trash2, UserRoundCheck, X } from "lucide-react";
 import {
@@ -493,6 +493,9 @@ export function DepartmentClientManager({
   const [isOpen, setIsOpen] = useState(false);
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
   const [selectedRegisteredClientIds, setSelectedRegisteredClientIds] = useState<string[]>([]);
+  const [clientSearchQuery, setClientSearchQuery] = useState("");
+  const [isAutocompleteOpen, setIsAutocompleteOpen] = useState(false);
+  const [activeAutocompleteIndex, setActiveAutocompleteIndex] = useState(-1);
   const [stagedRegisteredClientIds, setStagedRegisteredClientIds] = useState<string[]>(() =>
     departmentClientLinks.filter((link) => link.department_id === department.id && link.is_active).map((link) => link.client_id)
   );
@@ -500,6 +503,13 @@ export function DepartmentClientManager({
   const [saveState, saveAction] = useActionState(saveDepartmentClientSelectionAction, null);
   const persistedRegisteredClientIds = departmentClientLinks.filter((link) => link.department_id === department.id && link.is_active).map((link) => link.client_id);
   const availableClients = clients.filter((client) => !stagedRegisteredClientIds.includes(client.id));
+  const normalizedClientSearchQuery = clientSearchQuery.trim().toLocaleLowerCase("ko-KR");
+  const filteredAvailableClients = normalizedClientSearchQuery
+    ? availableClients.filter((client) =>
+        `${client.client_name} ${client.client_code}`.toLocaleLowerCase("ko-KR").includes(normalizedClientSearchQuery)
+      )
+    : availableClients;
+  const autocompleteClients = normalizedClientSearchQuery ? filteredAvailableClients.slice(0, 8) : [];
   const registeredClients = clients.filter((client) => stagedRegisteredClientIds.includes(client.id));
   const departmentUsers = users.filter((user) => user.department_id === department.id && user.app_role === "client_owner");
   const assignmentClient = registeredClients.find((client) => client.id === assignmentClientId) ?? null;
@@ -511,6 +521,9 @@ export function DepartmentClientManager({
     setStagedRegisteredClientIds(persistedRegisteredClientIds);
     setSelectedClientIds([]);
     setSelectedRegisteredClientIds([]);
+    setClientSearchQuery("");
+    setIsAutocompleteOpen(false);
+    setActiveAutocompleteIndex(-1);
     setAssignmentClientId(null);
     setIsOpen(true);
   }
@@ -530,6 +543,36 @@ export function DepartmentClientManager({
   function addSelectedClients() {
     setStagedRegisteredClientIds((current) => Array.from(new Set([...current, ...selectedClientIds])));
     setSelectedClientIds([]);
+    setClientSearchQuery("");
+    setIsAutocompleteOpen(false);
+    setActiveAutocompleteIndex(-1);
+  }
+
+  function selectAutocompleteClient(client: DepartmentClientValue) {
+    setClientSearchQuery(client.client_name);
+    setIsAutocompleteOpen(false);
+    setActiveAutocompleteIndex(-1);
+  }
+
+  function handleClientSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (autocompleteClients.length === 0) {
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setIsAutocompleteOpen(true);
+      setActiveAutocompleteIndex((current) => Math.min(current + 1, autocompleteClients.length - 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setIsAutocompleteOpen(true);
+      setActiveAutocompleteIndex((current) => Math.max(current - 1, 0));
+    } else if (event.key === "Enter" && activeAutocompleteIndex >= 0) {
+      event.preventDefault();
+      selectAutocompleteClient(autocompleteClients[activeAutocompleteIndex]);
+    } else if (event.key === "Escape") {
+      setIsAutocompleteOpen(false);
+      setActiveAutocompleteIndex(-1);
+    }
   }
 
   function removeSelectedClients() {
@@ -556,6 +599,16 @@ export function DepartmentClientManager({
                 <p className="mt-1 text-sm text-slate-500">왼쪽 화주목록에서 선택 후 등록하고, 상단 저장을 눌러 최종 반영합니다.</p>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={addSelectedClients}
+                  disabled={selectedClientIds.length === 0}
+                  title={selectedClientIds.length === 0 ? "등록할 화주를 선택하세요." : undefined}
+                  className="focus-ring tool-button tool-button-primary disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  등록
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </button>
                 <form action={saveAction}>
                   <input type="hidden" name="department_id" value={department.id} />
                   <input type="hidden" name="registered_client_ids" value={stagedRegisteredClientIds.join(",")} />
@@ -570,17 +623,86 @@ export function DepartmentClientManager({
               </div>
             </div>
 
-            <div className="grid max-h-[76vh] gap-4 overflow-y-auto p-5 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+            <div className="grid max-h-[76vh] gap-4 overflow-y-auto p-5 lg:grid-cols-2">
               <section className="rounded-[1.25rem] border border-[#d9e4f2] bg-[#f8fbff] p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <h3 className="font-black text-[#10223d]">화주목록</h3>
-                  <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-500">{availableClients.length}건</span>
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-500">
+                    {normalizedClientSearchQuery ? `${filteredAvailableClients.length}/${availableClients.length}건` : `${availableClients.length}건`}
+                  </span>
+                </div>
+                <div className="relative mb-3">
+                  <label htmlFor={`client-search-${department.id}`} className="sr-only">화주명 또는 화주코드 검색</label>
+                  <div className="flex h-10 items-center gap-2 rounded-md border border-[#b9cce4] bg-white px-3 focus-within:border-[#075be8] focus-within:ring-2 focus-within:ring-[#075be8]/15">
+                    <Search className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+                    <input
+                      id={`client-search-${department.id}`}
+                      type="search"
+                      role="combobox"
+                      aria-autocomplete="list"
+                      aria-expanded={isAutocompleteOpen && autocompleteClients.length > 0}
+                      aria-controls={`client-search-options-${department.id}`}
+                      aria-activedescendant={activeAutocompleteIndex >= 0 ? `client-search-option-${autocompleteClients[activeAutocompleteIndex]?.id}` : undefined}
+                      value={clientSearchQuery}
+                      onChange={(event) => {
+                        setClientSearchQuery(event.target.value);
+                        setIsAutocompleteOpen(true);
+                        setActiveAutocompleteIndex(-1);
+                      }}
+                      onFocus={() => setIsAutocompleteOpen(true)}
+                      onBlur={() => setIsAutocompleteOpen(false)}
+                      onKeyDown={handleClientSearchKeyDown}
+                      placeholder="화주명 또는 화주코드 검색"
+                      autoComplete="off"
+                      className="min-w-0 flex-1 border-0 bg-transparent text-sm font-semibold text-[#10223d] outline-none placeholder:text-slate-400"
+                    />
+                    {clientSearchQuery ? (
+                      <button
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setClientSearchQuery("");
+                          setIsAutocompleteOpen(false);
+                          setActiveAutocompleteIndex(-1);
+                        }}
+                        className="rounded p-1 text-slate-400 transition hover:bg-slate-100 hover:text-[#075be8]"
+                        aria-label="화주 검색 초기화"
+                      >
+                        <X className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    ) : null}
+                  </div>
+                  {isAutocompleteOpen && autocompleteClients.length > 0 ? (
+                    <div
+                      id={`client-search-options-${department.id}`}
+                      role="listbox"
+                      className="absolute inset-x-0 top-[calc(100%+0.35rem)] z-20 max-h-64 overflow-y-auto rounded-md border border-[#b9cce4] bg-white p-1.5 shadow-[0_18px_40px_rgba(16,34,61,0.18)]"
+                    >
+                      {autocompleteClients.map((client, index) => (
+                        <button
+                          key={client.id}
+                          id={`client-search-option-${client.id}`}
+                          type="button"
+                          role="option"
+                          aria-selected={index === activeAutocompleteIndex}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => selectAutocompleteClient(client)}
+                          className={`flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left text-sm transition ${index === activeAutocompleteIndex ? "bg-[#eaf3ff] text-[#075be8]" : "text-[#10223d] hover:bg-[#f4f8fd]"}`}
+                        >
+                          <span className="min-w-0 truncate font-bold">{client.client_name}</span>
+                          <span className="shrink-0 text-xs font-semibold text-slate-400">{client.client_code}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
                 {availableClients.length === 0 ? (
                   <p className="rounded-2xl border border-dashed border-[#b9cce4] bg-white/80 px-4 py-10 text-center text-sm font-semibold text-slate-500">등록 가능한 미소속 화주가 없습니다.</p>
+                ) : filteredAvailableClients.length === 0 ? (
+                  <p className="rounded-2xl border border-dashed border-[#b9cce4] bg-white/80 px-4 py-10 text-center text-sm font-semibold text-slate-500">검색 조건에 맞는 화주가 없습니다.</p>
                 ) : (
-                  <div className="space-y-2">
-                    {availableClients.map((client) => (
+                  <div className="max-h-[52vh] space-y-2 overflow-y-auto pr-1">
+                    {filteredAvailableClients.map((client) => (
                       <label key={client.id} className="flex cursor-pointer items-center gap-3 rounded-2xl border border-[#d9e4f2] bg-white/86 px-3 py-3 text-sm transition hover:border-[#075be8]/30 hover:bg-white">
                         <input
                           type="checkbox"
@@ -598,19 +720,6 @@ export function DepartmentClientManager({
                   </div>
                 )}
               </section>
-
-              <div className="flex items-center justify-center">
-                <button
-                  type="button"
-                  onClick={addSelectedClients}
-                  disabled={selectedClientIds.length === 0}
-                  title={selectedClientIds.length === 0 ? "등록할 화주를 선택하세요." : undefined}
-                  className="focus-ring tool-button tool-button-primary disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  등록
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </div>
 
               <section className="rounded-[1.25rem] border border-[#d9e4f2] bg-[#f8fbff] p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
@@ -632,7 +741,7 @@ export function DepartmentClientManager({
                 {registeredClients.length === 0 ? (
                   <p className="rounded-2xl border border-dashed border-[#b9cce4] bg-white/80 px-4 py-10 text-center text-sm font-semibold text-slate-500">아직 등록된 화주가 없습니다.</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="max-h-[58vh] space-y-2 overflow-y-auto pr-1">
                     {registeredClients.map((client) => {
                       const assignedUsers = assignments
                         .filter((assignment) => assignment.department_id === department.id && assignment.client_id === client.id && assignment.is_active)
