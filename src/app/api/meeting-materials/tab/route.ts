@@ -21,7 +21,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const REPORT_LIMIT = 500;
 const OPEN_REQUEST_SELECT =
-  "id,target_type,target_key,report_item_id,department_submission_id,section_type,item_period,item_sort_order,request_content,request_author_name,request_author_department_name,result_content,result_author_name,result_author_department_name,result_created_by,result_created_at,result_updated_at,closed_by,closed_author_name,closed_author_department_name,closed_at,created_by,created_at,updated_at,deleted_at,weekly_client_report_items(id,item_period,title,content,importance,work_categories(category_name),weekly_client_reports(department_id,client_id,week_start_date,report_year,report_month,week_of_month,departments(department_name),clients(client_name))),department_weekly_submissions(id,department_id,week_start_date,report_year,report_month,week_of_month,departments(department_name),department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content))";
+  "id,target_type,target_key,report_item_id,department_submission_id,section_type,item_period,item_sort_order,request_content,request_author_name,request_author_department_name,result_content,result_author_name,result_author_department_name,result_created_by,result_created_at,result_updated_at,closed_by,closed_author_name,closed_author_department_name,closed_at,created_by,created_at,updated_at,deleted_at,weekly_client_report_items(id,item_period,title,content,importance,work_categories(category_name),weekly_client_reports(id,department_id,client_id,week_start_date,report_year,report_month,week_of_month,departments(department_name),clients(client_name))),department_weekly_submissions(id,department_id,week_start_date,report_year,report_month,week_of_month,departments(department_name),department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content))";
 const validTabs = new Set<MeetingTab>(["collection", "materials", "volumes", "holiday", "facility"]);
 
 function makeWeekFromStartDate(weekStartDate: string): WeekOption {
@@ -60,7 +60,7 @@ function paramsFromRequest(request: NextRequest): MeetingSearchParams {
 }
 
 async function getCompatibilityRequests(tab: MeetingTab, params: MeetingSearchParams, resolvedDepartmentId: string | null) {
-  if (tab !== "collection") return undefined;
+  if (tab !== "collection" && tab !== "materials") return undefined;
   try {
     const admin = createSupabaseAdminClient();
     const { data, error } = await admin

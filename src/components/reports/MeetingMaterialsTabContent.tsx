@@ -5,6 +5,7 @@ import { MeetingDepartmentVolumeBoard } from "@/components/reports/MeetingDepart
 import { MeetingFacilityConstructionBoard } from "@/components/reports/MeetingFacilityConstructionBoard";
 import { MeetingHolidayWorkBoard } from "@/components/reports/MeetingHolidayWorkBoard";
 import { MeetingMaterialsTable } from "@/components/reports/MeetingMaterialsTable";
+import { DepartmentOpenRequestBoard } from "@/components/reports/DepartmentOpenRequestBoard";
 import { MeetingPriorityPanel } from "@/components/reports/MeetingPriorityPanel";
 import { VolumeComparisonChart } from "@/components/charts/VolumeComparisonChart";
 import { TableShell } from "@/components/common/TableShell";
@@ -21,7 +22,9 @@ function compactStatus(status: DepartmentSubmissionStatus | null) {
   return { label: "반려", className: "border-rose-200 bg-rose-50 text-rose-700" };
 }
 
-function CollectionContent({ data }: { data: Extract<MeetingTabData, { tab: "collection" }> }) {
+function CollectionContent({ data }: {
+  data: Extract<MeetingTabData, { tab: "collection" }>;
+}) {
   const total = data.departments.reduce((sum, department) => sum + (data.clientCounts[department.id] ?? 0), 0);
   const completed = data.departments.reduce((sum, department) => sum + (data.writtenClientCounts[department.id] ?? 0), 0);
   const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -94,9 +97,18 @@ export function MeetingMaterialsTabContent({ data, currentUserId, canManageAllRe
 }) {
   if (data.tab === "collection") return <CollectionContent data={data} />;
   if (data.tab === "materials") return <div className="space-y-2">
-    <div className="rounded-md border border-[#d9e7f7] bg-white/90 p-3 shadow-[0_10px_26px_rgba(16,34,61,0.05)]">
-      <DepartmentCommonSearchToolbar key={Object.values(data.filters).join("|")} categories={data.workCategories} filters={data.filters} resultCount={data.reports.length} detailsId="meeting-materials-detailed-search" unifiedDataSearch showQuickReset />
+    <div className="rounded-md border border-[#d9e7f7] bg-white/90 px-2 py-0.5 shadow-[0_10px_26px_rgba(16,34,61,0.05)]">
+      <DepartmentCommonSearchToolbar key={Object.values(data.filters).join("|")} categories={data.workCategories} filters={data.filters} resultCount={data.reports.length} detailsId="meeting-materials-detailed-search" unifiedDataSearch showQuickReset inlineQuickSearch />
     </div>
+    <DepartmentOpenRequestBoard
+      requests={data.confirmationRequestItems}
+      currentUserId={currentUserId}
+      canManageAllRequests={canManageAllRequests}
+      title="확인요청현황"
+      emptyMessage="진행 중인 확인요청이 없습니다."
+      onDataChanged={onDataChanged}
+      compact
+    />
     <MeetingMaterialsTable reports={data.reports} currentUserId={currentUserId} canManageAllRequests={canManageAllRequests} emptyTitle={data.hasSearchFilters ? "검색 조건에 맞는 회의자료가 없습니다." : "선택한 주차의 회의자료가 없습니다."} onDataChanged={onDataChanged} />
   </div>;
   if (data.tab === "volumes") return <VolumesContent data={data} />;

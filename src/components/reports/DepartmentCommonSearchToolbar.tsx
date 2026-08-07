@@ -35,7 +35,8 @@ export function DepartmentCommonSearchToolbar({
   resultCount,
   detailsId = "department-common-detailed-search",
   unifiedDataSearch = false,
-  showQuickReset = false
+  showQuickReset = false,
+  inlineQuickSearch = false
 }: {
   categories: Category[];
   filters: ClientReportSearchFilters;
@@ -43,6 +44,7 @@ export function DepartmentCommonSearchToolbar({
   detailsId?: string;
   unifiedDataSearch?: boolean;
   showQuickReset?: boolean;
+  inlineQuickSearch?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -140,19 +142,19 @@ export function DepartmentCommonSearchToolbar({
 
   return (
     <div className="min-w-0 flex-1">
-      <div className="flex flex-wrap items-end justify-end gap-2">
+      <div className={`flex flex-wrap justify-end gap-2 ${inlineQuickSearch ? "items-center" : "items-end"}`}>
         {hasSearch ? (
           <span className="self-center whitespace-nowrap text-xs font-black text-[#075be8]">검색결과 {resultCount}건</span>
         ) : null}
-        <label className="min-w-[190px] flex-1 text-xs font-bold text-slate-600 lg:max-w-[290px]">
-          제목 검색
+        <label className={`min-w-[190px] flex-1 text-xs font-bold text-slate-600 lg:max-w-[360px] ${inlineQuickSearch ? "flex items-center gap-2" : ""}`}>
+          <span className={inlineQuickSearch ? "shrink-0 whitespace-nowrap" : ""}>제목 검색</span>
           <input
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={handleQuickSearchKeyDown}
             placeholder="금주·차주 제목 검색"
-            className={controlClassName}
+            className={inlineQuickSearch ? controlClassName.replace("mt-1 ", "") : controlClassName}
           />
         </label>
         {showQuickReset ? (
