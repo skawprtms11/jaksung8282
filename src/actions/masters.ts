@@ -19,6 +19,18 @@ function revalidateMasterPath(path: string) {
   revalidateTag(HEADER_FILTER_CACHE_TAG, { expire: 0 });
 }
 
+function normalizeDepartmentName(value: string) {
+  return value.trim().toLocaleLowerCase("ko-KR");
+}
+
+function isDuplicateDepartmentNameError(error: { code?: string; message?: string } | null) {
+  return Boolean(
+    error &&
+      error.code === "23505" &&
+      (error.message?.includes("department name") || error.message?.includes("departments_department_name_normalized_key"))
+  );
+}
+
 async function requireAdmin() {
   const { profile } = await getCurrentUserProfile();
   if (!isAdmin(profile)) {
@@ -161,17 +173,49 @@ export async function saveDepartmentAction(_: ActionResult | null, formData: For
     return { ok: false, message: "부서장 정보를 확인하세요." };
   }
 
+  const { data: departmentNameRows, error: departmentNameLookupError } = await supabase
+    .from("departments")
+    .select("id,department_name")
+    .limit(500);
+  if (departmentNameLookupError) {
+    return { ok: false, message: safeErrorMessage(departmentNameLookupError.message) };
+  }
+  const normalizedDepartmentName = normalizeDepartmentName(payload.department_name);
+  const currentDepartmentName = id
+    ? departmentNameRows?.find((department) => department.id === id)?.department_name
+    : undefined;
+  const isDepartmentNameChanged =
+    !currentDepartmentName || normalizeDepartmentName(currentDepartmentName) !== normalizedDepartmentName;
+  const hasDuplicateDepartmentName =
+    isDepartmentNameChanged &&
+    departmentNameRows?.some(
+      (department) => department.id !== id && normalizeDepartmentName(department.department_name) === normalizedDepartmentName
+    );
+  if (hasDuplicateDepartmentName) {
+    return {
+      ok: false,
+      message: "이미 등록된 부서명입니다.",
+      fieldErrors: { department_name: ["동일한 부서명을 사용할 수 없습니다."] }
+    };
+  }
+
   const request = id
     ? supabase.from("departments").update({ ...payload, updated_by: profile.id }).eq("id", id).select("id").single()
     : supabase.from("departments").insert({ ...payload, created_by: profile.id, updated_by: profile.id }).select("id").single();
   const { data: savedDepartment, error } = await request;
   let savedDepartmentId = savedDepartment?.id ?? id ?? "";
+  if (isDuplicateDepartmentNameError(error)) {
+    return { ok: false, message: "이미 등록된 부서명입니다.", fieldErrors: { department_name: ["동일한 부서명을 사용할 수 없습니다."] } };
+  }
   if (error?.message.includes("notes")) {
     const payloadWithoutNotes = { ...payload };
     delete payloadWithoutNotes.notes;
     const retry = id
       ? await supabase.from("departments").update({ ...payloadWithoutNotes, updated_by: profile.id }).eq("id", id).select("id").single()
       : await supabase.from("departments").insert({ ...payloadWithoutNotes, created_by: profile.id, updated_by: profile.id }).select("id").single();
+    if (isDuplicateDepartmentNameError(retry.error)) {
+      return { ok: false, message: "이미 등록된 부서명입니다.", fieldErrors: { department_name: ["동일한 부서명을 사용할 수 없습니다."] } };
+    }
     if (retry.error) {
       return { ok: false, message: safeErrorMessage(retry.error.message) };
     }
