@@ -756,6 +756,7 @@ export default async function MeetingMaterialsPage({
 
   return (
     <MeetingMaterialsWorkspace
+      key={contentKey}
       initialTab={activeTab}
       currentUserId={profile.id}
       canManageAllRequests={isAdmin(profile)}
