@@ -159,7 +159,7 @@ const vacancyRecordSchema = z.object({
   vacancy_note: z.string().trim().optional().nullable()
 });
 
-export type ReportItemRequestActionRow = {
+type ReportItemRequestActionRow = {
   id: string;
   target_type: "client_item" | "department_common";
   target_key: string;

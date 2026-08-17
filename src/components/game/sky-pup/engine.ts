@@ -4,7 +4,7 @@ import { renderScene } from "./renderer";
 import { loadGameData, saveGameData } from "./storage";
 import { clampMiniGameScore } from "@/lib/game/score";
 import { normalizeJoystickInput } from "./controls";
-import type { Bullet, Enemy, EnemyKind, EngineCallbacks, GameHud, GameResult, GameStatus, HealItem, ItemKind, Particle, Player, SkyPupVisualAssets, Upgrade, UpgradeKind } from "./types";
+import type { Bullet, Enemy, EnemyKind, EngineCallbacks, GameHud, GameResult, GameStatus, HealItem, ItemKind, Particle, Player, SkyPupVisualAssets, UpgradeKind } from "./types";
 
 const TAU = Math.PI * 2;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -404,5 +404,3 @@ export function formatPlayTime(seconds: number) {
   const minutes = Math.floor(seconds / 60); const rest = seconds % 60;
   return `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
 }
-
-export function upgradeTitle(upgrade: Upgrade) { return upgrade.title; }

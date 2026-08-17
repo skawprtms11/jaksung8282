@@ -14,8 +14,7 @@ import {
 import {
   filterClientReportSearchItems,
   hasClientReportSearchFilters,
-  parseClientReportSearchFilters,
-  type ClientReportSearchFilters
+  parseClientReportSearchFilters
 } from "@/lib/reports/client-report-search";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
