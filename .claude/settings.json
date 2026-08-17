@@ -13,15 +13,43 @@
       "mcp__claude_ai_Supabase__get_organization",
       "mcp__claude_ai_Supabase__search_docs",
       "mcp__claude_ai_Supabase__generate_typescript_types",
+      "mcp__claude_ai_Netlify__netlify-project-services-reader",
+      "mcp__claude_ai_Netlify__netlify-deploy-services-reader",
+      "mcp__claude_ai_Netlify__netlify-user-services-reader",
       "Bash(sqlite3 .harness/chat.db *)",
       "Bash(npm run lint)",
       "Bash(npm run typecheck)",
       "Bash(npm test)",
+      "Bash(npm run build)",
       "Bash(npx tsc --noEmit)",
       "Bash(npx eslint .)",
       "Bash(npx vitest run)",
       "Bash(git diff --stat)",
-      "Bash(git status --porcelain)"
+      "Bash(git status --porcelain)",
+      "Bash(gh pr checks *)",
+      "Bash(gh run watch *)",
+      "Bash(curl -s -o /dev/null *)",
+      "Bash(lsof -ti:*)"
+    ],
+    "ask": [
+      "Bash(git push *)",
+      "Bash(gh pr merge *)",
+      "Bash(supabase db push *)",
+      "Bash(npm publish *)",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "mcp__claude_ai_Supabase__deploy_edge_function",
+      "mcp__claude_ai_Supabase__merge_branch",
+      "mcp__claude_ai_Netlify__netlify-deploy-services-updater",
+      "mcp__claude_ai_Netlify__netlify-project-services-updater"
+    ],
+    "deny": [
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
+      "Bash(git reset --hard origin/main)",
+      "mcp__claude_ai_Supabase__delete_branch",
+      "mcp__claude_ai_Supabase__pause_project"
     ]
   }
 }
