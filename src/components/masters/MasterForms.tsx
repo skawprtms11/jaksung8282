@@ -419,32 +419,6 @@ export function DepartmentForm({ users = [] }: { users?: AssignmentUser[] }) {
   );
 }
 
-export function DepartmentEditForm({ department }: { department: DepartmentFormValue }) {
-  const [state, action] = useActionState(saveDepartmentAction, null);
-  return (
-    <details className="glass-row p-3">
-      <summary className="cursor-pointer text-sm font-bold text-[#075be8]">수정·비활성화</summary>
-      <form action={action} className="mt-3 grid gap-2 md:grid-cols-5">
-        <input type="hidden" name="id" value={department.id} />
-        <input name="department_code" defaultValue={department.department_code} className="h-9 rounded-md border border-slate-300 px-2 text-sm" />
-        <input name="department_name" defaultValue={department.department_name} className="h-9 rounded-md border border-slate-300 px-2 text-sm md:col-span-2" />
-        <input name="notes" defaultValue={department.notes ?? ""} className="h-9 rounded-md border border-slate-300 px-2 text-sm md:col-span-2" placeholder="비고" />
-        <input name="sort_order" type="number" min={0} defaultValue={department.sort_order} className="h-9 rounded-md border border-slate-300 px-2 text-sm" />
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" name="is_active" value="true" defaultChecked={department.is_active} />
-          사용
-        </label>
-        <div className="md:col-span-5">
-          <SubmitButton variant="secondary">변경사항 저장</SubmitButton>
-        </div>
-        <div className="md:col-span-5">
-          <ActionMessage state={state} />
-        </div>
-      </form>
-    </details>
-  );
-}
-
 export function DepartmentCreateButton({ users = [] }: { users?: AssignmentUser[] }) {
   const [isOpen, setIsOpen] = useState(false);
   return (
@@ -1599,47 +1573,6 @@ export function UserForm({ departments }: { departments: Department[] }) {
       <ActionMessage state={state} />
       <SubmitButton>사용자 저장</SubmitButton>
     </form>
-  );
-}
-
-export function UserEditForm({ user, departments }: { user: UserFormValue; departments: Department[] }) {
-  const [state, action] = useActionState(saveUserAction, null);
-  return (
-    <details className="glass-row p-3">
-      <summary className="cursor-pointer text-sm font-bold text-[#075be8]">수정·비활성화</summary>
-      <form action={action} className="mt-3 grid gap-2 md:grid-cols-4">
-        <input type="hidden" name="id" value={user.id} />
-        <input name="email" type="email" defaultValue={user.email} className="h-9 rounded-md border border-slate-300 px-2 text-sm" />
-        <input name="employee_no" defaultValue={user.employee_no} className="h-9 rounded-md border border-slate-300 px-2 text-sm" />
-        <input name="full_name" defaultValue={user.full_name} className="h-9 rounded-md border border-slate-300 px-2 text-sm" />
-        <select name="department_id" defaultValue={user.department_id ?? ""} className="h-9 rounded-md border border-slate-300 px-2 text-sm">
-          <option value="">미지정</option>
-          {departments.map((department) => (
-            <option key={department.id} value={department.id}>
-              {department.department_name}
-            </option>
-          ))}
-        </select>
-        <select name="app_role" defaultValue={user.app_role} className="h-9 rounded-md border border-slate-300 px-2 text-sm">
-          <option value="admin">관리자</option>
-          <option value="department_head">부서장</option>
-          <option value="manager">매니저</option>
-          <option value="client_owner">화주담당자</option>
-        </select>
-        <input name="notes" defaultValue={user.notes ?? ""} className="h-9 rounded-md border border-slate-300 px-2 text-sm md:col-span-2" />
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" name="is_active" value="true" defaultChecked={user.is_active} />
-          사용
-        </label>
-        <input type="hidden" name="invite" value="false" />
-        <div className="md:col-span-4">
-          <SubmitButton variant="secondary">변경사항 저장</SubmitButton>
-        </div>
-        <div className="md:col-span-4">
-          <ActionMessage state={state} />
-        </div>
-      </form>
-    </details>
   );
 }
 

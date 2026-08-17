@@ -11,5 +11,3 @@ export const protectedRoutes = [
   "/client-reports",
   "/admin"
 ] as const;
-
-export const adminRoutes = ["/admin/departments", "/admin/clients", "/admin/users"] as const;

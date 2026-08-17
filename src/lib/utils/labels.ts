@@ -74,7 +74,3 @@ export function formatCompactDate(value?: string | null) {
   const datePart = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
   return `${datePart("year")}${datePart("month")}${datePart("day")}`;
 }
-
-export function formatWeekLabel(year: number, month: number, weekOfMonth: number, start: string, end: string) {
-  return `${year}년 ${month}월 ${weekOfMonth}주차 · ${start.replaceAll("-", ".")} ~ ${end.replaceAll("-", ".")}`;
-}

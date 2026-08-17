@@ -52,7 +52,3 @@ export function StatusBadge({
     </span>
   );
 }
-
-export function labelForStatus(value: ClientReportStatus | DepartmentSubmissionStatus) {
-  return clientStatus[value as ClientReportStatus]?.label ?? departmentStatus[value as DepartmentSubmissionStatus]?.label ?? value;
-}
