@@ -12,3 +12,4 @@ netlify/.next/
 .netlify/
 .harness/
 supabase/.temp/
+.claude/settings.local.json

@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "agent/**"
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint / Typecheck / Test / Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      # 빌드는 실제 자격증명 없이 통과하도록 placeholder 값을 사용한다.
+      # 보호 페이지가 모두 동적 렌더링이라 빌드 시점에 Supabase 연결이 없다.
+      # 실제 값은 Netlify 환경변수에서 주입된다.
+      - name: Build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
+          NEXT_PUBLIC_APP_NAME: TPL사업부 주간자료 시스템
+          APP_TIMEZONE: Asia/Seoul
+          NEXT_PUBLIC_SITE_URL: https://placeholder.example.com
+          LABOR_SUPABASE_URL: https://placeholder-labor.supabase.co
+          LABOR_SUPABASE_SERVICE_ROLE_KEY: placeholder-labor-key
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: npm run build
