@@ -96,17 +96,19 @@ submitted -> draft              (확정 후 3일 이내)
 
 - `saveClientReportAction`이 `clientReportSchema`로 전체 payload를 검증한다.
 - `save_client_report_atomic` RPC가 부모 보고서 저장, 기존 자식 항목·물동량 교체, 새 자식 저장, 필요 시 승인 이력 기록을 한 트랜잭션으로 수행한다.
+- 업무 항목은 `item_period`별 순번 위치를 기준으로 기존 행을 그대로 갱신하고, 줄어든 만큼만 삭제하고, 늘어난 만큼만 추가한다. 항목 id가 유지되어야 항목에 달린 사업부 요청사항이 보존된다.
+- 미종결 요청사항(`deleted_at is null`이며 `closed_at is null`)이 달린 업무 항목은 삭제할 수 없다. 저장으로 해당 항목이 사라지면 RPC가 저장 전체를 거부하므로 요청사항을 먼저 종결해야 한다.
+- 물동량은 참조하는 요청사항이 없으므로 저장할 때마다 전체를 교체한다.
 - advisory transaction lock으로 같은 화주·주차의 동시 중복 생성을 막는다.
 - 저장 결과 전체 행을 다시 읽어 로컬 목록에 upsert하고 편집 모드를 닫는다.
 
-### 일괄 확정·취소·삭제
+### 일괄 확정·취소
 
 - 확정: `submit_client_reports_atomic`
 - 확정취소: `cancel_client_reports_submission_atomic`
-- 삭제: `soft_delete_client_reports_atomic`
 - 확정취소는 `submitted` 상태이며 `submitted_at`부터 3일 이내여야 한다.
 - 화주담당자는 배정된 본인 범위만 처리한다.
-- 삭제는 `deleted_at`, `deleted_by`를 기록한다.
+- 삭제 도메인 로직(`deleteClientReportAction`, `deleteSelectedClientReportsAction`, `soft_delete_client_reports_atomic` RPC)은 `src/actions/reports.ts`에 정의되어 `deleted_at`, `deleted_by`를 기록하도록 설계되어 있지만, 현재 `ClientReportsTable`에는 연결되어 있지 않다. 화면에서 자료를 삭제하는 동작은 제공하지 않는다.
 
 ### 검토 상태
 
@@ -114,7 +116,7 @@ submitted -> draft              (확정 후 3일 이내)
 - 반려에는 사유가 필요하다.
 - 상태 전이는 `approval_history`에 기록한다.
 - `approved` 보고서는 일반 편집으로 수정하지 않는다.
-- 현재 route에 표시되는 `ClientReportsTable`은 편집, 확정, 확정취소, 삭제를 제공한다. 승인·반려용 `TransitionForm.tsx`와 server action은 존재하지만 현재 화면에는 연결되어 있지 않다.
+- 현재 route에 표시되는 `ClientReportsTable`은 편집, 확정, 확정취소를 제공한다. 삭제, 승인·반려는 화면에 없다. 삭제 server action(`deleteClientReportAction` 등)과 승인·반려용 `TransitionForm.tsx`, `transitionClientReportAction`은 코드에 존재하지만 현재 화면에는 연결되어 있지 않다.
 - 승인·반려 UI가 이미 제공된다고 가정하지 않는다. 이를 노출하는 변경은 별도 기능 변경으로 다루고 역할·상태별 검증을 추가한다.
 
 ## 8. 주요 코드와 데이터
@@ -131,7 +133,7 @@ submitted -> draft              (확정 후 3일 이내)
 | 입력 검증 | `clientReportSchema`, `reportItemSchema`, `volumeSchema` |
 | 테이블 | `weekly_client_reports`, `weekly_client_report_items`, `weekly_volumes` |
 | 범위 테이블 | `department_client_links`, `client_assignments`, `work_categories` |
-| 관련 migration | `018_atomic_report_saves_and_indexes.sql`, `025_confirmation_cancel_window_three_days.sql`, `029_simplify_permission_helpers.sql` |
+| 관련 migration | `018_atomic_report_saves_and_indexes.sql`, `025_confirmation_cancel_window_three_days.sql`, `029_simplify_permission_helpers.sql`, `20260817012721_preserve_client_report_items_on_save.sql` |
 
 ## 9. 교차 메뉴 영향
 
@@ -147,6 +149,7 @@ submitted -> draft              (확정 후 3일 이내)
 - 화주담당자에게 배정되지 않은 화주가 헤더, 편집기, server action 어느 경로에서도 허용되지 않아야 한다.
 - 검색 결과는 일치한 항목만 보이고 초기화하면 원래 선택 주차 데이터가 돌아와야 한다.
 - 저장 중 중복 클릭, 동일 화주·주차 중복 생성, 자식만 부분 저장되는 상황을 막아야 한다.
+- 자료를 다시 저장해도 남아 있는 업무 항목의 id와 그 항목에 달린 요청사항이 그대로 유지되어야 한다.
 - `draft`, 확정, 확정취소, 승인, 반려, 재편집 흐름을 역할별로 검증한다.
 - 확정 3일 경계는 UI와 DB 모두 확인하되 DB 결과를 최종 기준으로 한다.
 - 저장 후 부서자료의 화주별 검토 표와 물동량 합계에 즉시 같은 데이터가 나타나는지 확인한다.
