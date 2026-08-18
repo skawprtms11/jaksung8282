@@ -93,6 +93,25 @@ sqlite3 .harness/chat.db "INSERT INTO harness_messages (id, \"from\", \"to\", ty
 sqlite3 ... "... '외부팀원', '부장', 'report', '[<tool> 결과] ...', 'info'"
 ```
 
+### 🚫 No `cd` prefix in Bash commands
+
+**Never prefix a Bash call with `cd "<project path>" &&`.** The Bash tool's working directory is already the project root and persists across calls, so the prefix is pure noise — and it costs twice:
+
+- `cd` inside a compound command triggers a permission prompt on its own.
+- It breaks allowlist matching. `Bash(sqlite3 .harness/chat.db *)` in `.claude/settings.json` never matches `cd "…" && sqlite3 …`, so every allowed command asks anyway.
+
+```bash
+# ❌ prompts every time — allowlist can't match
+cd "/Users/seominho/Documents/New project 3" && sqlite3 .harness/chat.db "INSERT …"
+
+# ✅ matches the allowlist, runs silently
+sqlite3 .harness/chat.db "INSERT …"
+```
+
+Use absolute paths for files outside the project. `cd` only when genuinely switching to a **different** repo, and then as its own standalone call — never chained with `&&`.
+
+Applies to 부장, 공동대표, and all 16 teams.
+
 ### 💬 Auto-open the chat-room viewer
 
 When 대표님 says "톡방 열어줘" / "톡방 오픈" / "부장님 톡방", 부장 **auto-runs in the background**:

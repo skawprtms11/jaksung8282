@@ -29,7 +29,12 @@
       "Bash(gh pr checks *)",
       "Bash(gh run watch *)",
       "Bash(curl -s -o /dev/null *)",
-      "Bash(lsof -ti:*)"
+      "Bash(curl -sL -o /dev/null *)",
+      "Bash(lsof -ti:*)",
+      "Bash(npx harness-bujang@latest chat)",
+      "Bash(npx harness-bujang@latest status)",
+      "Bash(npx harness-bujang@latest --help)",
+      "Bash(npm run dev)"
     ],
     "ask": [
       "Bash(git push *)",
