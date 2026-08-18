@@ -9,7 +9,6 @@ import {
   ChartNoAxesCombined,
   ClipboardCheck,
   FilePenLine,
-  Headphones,
   Home,
   LoaderCircle,
   LogOut,
@@ -156,18 +155,6 @@ export function Sidebar({
       </nav>
 
       <div className="mt-3 shrink-0 space-y-3">
-        <div className="rounded-3xl border border-[#dce8f6] bg-[#f7fbff] p-3 shadow-[0_16px_30px_rgba(16,34,61,0.06)]">
-          <div className="flex items-start gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white text-[#075be8] shadow-[0_10px_22px_rgba(7,91,232,0.10)]">
-              <Headphones className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <div>
-              <p className="text-xs font-bold text-slate-500">운영 지원</p>
-              <p className="mt-0.5 text-base font-black text-[#10223d]">TPL Helpdesk</p>
-              <p className="mt-0.5 text-xs text-slate-500">Mon - Fri 09:00 - 18:00</p>
-            </div>
-          </div>
-        </div>
         <div className="flex items-center justify-between px-2 text-xs font-bold text-slate-500">
           <span className="inline-flex items-center gap-2">
             <PackageSearch className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
