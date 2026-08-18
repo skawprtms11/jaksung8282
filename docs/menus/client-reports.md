@@ -19,7 +19,7 @@
 - 화주담당자 제한은 `client_assignments(user_id, department_id, client_id, is_active)`까지 확인한다.
 - 관리자가 부서를 선택하지 않으면 `pickDefaultDepartmentId`로 기본 부서를 정한다.
 - 화주가 선택되지 않으면 역할 범위에서 `pickDefaultClientId`로 기본 화주를 정한다.
-- 화면 필터로 범위가 제한되어도 server action과 RPC가 권한을 다시 검사해야 한다.
+- 화면 필터로 범위가 제한되어도 조회 쿼리, server action, RPC가 권한을 각각 다시 검사해야 한다.
 
 ## 3. URL 상태
 
@@ -146,7 +146,10 @@ submitted -> draft              (확정 후 3일 이내)
 
 - 사이드바 진입은 배포 환경의 전체 route 프리페치와 Next.js 기본 링크 전환을 유지한다.
 - 주차를 바꾸면 편집 대상과 목록이 모두 같은 주차로 바뀌어야 한다.
-- 화주담당자에게 배정되지 않은 화주가 헤더, 편집기, server action 어느 경로에서도 허용되지 않아야 한다.
+- 화주담당자에게 배정되지 않은 화주가 헤더, 편집기, 목록 조회, server action 어느 경로에서도 허용되지 않아야 한다.
+- 목록 조회는 `createSupabaseAdminClient`(service role)로 나가 RLS가 평가되지 않으므로, 조회 쿼리도 역할 범위를 스스로 강제해야 한다.
+  - 부서 조건은 URL의 `department_id`가 아니라 역할로 확정한 부서 값 하나만 사용한다. 관리자만 URL로 부서를 바꿀 수 있고 그 외 역할은 `profile.department_id`로 고정된다.
+  - 화주담당자의 화주 조건은 `client_assignments`로 교차검증한 배정 화주 집합으로 제한하고, 배정 밖 `client_id`가 오면 결과를 비운다.
 - 검색 결과는 일치한 항목만 보이고 초기화하면 원래 선택 주차 데이터가 돌아와야 한다.
 - 저장 중 중복 클릭, 동일 화주·주차 중복 생성, 자식만 부분 저장되는 상황을 막아야 한다.
 - 자료를 다시 저장해도 남아 있는 업무 항목의 id와 그 항목에 달린 요청사항이 그대로 유지되어야 한다.

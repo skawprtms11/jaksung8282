@@ -23,7 +23,6 @@ import type { ClientReportStatus, VolumeType, VolumeUnit } from "@/types/enums";
 type DepartmentOption = { id: string; department_name: string };
 type ClientOption = { id: string; client_name: string; department_id: string };
 type ClientLinkRow = { department_id: string; clients: { id: string; client_name: string } | null };
-type ClientAssignmentRow = { client_id: string };
 type DefaultClientAssignmentRow = { client_id: string; clients: { id: string; client_name: string } | null };
 type CategoryOption = { id: string; category_name: string; icon_key: string };
 type ProfileNameRow = { id: string; full_name: string };
@@ -123,6 +122,13 @@ function getSelectedWeek(params: ClientReportsSearchParams) {
     }
   }
   return getCurrentWeekOption();
+}
+
+function resolveOwnerClientIds(assignedClientIds: Set<string>, requestedClientId?: string) {
+  if (!requestedClientId) {
+    return [...assignedClientIds];
+  }
+  return assignedClientIds.has(requestedClientId) ? [requestedClientId] : [];
 }
 
 function toClientReportTableRow(report: ReportRow, editSource: ReportRow = report): ClientReportTableRow {
@@ -234,21 +240,26 @@ export default async function ClientReportsPage({
     }
     const departmentFilter = isAdmin(profile) ? params.department_id ?? adminDefaultDepartmentId : profile.department_id;
     defaultDepartmentId = departmentFilter ?? null;
+    const isClientOwner = profile.app_role === "client_owner";
+    let assignedClients: { id: string; client_name: string }[] = [];
+    if (isClientOwner) {
+      const { data: assignmentRows } = await dataClient
+        .from("client_assignments")
+        .select("client_id,clients(id,client_name)")
+        .eq("user_id", profile.id)
+        .eq("is_active", true);
+      assignedClients = ((assignmentRows ?? []) as unknown as DefaultClientAssignmentRow[])
+        .filter((assignment) => assignment.clients)
+        .map((assignment) => ({
+          id: assignment.clients?.id ?? assignment.client_id,
+          client_name: assignment.clients?.client_name ?? ""
+        }))
+        .filter((client) => client.id && client.client_name)
+        .sort((left, right) => left.client_name.localeCompare(right.client_name, "ko"));
+    }
+    const assignedClientIds = new Set(assignedClients.map((client) => client.id));
     if (!params.client_id && departmentFilter) {
-      if (profile.app_role === "client_owner") {
-        const { data: defaultAssignments } = await dataClient
-          .from("client_assignments")
-          .select("client_id,clients(id,client_name)")
-          .eq("user_id", profile.id)
-          .eq("is_active", true);
-        const assignedClients = ((defaultAssignments ?? []) as unknown as DefaultClientAssignmentRow[])
-          .filter((assignment) => assignment.clients)
-          .map((assignment) => ({
-            id: assignment.clients?.id ?? assignment.client_id,
-            client_name: assignment.clients?.client_name ?? ""
-          }))
-          .filter((client) => client.id && client.client_name)
-          .sort((left, right) => left.client_name.localeCompare(right.client_name, "ko"));
+      if (isClientOwner) {
         defaultClientId = pickDefaultClientId(assignedClients, profile.app_role) || undefined;
       } else {
         const { data: defaultClientLinks } = await dataClient
@@ -268,12 +279,15 @@ export default async function ClientReportsPage({
         defaultClientId = pickDefaultClientId(defaultClients, profile.app_role) || undefined;
       }
     }
-    const selectedClientFilter = params.client_id ?? defaultClientId;
+    const requestedClientFilter = params.client_id ?? defaultClientId;
+    const ownerClientIds = isClientOwner ? resolveOwnerClientIds(assignedClientIds, requestedClientFilter) : null;
+    const isClientOutOfScope = Boolean(requestedClientFilter) && ownerClientIds?.length === 0;
+    const selectedClientFilter = isClientOutOfScope ? undefined : requestedClientFilter;
+    defaultClientId = selectedClientFilter;
     const [
       { data: departmentData },
       { data: categoryData },
       { data: clientData },
-      { data: assignmentData },
       { data: profileData },
       { data: reportData, error: reportError }
     ] = await Promise.all([
@@ -296,9 +310,6 @@ export default async function ClientReportsPage({
         }
         return query;
       })(),
-      profile.app_role === "client_owner"
-        ? dataClient.from("client_assignments").select("client_id").eq("user_id", profile.id).eq("is_active", true)
-        : Promise.resolve({ data: [] }),
       (() => {
         let query = dataClient.from("profiles").select("id,full_name");
         if (departmentFilter) {
@@ -307,18 +318,21 @@ export default async function ClientReportsPage({
         return query;
       })(),
       (() => {
+        if (ownerClientIds?.length === 0) {
+          return Promise.resolve({ data: [], error: null });
+        }
         let query = dataClient
           .from("weekly_client_reports")
           .select(CLIENT_REPORT_SELECT)
           .is("deleted_at", null)
           .order("week_start_date", { ascending: false })
           .limit(REPORT_LIST_LIMIT);
-        if (params.department_id) {
-          query = query.eq("department_id", params.department_id);
-        } else if (departmentFilter) {
+        if (departmentFilter) {
           query = query.eq("department_id", departmentFilter);
         }
-        if (selectedClientFilter) {
+        if (ownerClientIds) {
+          query = query.in("client_id", ownerClientIds);
+        } else if (selectedClientFilter) {
           query = query.eq("client_id", selectedClientFilter);
         }
         if (params.status) {
@@ -352,8 +366,7 @@ export default async function ClientReportsPage({
         client_name: link.clients?.client_name ?? "",
         department_id: link.department_id
       }));
-    const assignedClientIds = new Set(((assignmentData ?? []) as ClientAssignmentRow[]).map((assignment) => assignment.client_id));
-    editorClients = profile.app_role === "client_owner" ? clients.filter((client) => assignedClientIds.has(client.id)) : clients;
+    editorClients = isClientOwner ? clients.filter((client) => assignedClientIds.has(client.id)) : clients;
     const reportRows = reportError ? [] : ((reportData ?? []) as unknown as ReportRow[]);
     const creatorNameMap = new Map(((profileData ?? []) as ProfileNameRow[]).map((creator) => [creator.id, creator.full_name]));
     const namedReports = reportRows.map((report) => ({
@@ -379,12 +392,12 @@ export default async function ClientReportsPage({
   return (
     <>
       <ClientReportsWorkspace
-        key={`client-reports-${defaultDepartmentId ?? "department"}-${params.client_id ?? "all"}-${params.status ?? "all"}-${selectedWeek.weekStartDate}-${Object.values(searchFilters).join("|")}`}
+        key={`client-reports-${defaultDepartmentId ?? "department"}-${defaultClientId ?? "all"}-${params.status ?? "all"}-${selectedWeek.weekStartDate}-${Object.values(searchFilters).join("|")}`}
         departments={departments}
         clients={editorClients}
         categories={categories}
         defaultDepartmentId={defaultDepartmentId}
-        defaultClientId={params.client_id ?? defaultClientId}
+        defaultClientId={defaultClientId}
         selectedWeekStartDate={selectedWeek.weekStartDate}
         searchFilters={searchFilters}
         hasSearchFilters={hasSearchFilters}
