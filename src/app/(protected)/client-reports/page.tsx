@@ -366,9 +366,7 @@ export default async function ClientReportsPage({
           .is("deleted_at", null)
           .order("updated_at", { ascending: false })
           .limit(1);
-        if (params.department_id) {
-          query = query.eq("department_id", params.department_id);
-        } else if (departmentFilter) {
+        if (departmentFilter) {
           query = query.eq("department_id", departmentFilter);
         }
         return query;
