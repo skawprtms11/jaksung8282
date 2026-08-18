@@ -209,6 +209,7 @@ export default async function ClientReportsPage({
   const selectedWeek = getSelectedWeek(params);
   const searchFilters = parseClientReportSearchFilters(params);
   const hasSearchFilters = hasClientReportSearchFilters(searchFilters);
+  const hasListScopeFilters = Boolean(searchFilters.dateFrom || searchFilters.dateTo || params.status);
   const { profile } = await getCurrentUserProfile();
   const supabase = await createSupabaseServerClient();
   let departments: DepartmentOption[] = [];
@@ -289,7 +290,8 @@ export default async function ClientReportsPage({
       { data: categoryData },
       { data: clientData },
       { data: profileData },
-      { data: reportData, error: reportError }
+      { data: reportData, error: reportError },
+      { data: editorReportData, error: editorReportError }
     ] = await Promise.all([
       (() => {
         let query = dataClient.from("departments").select("id,department_name").eq("is_active", true).order("sort_order");
@@ -340,19 +342,34 @@ export default async function ClientReportsPage({
         }
         if (searchFilters.dateFrom || searchFilters.dateTo) {
           if (searchFilters.dateFrom) {
-            query = query.gte(
-              "week_start_date",
-              searchFilters.dateFrom < selectedWeek.weekStartDate ? searchFilters.dateFrom : selectedWeek.weekStartDate
-            );
+            query = query.gte("week_start_date", searchFilters.dateFrom);
           }
           if (searchFilters.dateTo) {
-            query = query.lte(
-              "week_start_date",
-              searchFilters.dateTo > selectedWeek.weekStartDate ? searchFilters.dateTo : selectedWeek.weekStartDate
-            );
+            query = query.lte("week_start_date", searchFilters.dateTo);
           }
         } else {
           query = query.eq("week_start_date", selectedWeek.weekStartDate);
+        }
+        return query;
+      })(),
+      // 편집 폼 원본은 검색·상태 조건과 무관하게 선택 화주·주차 자료를 그대로 불러온다.
+      // 목록 조회 범위가 선택 주차와 같을 때만 목록 결과를 재사용한다.
+      (() => {
+        if (!selectedClientFilter || !hasListScopeFilters) {
+          return Promise.resolve({ data: [], error: null });
+        }
+        let query = dataClient
+          .from("weekly_client_reports")
+          .select(CLIENT_REPORT_SELECT)
+          .eq("client_id", selectedClientFilter)
+          .eq("week_start_date", selectedWeek.weekStartDate)
+          .is("deleted_at", null)
+          .order("updated_at", { ascending: false })
+          .limit(1);
+        if (params.department_id) {
+          query = query.eq("department_id", params.department_id);
+        } else if (departmentFilter) {
+          query = query.eq("department_id", departmentFilter);
         }
         return query;
       })()
@@ -374,9 +391,23 @@ export default async function ClientReportsPage({
       profiles: { full_name: creatorNameMap.get(report.created_by) ?? "-" }
     }));
     reportSourceById = new Map(namedReports.map((report) => [report.id, report]));
-    editorReport = namedReports.find(
-      (report) => report.client_id === selectedClientFilter && report.week_start_date === selectedWeek.weekStartDate
-    ) ?? null;
+    if (editorReportError) {
+      console.error("client-reports: editor source lookup failed", editorReportError);
+    }
+    const editorReportRow = editorReportError
+      ? null
+      : (((editorReportData ?? []) as unknown as ReportRow[])[0] ?? null);
+    if (!selectedClientFilter) {
+      editorReport = null;
+    } else if (hasListScopeFilters) {
+      editorReport = editorReportRow
+        ? { ...editorReportRow, profiles: { full_name: creatorNameMap.get(editorReportRow.created_by) ?? "-" } }
+        : null;
+    } else {
+      editorReport = namedReports.find(
+        (report) => report.client_id === selectedClientFilter && report.week_start_date === selectedWeek.weekStartDate
+      ) ?? null;
+    }
     reports = hasSearchFilters
       ? namedReports.flatMap((report) => {
           const matchingItems = filterClientReportSearchItems(report, searchFilters);
