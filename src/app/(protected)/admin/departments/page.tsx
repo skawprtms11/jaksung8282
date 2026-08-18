@@ -64,7 +64,7 @@ export default async function DepartmentsPage({ searchParams }: { searchParams: 
   let assignments: DepartmentAssignmentValue[] = [];
 
   if (supabase) {
-    const baseDepartmentQuery = (withNotes: boolean) => {
+    const baseDepartmentQuery = (withNotes: boolean, searchColumn?: "department_code" | "department_name") => {
       let query = supabase
         .from("departments")
         .select(withNotes ? "id,department_code,department_name,notes,is_active,sort_order,created_at,updated_at" : "id,department_code,department_name,is_active,sort_order,created_at,updated_at")
@@ -75,14 +75,36 @@ export default async function DepartmentsPage({ searchParams }: { searchParams: 
       if (!isAdmin(profile) && profile?.department_id) {
         query = query.eq("id", profile.department_id);
       }
-      if (params.q) {
-        query = query.or(`department_code.ilike.%${params.q}%,department_name.ilike.%${params.q}%`);
+      if (searchColumn) {
+        query = query.ilike(searchColumn, `%${params.q}%`);
       }
       return query;
     };
 
-    const result = await baseDepartmentQuery(true);
-    const departmentResult = result.error?.message.includes("notes") ? await baseDepartmentQuery(false) : result;
+    // 검색어를 PostgREST 필터 문자열에 보간하지 않도록 컬럼별로 조회한 뒤 합친다.
+    const runDepartmentQuery = async (withNotes: boolean) => {
+      if (!params.q) {
+        return baseDepartmentQuery(withNotes);
+      }
+      const [codeResult, nameResult] = await Promise.all([
+        baseDepartmentQuery(withNotes, "department_code"),
+        baseDepartmentQuery(withNotes, "department_name")
+      ]);
+      const mergedRows = new Map<string, DepartmentRow>();
+      for (const row of [...(codeResult.data ?? []), ...(nameResult.data ?? [])] as unknown as DepartmentRow[]) {
+        mergedRows.set(row.id, row);
+      }
+      return {
+        data: [...mergedRows.values()].sort(
+          (left, right) =>
+            left.sort_order - right.sort_order || left.department_name.localeCompare(right.department_name, "ko")
+        ),
+        error: codeResult.error ?? nameResult.error
+      };
+    };
+
+    const result = await runDepartmentQuery(true);
+    const departmentResult = result.error?.message.includes("notes") ? await runDepartmentQuery(false) : result;
     departments = ((departmentResult.data ?? []) as unknown as DepartmentRow[]).map((department) => ({
       ...department,
       notes: department.notes ?? null
