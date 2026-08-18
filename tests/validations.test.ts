@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   clientSchema,
   departmentSchema,
+  employeeNoSchema,
   reportItemRequestResultSchema,
   reportItemRequestSchema,
   userSchema
@@ -85,5 +86,49 @@ describe("master validation schemas", () => {
     });
 
     expect(parsed.success).toBe(false);
+  });
+});
+
+describe("employeeNoSchema", () => {
+  it("allows the employee number formats already stored in production", () => {
+    for (const value of ["test1", "y7206050", "Y7215039", "EMP001", "A-1024"]) {
+      expect(employeeNoSchema.safeParse(value).success).toBe(true);
+    }
+  });
+
+  it("trims surrounding whitespace before validating", () => {
+    const parsed = employeeNoSchema.safeParse("  y7220033  ");
+
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data).toBe("y7220033");
+    }
+  });
+
+  it("blocks PostgREST filter metacharacters", () => {
+    for (const value of ["x,is_active.eq.true", "x.eq.1", "id.eq.8a831fd5", "a(b)", 'a"b', "a b", "가나다"]) {
+      expect(employeeNoSchema.safeParse(value).success).toBe(false);
+    }
+  });
+
+  it("blocks empty and over-long employee numbers", () => {
+    expect(employeeNoSchema.safeParse("   ").success).toBe(false);
+    expect(employeeNoSchema.safeParse("A".repeat(51)).success).toBe(false);
+  });
+});
+
+describe("userSchema employee number", () => {
+  const baseUser = {
+    email: "user@example.com",
+    full_name: "테스트사용자",
+    department_id: "",
+    app_role: "client_owner",
+    notes: "",
+    is_active: "true",
+    invite: "false"
+  };
+
+  it("rejects an injection-shaped employee number", () => {
+    expect(userSchema.safeParse({ ...baseUser, employee_no: "x,is_active.eq.true" }).success).toBe(false);
   });
 });

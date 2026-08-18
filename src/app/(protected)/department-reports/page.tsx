@@ -518,9 +518,10 @@ export default async function DepartmentReportsPage({
       adminDefaultDepartmentId = pickDefaultDepartmentId((defaultDepartments ?? []) as DepartmentDefaultRow[], profile.app_role) || undefined;
     }
     const departmentFilter = isAdmin(profile) ? params.department_id ?? adminDefaultDepartmentId : profile.department_id;
-    const selectedDepartmentFilter = departmentFilter ?? params.department_id;
+    // 부서 범위를 확정하지 못한 비관리자는 전 부서 자료가 새지 않도록 조회 자체를 막는다.
+    const isDepartmentScopeBlocked = !isAdmin(profile) && !departmentFilter;
     const selectedClientFilter = params.client_id;
-    initialLookupDepartmentId = selectedDepartmentFilter ?? null;
+    initialLookupDepartmentId = departmentFilter ?? null;
     const [
       { data: departmentData },
       { data: categoryData },
@@ -539,6 +540,9 @@ export default async function DepartmentReportsPage({
       { data: summaryReportData, error: summaryReportError }
     ] = await Promise.all([
       (() => {
+        if (isDepartmentScopeBlocked) {
+          return Promise.resolve({ data: [], error: null });
+        }
         let query = dataClient.from("departments").select("id,department_name").eq("is_active", true).order("sort_order");
         if (!isAdmin(profile) && departmentFilter) {
           query = query.eq("id", departmentFilter);
@@ -547,6 +551,9 @@ export default async function DepartmentReportsPage({
       })(),
       dataClient.from("work_categories").select("id,category_name,icon_key").eq("is_active", true).order("sort_order"),
       (() => {
+        if (isDepartmentScopeBlocked) {
+          return Promise.resolve({ data: [], error: null });
+        }
         let query = dataClient
           .from("weekly_client_reports")
           .select("id,created_by,report_year,report_month,week_of_month,week_start_date,status,updated_at,clients(client_name),weekly_client_report_items(item_period,importance,work_category_id,title,content,sort_order,work_categories(category_name,icon_key)),weekly_volumes(volume_type,quantity,unit)")
@@ -556,9 +563,6 @@ export default async function DepartmentReportsPage({
           .limit(CLIENT_REVIEW_LIMIT);
         if (departmentFilter) {
           query = query.eq("department_id", departmentFilter);
-        }
-        if (selectedDepartmentFilter) {
-          query = query.eq("department_id", selectedDepartmentFilter);
         }
         if (selectedClientFilter) {
           query = query.eq("client_id", selectedClientFilter);
@@ -576,6 +580,9 @@ export default async function DepartmentReportsPage({
         return query;
       })(),
       (() => {
+        if (isDepartmentScopeBlocked) {
+          return Promise.resolve({ count: 0 });
+        }
         let query = dataClient
           .from("department_client_links")
           .select("client_id", { count: "exact", head: true })
@@ -583,75 +590,74 @@ export default async function DepartmentReportsPage({
         if (departmentFilter) {
           query = query.eq("department_id", departmentFilter);
         }
-        if (selectedDepartmentFilter) {
-          query = query.eq("department_id", selectedDepartmentFilter);
-        }
         if (selectedClientFilter) {
           query = query.eq("client_id", selectedClientFilter);
         }
         return query;
       })(),
-      selectedDepartmentFilter
+      departmentFilter
           ? dataClient
             .from("department_weekly_submissions")
             .select(
               "id,department_id,week_start_date,status,finalized_at,department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content)"
             )
-            .eq("department_id", selectedDepartmentFilter)
+            .eq("department_id", departmentFilter)
             .eq("week_start_date", currentWeek.weekStartDate)
             .is("deleted_at", null)
             .maybeSingle()
         : Promise.resolve({ data: null }),
-      selectedDepartmentFilter
+      departmentFilter
           ? dataClient
             .from("department_client_links")
             .select("clients(id,client_name)")
-            .eq("department_id", selectedDepartmentFilter)
+            .eq("department_id", departmentFilter)
             .eq("is_active", true)
             .order("client_id", { ascending: true })
         : Promise.resolve({ data: [] }),
-      selectedDepartmentFilter
+      departmentFilter
           ? dataClient
             .from("profiles")
             .select("id,full_name,is_active")
-            .eq("department_id", selectedDepartmentFilter)
+            .eq("department_id", departmentFilter)
             .order("full_name", { ascending: true })
         : Promise.resolve({ data: [] }),
       dataClient.from("center_masters").select("id,center_name").eq("is_active", true).order("center_name", { ascending: true }),
-      selectedDepartmentFilter
+      departmentFilter
           ? dataClient
             .from("weekly_client_reports")
             .select("id,client_id,week_of_month,clients(client_name),weekly_volumes(volume_type,quantity,unit,note)")
-            .eq("department_id", selectedDepartmentFilter)
+            .eq("department_id", departmentFilter)
             .eq("report_year", currentWeek.year)
             .eq("report_month", currentWeek.month)
             .is("deleted_at", null)
         : Promise.resolve({ data: [], error: null }),
       Promise.resolve({ data: [] }),
       Promise.resolve({ data: [] }),
-      dataClient.from("profiles").select("id").eq("app_role", "admin"),
-      selectedDepartmentFilter
+      isDepartmentScopeBlocked
+        ? Promise.resolve({ data: [] })
+        : dataClient.from("profiles").select("id").eq("app_role", "admin"),
+      departmentFilter
         ? dataClient
           .from("weekly_report_item_requests")
           .select(
             `${OPEN_REQUEST_FIELDS},weekly_client_report_items!inner(id,item_period,title,content,importance,work_category_id,sort_order,work_categories(category_name),weekly_client_reports!inner(id,department_id,client_id,report_year,report_month,week_of_month,deleted_at,departments(department_name),clients(client_name)))`
           )
           .eq("target_type", "client_item")
-          .eq("weekly_client_report_items.weekly_client_reports.department_id", selectedDepartmentFilter)
+          .eq("weekly_client_report_items.weekly_client_reports.department_id", departmentFilter)
           .is("weekly_client_report_items.weekly_client_reports.deleted_at", null)
           .is("deleted_at", null)
           .is("closed_at", null)
           .order("created_at", { ascending: false })
           .limit(OPEN_REQUEST_LIMIT)
         : Promise.resolve({ data: [] }),
-      selectedDepartmentFilter
+      departmentFilter
         ? dataClient
           .from("weekly_report_item_requests")
           .select(
             `${OPEN_REQUEST_FIELDS},department_weekly_submissions!inner(id,department_id,report_year,report_month,week_of_month,deleted_at,departments(department_name),department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content))`
           )
           .eq("target_type", "department_common")
-          .eq("department_weekly_submissions.department_id", selectedDepartmentFilter)
+          .eq("department_weekly_submissions.department_id", departmentFilter)
           .is("department_weekly_submissions.deleted_at", null)
           .is("deleted_at", null)
           .is("closed_at", null)
@@ -659,7 +665,7 @@ export default async function DepartmentReportsPage({
           .limit(OPEN_REQUEST_LIMIT)
         : Promise.resolve({ data: [] }),
       // 요약 카드는 검색 조건과 무관하게 선택 주차만 집계한다. 기간 검색이 없으면 목록 조회와 범위가 같아 재사용한다.
-      hasDateRangeFilter
+      hasDateRangeFilter && !isDepartmentScopeBlocked
         ? (() => {
             let query = dataClient
               .from("weekly_client_reports")
@@ -669,9 +675,6 @@ export default async function DepartmentReportsPage({
               .limit(CLIENT_REVIEW_LIMIT);
             if (departmentFilter) {
               query = query.eq("department_id", departmentFilter);
-            }
-            if (selectedDepartmentFilter) {
-              query = query.eq("department_id", selectedDepartmentFilter);
             }
             if (selectedClientFilter) {
               query = query.eq("client_id", selectedClientFilter);

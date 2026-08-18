@@ -16,7 +16,8 @@
 | `client_owner` | 소속 부서이면서 자신에게 활성 배정된 화주 |
 
 - 부서-화주 관계는 `department_client_links`가 기준이다.
-- 화주담당자 제한은 `client_assignments(user_id, department_id, client_id, is_active)`까지 확인한다.
+- 화주담당자 제한은 `client_assignments(user_id, department_id, client_id, is_active)`까지 확인한다. `department_id`는 RLS 헬퍼 `is_assigned_department_client`와 같은 기준으로 조회 부서와 정확히 일치해야 한다.
+- 관리자가 아닌 사용자의 부서 범위를 확정하지 못하면(`profiles.department_id`가 비어 있으면) 부서 범위 쿼리는 조회하지 않고 빈 결과를 돌려준다.
 - 관리자가 부서를 선택하지 않으면 `pickDefaultDepartmentId`로 기본 부서를 정한다.
 - 화주가 선택되지 않으면 역할 범위에서 `pickDefaultClientId`로 기본 화주를 정한다.
 - 화면 필터로 범위가 제한되어도 조회 쿼리, server action, RPC가 권한을 각각 다시 검사해야 한다.
@@ -53,7 +54,7 @@
 
 1. 선택 주차를 `week.ts`로 해석한다.
 2. 사용자 프로필과 역할에 따라 부서·화주 기본 범위를 결정한다.
-3. 부서, 업무구분, 부서-화주 연결, 담당자 배정, 작성자명, 보고서를 독립 쿼리로 병렬 조회한다.
+3. 담당자 배정은 부서 범위를 확정한 뒤 선행 조회하고, 부서, 업무구분, 부서-화주 연결, 작성자명, 보고서는 독립 쿼리로 병렬 조회한다.
 4. 기간 검색이 없으면 `week_start_date`가 선택 주차와 같은 보고서만 조회한다.
 5. 기간 검색이 있으면 입력한 `date_from`·`date_to` 경계만 그대로 사용한다. 선택 주차를 포함하도록 범위를 넓히지 않는다. 화면에는 지정한 조건에 맞는 자료만 보인다.
 6. 편집 폼 원본은 목록 조회와 분리한다. 기간 검색이나 `status` 필터가 걸려 목록 범위가 선택 주차와 달라질 수 있으면 선택 화주·선택 주차·`deleted_at is null`·부서 범위만으로 별도 조회하고, 두 필터가 모두 없으면 목록 결과를 재사용한다. 화주가 선택되지 않으면 조회하지 않는다.
