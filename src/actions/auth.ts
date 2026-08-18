@@ -5,7 +5,7 @@ import { z } from "zod";
 import { normalizeAuthRedirect } from "@/lib/auth/redirect";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { idSchema } from "@/lib/validations/common";
+import { employeeNoSchema, idSchema } from "@/lib/validations/common";
 import type { ActionResult } from "@/lib/utils/form";
 
 const updatePasswordSchema = z
@@ -23,7 +23,7 @@ const registrationRequestSchema = z
     email: z.string().trim().email("회사 이메일 주소를 입력하세요."),
     password: z.string().min(8, "비밀번호는 8자 이상이어야 합니다."),
     passwordConfirm: z.string().min(1, "비밀번호 확인을 입력하세요."),
-    employee_no: z.string().trim().min(1, "사번을 입력하세요.").max(50),
+    employee_no: employeeNoSchema,
     full_name: z.string().trim().min(1, "성함을 입력하세요.").max(100),
     department_id: idSchema
   })
@@ -92,22 +92,31 @@ export async function requestUserRegistrationAction(_: ActionResult | null, form
     return { ok: false, message: "소속 부서를 확인하세요." };
   }
 
-  const [{ data: existingProfile }, { data: existingRequest }] = await Promise.all([
-    admin
-      .from("profiles")
-      .select("id,is_active")
-      .or(`email.eq.${parsed.data.email},employee_no.eq.${parsed.data.employee_no}`)
-      .maybeSingle(),
+  const [
+    { data: activeEmailProfiles },
+    { data: activeEmployeeNoProfiles },
+    { data: pendingEmailRequests },
+    { data: pendingEmployeeNoRequests }
+  ] = await Promise.all([
+    admin.from("profiles").select("id").eq("email", parsed.data.email).eq("is_active", true).limit(1),
+    admin.from("profiles").select("id").eq("employee_no", parsed.data.employee_no).eq("is_active", true).limit(1),
     admin
       .from("user_registration_requests")
-      .select("id,status")
-      .or(`email.eq.${parsed.data.email},employee_no.eq.${parsed.data.employee_no}`)
-      .maybeSingle()
+      .select("id")
+      .eq("email", parsed.data.email)
+      .eq("status", "pending")
+      .limit(1),
+    admin
+      .from("user_registration_requests")
+      .select("id")
+      .eq("employee_no", parsed.data.employee_no)
+      .eq("status", "pending")
+      .limit(1)
   ]);
-  if (existingProfile?.is_active) {
+  if ((activeEmailProfiles?.length ?? 0) > 0 || (activeEmployeeNoProfiles?.length ?? 0) > 0) {
     return { ok: false, message: "이미 사용 중인 이메일 또는 사번입니다." };
   }
-  if (existingRequest?.status === "pending") {
+  if ((pendingEmailRequests?.length ?? 0) > 0 || (pendingEmployeeNoRequests?.length ?? 0) > 0) {
     return { ok: false, message: "이미 승인 대기 중인 가입 요청이 있습니다." };
   }
 

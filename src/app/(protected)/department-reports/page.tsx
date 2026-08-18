@@ -9,6 +9,7 @@ import { DepartmentCommonSearchToolbar } from "@/components/reports/DepartmentCo
 import type { MeetingReportItemRequest } from "@/components/reports/MeetingMaterialsTable";
 import type {
   DepartmentSubmissionEditorInitialSubmission,
+  DepartmentTabValue,
   DepartmentVacancyRecordValue,
   DepartmentVacancyTrendPointValue
 } from "@/components/reports/DepartmentSubmissionEditor";
@@ -28,7 +29,14 @@ import {
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils/cn";
-import { getCurrentWeekOption } from "@/lib/dates/week";
+import {
+  getCurrentWeekOption,
+  getReportMonthByThursday,
+  getWeekEndDate,
+  getWeekOfMonth,
+  resolveWeekFromSelection,
+  type WeekOption
+} from "@/lib/dates/week";
 import { formatDateTime, volumeUnitLabels } from "@/lib/utils/labels";
 import type { ClientReportStatus, Importance, VolumeType, VolumeUnit } from "@/types/enums";
 
@@ -60,6 +68,11 @@ type ClientReviewRow = {
   clients: { client_name: string } | null;
   profiles: { full_name: string } | null;
   weekly_client_report_items: ClientReviewItem[];
+  weekly_volumes: { volume_type: VolumeType; quantity: number; unit: VolumeUnit }[];
+};
+type SummaryReportRow = {
+  week_start_date: string;
+  weekly_client_report_items: { importance: Importance }[];
   weekly_volumes: { volume_type: VolumeType; quantity: number; unit: VolumeUnit }[];
 };
 type DepartmentDefaultRow = { id: string; department_name: string };
@@ -122,6 +135,11 @@ type DepartmentOpenRequestQueryRow = MeetingReportItemRequest & {
 type DepartmentReportsSearchParams = {
   department_id?: string;
   client_id?: string;
+  report_year?: string;
+  report_month?: string;
+  week_of_month?: string;
+  week_start_date?: string;
+  tab?: string;
   q?: string;
   search_data?: string;
   work_category_id?: string;
@@ -133,6 +151,7 @@ type DepartmentReportsSearchParams = {
   date_to?: string;
 };
 
+const DEPARTMENT_TAB_VALUES: DepartmentTabValue[] = ["common", "volume", "facility", "vacancy", "holiday_work"];
 const CLIENT_REVIEW_LIMIT = 300;
 const OPEN_REQUEST_LIMIT = 200;
 const OPEN_REQUEST_FIELDS =
@@ -157,6 +176,43 @@ const DepartmentVolumeBoard = dynamic(
     )
   }
 );
+
+function makeWeekFromStartDate(weekStartDate: string): WeekOption {
+  const { year, month } = getReportMonthByThursday(weekStartDate);
+  const weekOfMonth = getWeekOfMonth(weekStartDate);
+  const weekEndDate = getWeekEndDate(weekStartDate);
+  return {
+    year,
+    month,
+    weekOfMonth,
+    weekStartDate,
+    weekEndDate,
+    label: `${year}년 ${month}월 ${weekOfMonth}주차 · ${weekStartDate.replaceAll("-", ".")} ~ ${weekEndDate.replaceAll("-", ".")}`
+  };
+}
+
+function resolveWeek(params: DepartmentReportsSearchParams) {
+  if (params.week_start_date && /^\d{4}-\d{2}-\d{2}$/.test(params.week_start_date)) {
+    return makeWeekFromStartDate(params.week_start_date);
+  }
+
+  const year = Number(params.report_year);
+  const month = Number(params.report_month);
+  const weekOfMonth = Number(params.week_of_month);
+  if (Number.isInteger(year) && Number.isInteger(month) && Number.isInteger(weekOfMonth)) {
+    try {
+      return resolveWeekFromSelection(year, month, weekOfMonth);
+    } catch {
+      return getCurrentWeekOption();
+    }
+  }
+
+  return getCurrentWeekOption();
+}
+
+function resolveActiveTab(params: DepartmentReportsSearchParams) {
+  return DEPARTMENT_TAB_VALUES.find((value) => value === params.tab) ?? null;
+}
 
 function importanceIconClassName(importance: Importance) {
   if (importance === "very_high") {
@@ -200,7 +256,7 @@ function WorkItemList({ rows, period }: { rows: ClientReviewRow["weekly_client_r
   );
 }
 
-function summarizeVolumeByUnit(reports: ClientReviewRow[], volumeType: VolumeType) {
+function summarizeVolumeByUnit(reports: SummaryReportRow[], volumeType: VolumeType) {
   const totals = new Map<VolumeUnit, number>();
   reports.forEach((report) => {
     report.weekly_volumes
@@ -217,7 +273,7 @@ function summarizeVolumeByUnit(reports: ClientReviewRow[], volumeType: VolumeTyp
     .join(" · ");
 }
 
-function getImportanceStats(reports: ClientReviewRow[]) {
+function getImportanceStats(reports: SummaryReportRow[]) {
   const labels: Record<Importance, string> = {
     very_high: "매우높음",
     high: "높음",
@@ -425,11 +481,12 @@ export default async function DepartmentReportsPage({
   const params = await searchParams;
   const searchFilters = parseClientReportSearchFilters(params);
   const hasSearchFilters = hasClientReportSearchFilters(searchFilters);
+  const hasDateRangeFilter = Boolean(searchFilters.dateFrom || searchFilters.dateTo);
   const { profile } = await getCurrentUserProfile();
   const supabase = await createSupabaseServerClient();
   let departments: DepartmentOption[] = [];
   let categories: CategoryOption[] = [];
-  let reports: ClientReviewRow[] = [];
+  let summaryReports: SummaryReportRow[] = [];
   let reviewReports: ClientReviewRow[] = [];
   let volumeReports: DepartmentVolumeReport[] = [];
   let holidayClientOptions: HolidayClientOption[] = [];
@@ -441,7 +498,8 @@ export default async function DepartmentReportsPage({
   let initialSubmission: DepartmentSubmissionEditorInitialSubmission | null = null;
   let departmentOpenRequests: DepartmentOpenRequestItem[] = [];
   let initialLookupDepartmentId: string | null = null;
-  const currentWeek = getCurrentWeekOption();
+  const currentWeek = resolveWeek(params);
+  const activeTab = resolveActiveTab(params);
   if (supabase && profile) {
     let dataClient = supabase;
     try {
@@ -460,9 +518,10 @@ export default async function DepartmentReportsPage({
       adminDefaultDepartmentId = pickDefaultDepartmentId((defaultDepartments ?? []) as DepartmentDefaultRow[], profile.app_role) || undefined;
     }
     const departmentFilter = isAdmin(profile) ? params.department_id ?? adminDefaultDepartmentId : profile.department_id;
-    const selectedDepartmentFilter = departmentFilter ?? params.department_id;
+    // 부서 범위를 확정하지 못한 비관리자는 전 부서 자료가 새지 않도록 조회 자체를 막는다.
+    const isDepartmentScopeBlocked = !isAdmin(profile) && !departmentFilter;
     const selectedClientFilter = params.client_id;
-    initialLookupDepartmentId = selectedDepartmentFilter ?? null;
+    initialLookupDepartmentId = departmentFilter ?? null;
     const [
       { data: departmentData },
       { data: categoryData },
@@ -477,9 +536,13 @@ export default async function DepartmentReportsPage({
       { data: vacancyTrendData },
       { data: adminProfileData },
       { data: clientOpenRequestData },
-      { data: commonOpenRequestData }
+      { data: commonOpenRequestData },
+      { data: summaryReportData, error: summaryReportError }
     ] = await Promise.all([
       (() => {
+        if (isDepartmentScopeBlocked) {
+          return Promise.resolve({ data: [], error: null });
+        }
         let query = dataClient.from("departments").select("id,department_name").eq("is_active", true).order("sort_order");
         if (!isAdmin(profile) && departmentFilter) {
           query = query.eq("id", departmentFilter);
@@ -488,6 +551,9 @@ export default async function DepartmentReportsPage({
       })(),
       dataClient.from("work_categories").select("id,category_name,icon_key").eq("is_active", true).order("sort_order"),
       (() => {
+        if (isDepartmentScopeBlocked) {
+          return Promise.resolve({ data: [], error: null });
+        }
         let query = dataClient
           .from("weekly_client_reports")
           .select("id,created_by,report_year,report_month,week_of_month,week_start_date,status,updated_at,clients(client_name),weekly_client_report_items(item_period,importance,work_category_id,title,content,sort_order,work_categories(category_name,icon_key)),weekly_volumes(volume_type,quantity,unit)")
@@ -498,24 +564,15 @@ export default async function DepartmentReportsPage({
         if (departmentFilter) {
           query = query.eq("department_id", departmentFilter);
         }
-        if (selectedDepartmentFilter) {
-          query = query.eq("department_id", selectedDepartmentFilter);
-        }
         if (selectedClientFilter) {
           query = query.eq("client_id", selectedClientFilter);
         }
         if (searchFilters.dateFrom || searchFilters.dateTo) {
           if (searchFilters.dateFrom) {
-            query = query.gte(
-              "week_start_date",
-              searchFilters.dateFrom < currentWeek.weekStartDate ? searchFilters.dateFrom : currentWeek.weekStartDate
-            );
+            query = query.gte("week_start_date", searchFilters.dateFrom);
           }
           if (searchFilters.dateTo) {
-            query = query.lte(
-              "week_start_date",
-              searchFilters.dateTo > currentWeek.weekStartDate ? searchFilters.dateTo : currentWeek.weekStartDate
-            );
+            query = query.lte("week_start_date", searchFilters.dateTo);
           }
         } else {
           query = query.eq("week_start_date", currentWeek.weekStartDate);
@@ -523,6 +580,9 @@ export default async function DepartmentReportsPage({
         return query;
       })(),
       (() => {
+        if (isDepartmentScopeBlocked) {
+          return Promise.resolve({ count: 0 });
+        }
         let query = dataClient
           .from("department_client_links")
           .select("client_id", { count: "exact", head: true })
@@ -530,81 +590,98 @@ export default async function DepartmentReportsPage({
         if (departmentFilter) {
           query = query.eq("department_id", departmentFilter);
         }
-        if (selectedDepartmentFilter) {
-          query = query.eq("department_id", selectedDepartmentFilter);
-        }
         if (selectedClientFilter) {
           query = query.eq("client_id", selectedClientFilter);
         }
         return query;
       })(),
-      selectedDepartmentFilter
+      departmentFilter
           ? dataClient
             .from("department_weekly_submissions")
             .select(
               "id,department_id,week_start_date,status,finalized_at,department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content)"
             )
-            .eq("department_id", selectedDepartmentFilter)
+            .eq("department_id", departmentFilter)
             .eq("week_start_date", currentWeek.weekStartDate)
             .is("deleted_at", null)
             .maybeSingle()
         : Promise.resolve({ data: null }),
-      selectedDepartmentFilter
+      departmentFilter
           ? dataClient
             .from("department_client_links")
             .select("clients(id,client_name)")
-            .eq("department_id", selectedDepartmentFilter)
+            .eq("department_id", departmentFilter)
             .eq("is_active", true)
             .order("client_id", { ascending: true })
         : Promise.resolve({ data: [] }),
-      selectedDepartmentFilter
+      departmentFilter
           ? dataClient
             .from("profiles")
             .select("id,full_name,is_active")
-            .eq("department_id", selectedDepartmentFilter)
+            .eq("department_id", departmentFilter)
             .order("full_name", { ascending: true })
         : Promise.resolve({ data: [] }),
       dataClient.from("center_masters").select("id,center_name").eq("is_active", true).order("center_name", { ascending: true }),
-      selectedDepartmentFilter
+      departmentFilter
           ? dataClient
             .from("weekly_client_reports")
             .select("id,client_id,week_of_month,clients(client_name),weekly_volumes(volume_type,quantity,unit,note)")
-            .eq("department_id", selectedDepartmentFilter)
+            .eq("department_id", departmentFilter)
             .eq("report_year", currentWeek.year)
             .eq("report_month", currentWeek.month)
             .is("deleted_at", null)
         : Promise.resolve({ data: [], error: null }),
       Promise.resolve({ data: [] }),
       Promise.resolve({ data: [] }),
-      dataClient.from("profiles").select("id").eq("app_role", "admin"),
-      selectedDepartmentFilter
+      isDepartmentScopeBlocked
+        ? Promise.resolve({ data: [] })
+        : dataClient.from("profiles").select("id").eq("app_role", "admin"),
+      departmentFilter
         ? dataClient
           .from("weekly_report_item_requests")
           .select(
             `${OPEN_REQUEST_FIELDS},weekly_client_report_items!inner(id,item_period,title,content,importance,work_category_id,sort_order,work_categories(category_name),weekly_client_reports!inner(id,department_id,client_id,report_year,report_month,week_of_month,deleted_at,departments(department_name),clients(client_name)))`
           )
           .eq("target_type", "client_item")
-          .eq("weekly_client_report_items.weekly_client_reports.department_id", selectedDepartmentFilter)
+          .eq("weekly_client_report_items.weekly_client_reports.department_id", departmentFilter)
           .is("weekly_client_report_items.weekly_client_reports.deleted_at", null)
           .is("deleted_at", null)
           .is("closed_at", null)
           .order("created_at", { ascending: false })
           .limit(OPEN_REQUEST_LIMIT)
         : Promise.resolve({ data: [] }),
-      selectedDepartmentFilter
+      departmentFilter
         ? dataClient
           .from("weekly_report_item_requests")
           .select(
             `${OPEN_REQUEST_FIELDS},department_weekly_submissions!inner(id,department_id,report_year,report_month,week_of_month,deleted_at,departments(department_name),department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content))`
           )
           .eq("target_type", "department_common")
-          .eq("department_weekly_submissions.department_id", selectedDepartmentFilter)
+          .eq("department_weekly_submissions.department_id", departmentFilter)
           .is("department_weekly_submissions.deleted_at", null)
           .is("deleted_at", null)
           .is("closed_at", null)
           .order("created_at", { ascending: false })
           .limit(OPEN_REQUEST_LIMIT)
-        : Promise.resolve({ data: [] })
+        : Promise.resolve({ data: [] }),
+      // 요약 카드는 검색 조건과 무관하게 선택 주차만 집계한다. 기간 검색이 없으면 목록 조회와 범위가 같아 재사용한다.
+      hasDateRangeFilter && !isDepartmentScopeBlocked
+        ? (() => {
+            let query = dataClient
+              .from("weekly_client_reports")
+              .select("created_by,week_start_date,weekly_client_report_items(importance),weekly_volumes(volume_type,quantity,unit)")
+              .eq("week_start_date", currentWeek.weekStartDate)
+              .is("deleted_at", null)
+              .limit(CLIENT_REVIEW_LIMIT);
+            if (departmentFilter) {
+              query = query.eq("department_id", departmentFilter);
+            }
+            if (selectedClientFilter) {
+              query = query.eq("client_id", selectedClientFilter);
+            }
+            return query;
+          })()
+        : Promise.resolve({ data: [], error: null })
     ]);
     departments = (departmentData ?? []) as DepartmentOption[];
     categories = (categoryData ?? []) as CategoryOption[];
@@ -624,7 +701,10 @@ export default async function DepartmentReportsPage({
       ...report,
       profiles: { full_name: creatorNameMap.get(report.created_by) ?? "-" }
     }));
-    reports = namedReports.filter((report) => report.week_start_date === currentWeek.weekStartDate);
+    const summaryRows = summaryReportError ? [] : ((summaryReportData ?? []) as unknown as SummaryReportRow[]);
+    summaryReports = hasDateRangeFilter
+      ? summaryRows
+      : namedReports.filter((report) => report.week_start_date === currentWeek.weekStartDate);
     reviewReports = hasSearchFilters
       ? namedReports.flatMap((report) => {
           const matchingItems = filterClientReportSearchItems(report, searchFilters);
@@ -648,10 +728,10 @@ export default async function DepartmentReportsPage({
     initialVacancyRecords = ((vacancyMonthData ?? []) as unknown as DepartmentVacancyDbRow[]).map(mapVacancyRow);
     initialVacancyTrend = buildVacancyTrend(((vacancyTrendData ?? []) as unknown as DepartmentVacancyDbRow[]).map(mapVacancyRow));
   }
-  const missingCount = Math.max(clientCount - reports.length, 0);
-  const inboundVolumeSummary = summarizeVolumeByUnit(reports, "inbound");
-  const outboundVolumeSummary = summarizeVolumeByUnit(reports, "outbound");
-  const importanceStats = getImportanceStats(reports);
+  const missingCount = Math.max(clientCount - summaryReports.length, 0);
+  const inboundVolumeSummary = summarizeVolumeByUnit(summaryReports, "inbound");
+  const outboundVolumeSummary = summarizeVolumeByUnit(summaryReports, "outbound");
+  const importanceStats = getImportanceStats(summaryReports);
   const commonSubmissionContent = initialSubmission?.department_weekly_contents.find(
     (content) => content.section_type === "common"
   );
@@ -688,6 +768,7 @@ export default async function DepartmentReportsPage({
         initialSubmission={initialSubmission}
         initialLookupDepartmentId={initialLookupDepartmentId}
         initialLookupWeekStartDate={currentWeek.weekStartDate}
+        initialActiveTab={activeTab}
         commonSearchFilters={searchFilters}
         requireExplicitDepartmentSelection={false}
         volumeSlot={<DepartmentVolumeBoard clients={holidayClientOptions} reports={volumeReports} />}
@@ -763,13 +844,13 @@ export default async function DepartmentReportsPage({
                 <h2 className="text-[13px] font-black text-[#10223d]">작성현황</h2>
               </div>
               <p className="text-[13px] font-black tabular-nums text-[#10223d]">
-                {reports.length}<span className="font-bold text-slate-400"> / {clientCount}</span>
+                {summaryReports.length}<span className="font-bold text-slate-400"> / {clientCount}</span>
               </p>
             </header>
             <div className="grid min-h-0 flex-1 grid-cols-3 divide-x divide-[#e7eff9]">
               {[
                 { label: "전체", value: clientCount, labelClassName: "text-slate-500", valueClassName: "text-[#10223d]" },
-                { label: "작성", value: reports.length, labelClassName: "text-[#075be8]", valueClassName: "text-[#075be8]" },
+                { label: "작성", value: summaryReports.length, labelClassName: "text-[#075be8]", valueClassName: "text-[#075be8]" },
                 { label: "미작성", value: missingCount, labelClassName: "text-rose-600", valueClassName: "text-rose-600" }
               ].map((item) => (
                 <div key={item.label} className="flex min-w-0 flex-col items-center justify-center px-2 text-center">

@@ -1,5 +1,6 @@
 import dynamic from "next/dynamic";
 import { type ClientReportTableRow } from "@/components/reports/ClientReportsTable";
+import { resolveOwnerClientIds } from "@/lib/auth/client-scope";
 import { pickDefaultClientId, pickDefaultDepartmentId } from "@/lib/auth/default-scope";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { isAdmin } from "@/lib/auth/permissions";
@@ -23,7 +24,6 @@ import type { ClientReportStatus, VolumeType, VolumeUnit } from "@/types/enums";
 type DepartmentOption = { id: string; department_name: string };
 type ClientOption = { id: string; client_name: string; department_id: string };
 type ClientLinkRow = { department_id: string; clients: { id: string; client_name: string } | null };
-type ClientAssignmentRow = { client_id: string };
 type DefaultClientAssignmentRow = { client_id: string; clients: { id: string; client_name: string } | null };
 type CategoryOption = { id: string; category_name: string; icon_key: string };
 type ProfileNameRow = { id: string; full_name: string };
@@ -203,6 +203,7 @@ export default async function ClientReportsPage({
   const selectedWeek = getSelectedWeek(params);
   const searchFilters = parseClientReportSearchFilters(params);
   const hasSearchFilters = hasClientReportSearchFilters(searchFilters);
+  const hasListScopeFilters = Boolean(searchFilters.dateFrom || searchFilters.dateTo || params.status);
   const { profile } = await getCurrentUserProfile();
   const supabase = await createSupabaseServerClient();
   let departments: DepartmentOption[] = [];
@@ -233,22 +234,30 @@ export default async function ClientReportsPage({
       adminDefaultDepartmentId = pickDefaultDepartmentId((defaultDepartments ?? []) as DepartmentOption[], profile.app_role) || undefined;
     }
     const departmentFilter = isAdmin(profile) ? params.department_id ?? adminDefaultDepartmentId : profile.department_id;
+    // 부서 범위를 확정하지 못한 비관리자는 전 부서 자료가 새지 않도록 조회 자체를 막는다.
+    const isDepartmentScopeBlocked = !isAdmin(profile) && !departmentFilter;
     defaultDepartmentId = departmentFilter ?? null;
+    const isClientOwner = profile.app_role === "client_owner";
+    let assignedClients: { id: string; client_name: string }[] = [];
+    if (isClientOwner && departmentFilter) {
+      const { data: assignmentRows } = await dataClient
+        .from("client_assignments")
+        .select("client_id,clients(id,client_name)")
+        .eq("user_id", profile.id)
+        .eq("department_id", departmentFilter)
+        .eq("is_active", true);
+      assignedClients = ((assignmentRows ?? []) as unknown as DefaultClientAssignmentRow[])
+        .filter((assignment) => assignment.clients)
+        .map((assignment) => ({
+          id: assignment.clients?.id ?? assignment.client_id,
+          client_name: assignment.clients?.client_name ?? ""
+        }))
+        .filter((client) => client.id && client.client_name)
+        .sort((left, right) => left.client_name.localeCompare(right.client_name, "ko"));
+    }
+    const assignedClientIds = new Set(assignedClients.map((client) => client.id));
     if (!params.client_id && departmentFilter) {
-      if (profile.app_role === "client_owner") {
-        const { data: defaultAssignments } = await dataClient
-          .from("client_assignments")
-          .select("client_id,clients(id,client_name)")
-          .eq("user_id", profile.id)
-          .eq("is_active", true);
-        const assignedClients = ((defaultAssignments ?? []) as unknown as DefaultClientAssignmentRow[])
-          .filter((assignment) => assignment.clients)
-          .map((assignment) => ({
-            id: assignment.clients?.id ?? assignment.client_id,
-            client_name: assignment.clients?.client_name ?? ""
-          }))
-          .filter((client) => client.id && client.client_name)
-          .sort((left, right) => left.client_name.localeCompare(right.client_name, "ko"));
+      if (isClientOwner) {
         defaultClientId = pickDefaultClientId(assignedClients, profile.app_role) || undefined;
       } else {
         const { data: defaultClientLinks } = await dataClient
@@ -268,16 +277,23 @@ export default async function ClientReportsPage({
         defaultClientId = pickDefaultClientId(defaultClients, profile.app_role) || undefined;
       }
     }
-    const selectedClientFilter = params.client_id ?? defaultClientId;
+    const requestedClientFilter = params.client_id ?? defaultClientId;
+    const ownerClientIds = isClientOwner ? resolveOwnerClientIds(assignedClientIds, requestedClientFilter) : null;
+    const isClientOutOfScope = Boolean(requestedClientFilter) && ownerClientIds?.length === 0;
+    const selectedClientFilter = isClientOutOfScope ? undefined : requestedClientFilter;
+    defaultClientId = selectedClientFilter;
     const [
       { data: departmentData },
       { data: categoryData },
       { data: clientData },
-      { data: assignmentData },
       { data: profileData },
-      { data: reportData, error: reportError }
+      { data: reportData, error: reportError },
+      { data: editorReportData, error: editorReportError }
     ] = await Promise.all([
       (() => {
+        if (isDepartmentScopeBlocked) {
+          return Promise.resolve({ data: [], error: null });
+        }
         let query = dataClient.from("departments").select("id,department_name").eq("is_active", true).order("sort_order");
         if (!isAdmin(profile) && departmentFilter) {
           query = query.eq("id", departmentFilter);
@@ -286,6 +302,9 @@ export default async function ClientReportsPage({
       })(),
       dataClient.from("work_categories").select("id,category_name,icon_key").eq("is_active", true).order("sort_order"),
       (() => {
+        if (isDepartmentScopeBlocked) {
+          return Promise.resolve({ data: [], error: null });
+        }
         let query = dataClient
           .from("department_client_links")
           .select("department_id,clients(id,client_name)")
@@ -296,10 +315,10 @@ export default async function ClientReportsPage({
         }
         return query;
       })(),
-      profile.app_role === "client_owner"
-        ? dataClient.from("client_assignments").select("client_id").eq("user_id", profile.id).eq("is_active", true)
-        : Promise.resolve({ data: [] }),
       (() => {
+        if (isDepartmentScopeBlocked) {
+          return Promise.resolve({ data: [], error: null });
+        }
         let query = dataClient.from("profiles").select("id,full_name");
         if (departmentFilter) {
           query = query.eq("department_id", departmentFilter);
@@ -307,18 +326,21 @@ export default async function ClientReportsPage({
         return query;
       })(),
       (() => {
+        if (isDepartmentScopeBlocked || ownerClientIds?.length === 0) {
+          return Promise.resolve({ data: [], error: null });
+        }
         let query = dataClient
           .from("weekly_client_reports")
           .select(CLIENT_REPORT_SELECT)
           .is("deleted_at", null)
           .order("week_start_date", { ascending: false })
           .limit(REPORT_LIST_LIMIT);
-        if (params.department_id) {
-          query = query.eq("department_id", params.department_id);
-        } else if (departmentFilter) {
+        if (departmentFilter) {
           query = query.eq("department_id", departmentFilter);
         }
-        if (selectedClientFilter) {
+        if (ownerClientIds) {
+          query = query.in("client_id", ownerClientIds);
+        } else if (selectedClientFilter) {
           query = query.eq("client_id", selectedClientFilter);
         }
         if (params.status) {
@@ -326,19 +348,32 @@ export default async function ClientReportsPage({
         }
         if (searchFilters.dateFrom || searchFilters.dateTo) {
           if (searchFilters.dateFrom) {
-            query = query.gte(
-              "week_start_date",
-              searchFilters.dateFrom < selectedWeek.weekStartDate ? searchFilters.dateFrom : selectedWeek.weekStartDate
-            );
+            query = query.gte("week_start_date", searchFilters.dateFrom);
           }
           if (searchFilters.dateTo) {
-            query = query.lte(
-              "week_start_date",
-              searchFilters.dateTo > selectedWeek.weekStartDate ? searchFilters.dateTo : selectedWeek.weekStartDate
-            );
+            query = query.lte("week_start_date", searchFilters.dateTo);
           }
         } else {
           query = query.eq("week_start_date", selectedWeek.weekStartDate);
+        }
+        return query;
+      })(),
+      // 편집 폼 원본은 검색·상태 조건과 무관하게 선택 화주·주차 자료를 그대로 불러온다.
+      // 목록 조회 범위가 선택 주차와 같을 때만 목록 결과를 재사용한다.
+      (() => {
+        if (isDepartmentScopeBlocked || !selectedClientFilter || !hasListScopeFilters) {
+          return Promise.resolve({ data: [], error: null });
+        }
+        let query = dataClient
+          .from("weekly_client_reports")
+          .select(CLIENT_REPORT_SELECT)
+          .eq("client_id", selectedClientFilter)
+          .eq("week_start_date", selectedWeek.weekStartDate)
+          .is("deleted_at", null)
+          .order("updated_at", { ascending: false })
+          .limit(1);
+        if (departmentFilter) {
+          query = query.eq("department_id", departmentFilter);
         }
         return query;
       })()
@@ -352,8 +387,7 @@ export default async function ClientReportsPage({
         client_name: link.clients?.client_name ?? "",
         department_id: link.department_id
       }));
-    const assignedClientIds = new Set(((assignmentData ?? []) as ClientAssignmentRow[]).map((assignment) => assignment.client_id));
-    editorClients = profile.app_role === "client_owner" ? clients.filter((client) => assignedClientIds.has(client.id)) : clients;
+    editorClients = isClientOwner ? clients.filter((client) => assignedClientIds.has(client.id)) : clients;
     const reportRows = reportError ? [] : ((reportData ?? []) as unknown as ReportRow[]);
     const creatorNameMap = new Map(((profileData ?? []) as ProfileNameRow[]).map((creator) => [creator.id, creator.full_name]));
     const namedReports = reportRows.map((report) => ({
@@ -361,9 +395,23 @@ export default async function ClientReportsPage({
       profiles: { full_name: creatorNameMap.get(report.created_by) ?? "-" }
     }));
     reportSourceById = new Map(namedReports.map((report) => [report.id, report]));
-    editorReport = namedReports.find(
-      (report) => report.client_id === selectedClientFilter && report.week_start_date === selectedWeek.weekStartDate
-    ) ?? null;
+    if (editorReportError) {
+      console.error("client-reports: editor source lookup failed", editorReportError);
+    }
+    const editorReportRow = editorReportError
+      ? null
+      : (((editorReportData ?? []) as unknown as ReportRow[])[0] ?? null);
+    if (!selectedClientFilter) {
+      editorReport = null;
+    } else if (hasListScopeFilters) {
+      editorReport = editorReportRow
+        ? { ...editorReportRow, profiles: { full_name: creatorNameMap.get(editorReportRow.created_by) ?? "-" } }
+        : null;
+    } else {
+      editorReport = namedReports.find(
+        (report) => report.client_id === selectedClientFilter && report.week_start_date === selectedWeek.weekStartDate
+      ) ?? null;
+    }
     reports = hasSearchFilters
       ? namedReports.flatMap((report) => {
           const matchingItems = filterClientReportSearchItems(report, searchFilters);
@@ -379,12 +427,12 @@ export default async function ClientReportsPage({
   return (
     <>
       <ClientReportsWorkspace
-        key={`client-reports-${defaultDepartmentId ?? "department"}-${params.client_id ?? "all"}-${params.status ?? "all"}-${selectedWeek.weekStartDate}-${Object.values(searchFilters).join("|")}`}
+        key={`client-reports-${defaultDepartmentId ?? "department"}-${defaultClientId ?? "all"}-${params.status ?? "all"}-${selectedWeek.weekStartDate}-${Object.values(searchFilters).join("|")}`}
         departments={departments}
         clients={editorClients}
         categories={categories}
         defaultDepartmentId={defaultDepartmentId}
-        defaultClientId={params.client_id ?? defaultClientId}
+        defaultClientId={defaultClientId}
         selectedWeekStartDate={selectedWeek.weekStartDate}
         searchFilters={searchFilters}
         hasSearchFilters={hasSearchFilters}

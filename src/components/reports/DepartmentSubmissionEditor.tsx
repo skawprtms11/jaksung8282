@@ -42,7 +42,7 @@ type CenterOption = { id: string; center_name: string };
 type HolidayClientOption = { id: string; client_name: string };
 type HolidayWorkerOption = { id: string; full_name: string };
 type SectionValue = (typeof sections)[number]["value"];
-type DepartmentTabValue = SectionValue | "volume";
+export type DepartmentTabValue = SectionValue | "volume";
 type DepartmentContent = {
   section_type: SectionValue;
   current_importance: Importance;
@@ -420,6 +420,7 @@ export function DepartmentSubmissionEditor({
   initialSubmission,
   initialLookupDepartmentId,
   initialLookupWeekStartDate,
+  initialActiveTab,
   requireExplicitDepartmentSelection = false,
   visibleTabs,
   canEdit = true,
@@ -443,6 +444,7 @@ export function DepartmentSubmissionEditor({
   initialSubmission?: DepartmentSubmissionEditorInitialSubmission | null;
   initialLookupDepartmentId?: string | null;
   initialLookupWeekStartDate?: string;
+  initialActiveTab?: DepartmentTabValue | null;
   requireExplicitDepartmentSelection?: boolean;
   visibleTabs?: DepartmentTabValue[];
   canEdit?: boolean;
@@ -453,7 +455,13 @@ export function DepartmentSubmissionEditor({
   const availableTabs = visibleTabs?.length
     ? visibleTabs.flatMap((value) => departmentTabs.filter((tab) => tab.value === value))
     : departmentTabs;
-  const [active, setActive] = useState<DepartmentTabValue>(availableTabs[0]?.value ?? "common");
+  const [active, setActive] = useState<DepartmentTabValue>(() => {
+    const fallbackTab = availableTabs[0]?.value ?? "common";
+    if (!initialActiveTab) {
+      return fallbackTab;
+    }
+    return availableTabs.some((tab) => tab.value === initialActiveTab) ? initialActiveTab : fallbackTab;
+  });
   const [isMobileCommonExpanded, setIsMobileCommonExpanded] = useState(true);
   const [activeDialog, setActiveDialog] = useState<ActiveDialog>(null);
   const [facilityDialogOpen, setFacilityDialogOpen] = useState(false);
@@ -584,11 +592,17 @@ export function DepartmentSubmissionEditor({
     [departmentId, selectedWeekOption.month, selectedWeekOption.year, setVacancyRecords, setVacancyState, setVacancyTrend, startVacancyTransition]
   );
 
+  // 서버가 이미 내려준 조회키를 기억한다. prop을 deps로 쓰면 URL 갱신 RSC 응답이 진행 중인 조회를 취소해 로딩이 고착된다.
+  const loadedLookupKeyRef = useRef(`${initialLookupDepartmentId ?? ""}|${initialLookupWeekStartDate ?? ""}`);
+
   useEffect(() => {
     if (!departmentId || !weekStartDate) {
       return;
     }
-    if (departmentId === initialLookupDepartmentId && weekStartDate === initialLookupWeekStartDate) {
+    const lookupKey = `${departmentId}|${weekStartDate}`;
+    if (lookupKey === loadedLookupKeyRef.current) {
+      // 이미 이 조회키의 데이터를 들고 있다. 취소된 조회가 남긴 로딩 표시를 여기서 해제한다.
+      setIsLoadingSubmission(false);
       return;
     }
 
@@ -635,6 +649,7 @@ export function DepartmentSubmissionEditor({
       })
       .finally(() => {
         if (!ignore) {
+          loadedLookupKeyRef.current = lookupKey;
           setIsLoadingSubmission(false);
         }
       });
@@ -643,7 +658,7 @@ export function DepartmentSubmissionEditor({
       ignore = true;
       window.clearTimeout(loadingTimer);
     };
-  }, [departmentId, firstCategoryId, initialLookupDepartmentId, initialLookupWeekStartDate, weekStartDate]);
+  }, [departmentId, firstCategoryId, weekStartDate]);
 
   useEffect(() => {
     if (!departmentId || active !== "vacancy") {
@@ -652,7 +667,34 @@ export function DepartmentSubmissionEditor({
     refreshVacancyData();
   }, [active, departmentId, refreshVacancyData]);
 
+  function handleTabChange(nextTab: DepartmentTabValue) {
+    setActive(nextTab);
+    // 모바일은 key에 주차가 없어 탭이 리셋되지 않는다. URL을 건드리면 탭 전환마다 RSC 왕복만 늘어난다.
+    if (mobileMode) {
+      return;
+    }
+    const next = new URLSearchParams(searchParams.toString());
+    next.set("tab", nextTab);
+    router.replace(`/department-reports?${next.toString()}`, { scroll: false });
+  }
+
   function handleWeekSelectionChange(week: WeekOption) {
+    const next = new URLSearchParams(searchParams.toString());
+    next.set("report_year", String(week.year));
+    next.set("report_month", String(week.month));
+    next.set("week_of_month", String(week.weekOfMonth));
+    next.set("week_start_date", week.weekStartDate);
+
+    // 데스크톱은 URL 주차가 바뀌면 서버가 새 key로 에디터를 리마운트하므로 클라이언트 재조회가 중복이다.
+    if (!mobileMode) {
+      if (week.weekStartDate !== weekStartDate) {
+        setIsLoadingSubmission(true);
+        setLoadState(null);
+      }
+      router.replace(`/department-reports?${next.toString()}`, { scroll: false });
+      return;
+    }
+
     setSelectedWeekOption(week);
     setWeekStartDate((current) => {
       if (current !== week.weekStartDate) {
@@ -664,15 +706,8 @@ export function DepartmentSubmissionEditor({
       }
       return week.weekStartDate;
     });
-    if (mobileMode) {
-      const next = new URLSearchParams(searchParams.toString());
-      next.set("view", "department");
-      next.set("report_year", String(week.year));
-      next.set("report_month", String(week.month));
-      next.set("week_of_month", String(week.weekOfMonth));
-      next.set("week_start_date", week.weekStartDate);
-      router.replace(`/mobile?${next.toString()}`, { scroll: false });
-    }
+    next.set("view", "department");
+    router.replace(`/mobile?${next.toString()}`, { scroll: false });
   }
 
   function updateFacilityItems(nextItems: FacilityConstructionItem[]) {
@@ -741,7 +776,7 @@ export function DepartmentSubmissionEditor({
                     type="button"
                     role="tab"
                     aria-selected={isSelected}
-                    onClick={() => setActive(section.value)}
+                    onClick={() => handleTabChange(section.value)}
                     className={cn(
                       mobileMode ? "relative flex h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 font-black" : REPORT_TAB_ITEM_CLASS_NAME,
                       isSelected ? REPORT_TAB_ACTIVE_CLASS_NAME : REPORT_TAB_IDLE_CLASS_NAME
