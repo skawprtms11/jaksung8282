@@ -29,6 +29,14 @@ const formBooleanSchema = z.preprocess((value) => {
   return value;
 }, z.coerce.boolean());
 
+export const employeeNoPattern = /^[A-Za-z0-9-]+$/;
+export const employeeNoSchema = z
+  .string()
+  .trim()
+  .min(1, "사번을 입력하세요.")
+  .max(50)
+  .regex(employeeNoPattern, "사번은 영문, 숫자, 하이픈만 사용할 수 있습니다.");
+
 export const weekSelectionSchema = z.object({
   report_year: z.coerce.number().int().min(2020).max(2100),
   report_month: z.coerce.number().int().min(1).max(12),
@@ -103,7 +111,7 @@ export const departmentClientSchema = clientSchema.extend({
 export const userSchema = z.object({
   id: z.string().uuid().optional(),
   email: z.string().trim().email("올바른 이메일을 입력하세요."),
-  employee_no: z.string().trim().min(1, "사번을 입력하세요.").max(50),
+  employee_no: employeeNoSchema,
   full_name: z.string().trim().min(1, "성함을 입력하세요.").max(100),
   department_id: optionalIdSchema,
   app_role: z.enum(appRoles),

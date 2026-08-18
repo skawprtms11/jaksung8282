@@ -1,5 +1,6 @@
 import dynamic from "next/dynamic";
 import { type ClientReportTableRow } from "@/components/reports/ClientReportsTable";
+import { resolveOwnerClientIds } from "@/lib/auth/client-scope";
 import { pickDefaultClientId, pickDefaultDepartmentId } from "@/lib/auth/default-scope";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { isAdmin } from "@/lib/auth/permissions";
@@ -124,13 +125,6 @@ function getSelectedWeek(params: ClientReportsSearchParams) {
   return getCurrentWeekOption();
 }
 
-function resolveOwnerClientIds(assignedClientIds: Set<string>, requestedClientId?: string) {
-  if (!requestedClientId) {
-    return [...assignedClientIds];
-  }
-  return assignedClientIds.has(requestedClientId) ? [requestedClientId] : [];
-}
-
 function toClientReportTableRow(report: ReportRow, editSource: ReportRow = report): ClientReportTableRow {
   return {
     id: report.id,
@@ -240,14 +234,17 @@ export default async function ClientReportsPage({
       adminDefaultDepartmentId = pickDefaultDepartmentId((defaultDepartments ?? []) as DepartmentOption[], profile.app_role) || undefined;
     }
     const departmentFilter = isAdmin(profile) ? params.department_id ?? adminDefaultDepartmentId : profile.department_id;
+    // 부서 범위를 확정하지 못한 비관리자는 전 부서 자료가 새지 않도록 조회 자체를 막는다.
+    const isDepartmentScopeBlocked = !isAdmin(profile) && !departmentFilter;
     defaultDepartmentId = departmentFilter ?? null;
     const isClientOwner = profile.app_role === "client_owner";
     let assignedClients: { id: string; client_name: string }[] = [];
-    if (isClientOwner) {
+    if (isClientOwner && departmentFilter) {
       const { data: assignmentRows } = await dataClient
         .from("client_assignments")
         .select("client_id,clients(id,client_name)")
         .eq("user_id", profile.id)
+        .eq("department_id", departmentFilter)
         .eq("is_active", true);
       assignedClients = ((assignmentRows ?? []) as unknown as DefaultClientAssignmentRow[])
         .filter((assignment) => assignment.clients)
@@ -294,6 +291,9 @@ export default async function ClientReportsPage({
       { data: editorReportData, error: editorReportError }
     ] = await Promise.all([
       (() => {
+        if (isDepartmentScopeBlocked) {
+          return Promise.resolve({ data: [], error: null });
+        }
         let query = dataClient.from("departments").select("id,department_name").eq("is_active", true).order("sort_order");
         if (!isAdmin(profile) && departmentFilter) {
           query = query.eq("id", departmentFilter);
@@ -302,6 +302,9 @@ export default async function ClientReportsPage({
       })(),
       dataClient.from("work_categories").select("id,category_name,icon_key").eq("is_active", true).order("sort_order"),
       (() => {
+        if (isDepartmentScopeBlocked) {
+          return Promise.resolve({ data: [], error: null });
+        }
         let query = dataClient
           .from("department_client_links")
           .select("department_id,clients(id,client_name)")
@@ -313,6 +316,9 @@ export default async function ClientReportsPage({
         return query;
       })(),
       (() => {
+        if (isDepartmentScopeBlocked) {
+          return Promise.resolve({ data: [], error: null });
+        }
         let query = dataClient.from("profiles").select("id,full_name");
         if (departmentFilter) {
           query = query.eq("department_id", departmentFilter);
@@ -320,7 +326,7 @@ export default async function ClientReportsPage({
         return query;
       })(),
       (() => {
-        if (ownerClientIds?.length === 0) {
+        if (isDepartmentScopeBlocked || ownerClientIds?.length === 0) {
           return Promise.resolve({ data: [], error: null });
         }
         let query = dataClient
@@ -355,7 +361,7 @@ export default async function ClientReportsPage({
       // 편집 폼 원본은 검색·상태 조건과 무관하게 선택 화주·주차 자료를 그대로 불러온다.
       // 목록 조회 범위가 선택 주차와 같을 때만 목록 결과를 재사용한다.
       (() => {
-        if (!selectedClientFilter || !hasListScopeFilters) {
+        if (isDepartmentScopeBlocked || !selectedClientFilter || !hasListScopeFilters) {
           return Promise.resolve({ data: [], error: null });
         }
         let query = dataClient
