@@ -67,13 +67,19 @@ export function ClientReportsWorkspace({
     if (report) {
       setLocalReports((current) => {
         const nextReport = report as ClientReportTableRow;
-        return current.some((row) => row.id === nextReport.id)
-          ? current.map((row) => (row.id === nextReport.id ? nextReport : row))
-          : [nextReport, ...current];
+        if (current.some((row) => row.id === nextReport.id)) {
+          return current.map((row) => (row.id === nextReport.id ? nextReport : row));
+        }
+        // 기간 검색 중에는 편집 폼이 검색 범위 밖 주차를 다룬다. 범위 밖 자료를 목록에 끼워넣지 않는다.
+        const outsideRange = Boolean(
+          (searchFilters.dateFrom && nextReport.weekStartDate < searchFilters.dateFrom) ||
+            (searchFilters.dateTo && nextReport.weekStartDate > searchFilters.dateTo)
+        );
+        return outsideRange ? current : [nextReport, ...current];
       });
     }
     clearEditMode();
-  }, [clearEditMode]);
+  }, [clearEditMode, searchFilters.dateFrom, searchFilters.dateTo]);
 
   const openEditDialog = useCallback((report: ClientReportEditorInitialReport, period: ItemPeriod) => {
     setEditingReport(report);
