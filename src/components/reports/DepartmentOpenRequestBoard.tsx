@@ -134,14 +134,14 @@ export function DepartmentOpenRequestBoard({
         </div>
 
         <div className={compact ? "px-3 pt-2" : "px-4 pt-3"}>
-          <div className={`rounded-[1.1rem] bg-[#012241]/[0.06] ${compact ? "px-3 py-2" : "px-4 py-3"}`}>
+          <div className={`rounded-[1.1rem] bg-white/75 ring-1 ring-white/80 shadow-[0_8px_20px_rgba(1,34,65,0.06)] ${compact ? "px-3 py-2" : "px-4 py-3"}`}>
             <p className="text-2xl font-black leading-none tabular-nums text-[#012241]">{rows.length}</p>
-            <p className="mt-1 text-xs font-black text-[#012241]/70">미종결 요청</p>
+            <p className="mt-1 text-xs font-black text-[#4a5a6a]">미종결 요청</p>
           </div>
         </div>
 
         {rows.length === 0 ? (
-          <p className={`text-center text-xs font-bold text-[#012241]/50 ${compact ? "px-3 py-3" : "px-4 py-5"}`}>{emptyMessage}</p>
+          <p className={`text-center text-xs font-bold text-[#4a5a6a] ${compact ? "px-3 py-3" : "px-4 py-5"}`}>{emptyMessage}</p>
         ) : (
           <div className={compact ? "px-3 pb-2" : "px-4 pb-3"}>
             {rows.map((request, index) => (
@@ -168,13 +168,13 @@ export function DepartmentOpenRequestBoard({
                   >
                     {request.title}
                   </button>
-                  <p className="mt-1 truncate text-[11px] font-bold text-[#012241]/60">
+                  <p className="mt-1 truncate text-[11px] font-bold text-[#4a5a6a]">
                     {request.sourceLabel} · {request.categoryName} · {request.resultContent ? "처리결과 등록" : "처리대기"} ·{" "}
                     {request.weekLabel} · {formatDateTime(request.requestCreatedAt)} 등록
                   </p>
                   <p
                     className={cn(
-                      "mt-1 whitespace-pre-wrap text-xs font-semibold leading-5 text-[#012241]/70",
+                      "mt-1 whitespace-pre-wrap text-xs font-semibold leading-5 text-[#3a4a5a]",
                       compact ? "line-clamp-1" : "line-clamp-2"
                     )}
                   >
