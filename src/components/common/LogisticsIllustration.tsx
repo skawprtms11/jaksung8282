@@ -49,8 +49,8 @@ export function LogisticsIllustration({ mobileMode = false }: { mobileMode?: boo
           </div>
         ))}
       </div>
-      <div className="absolute right-5 top-8 hidden rounded-2xl border border-[#72c8ff]/40 bg-[#012241]/80 p-4 text-white shadow-[0_20px_50px_rgba(0, 112, 80,0.24)] backdrop-blur md:right-16 md:top-32 md:block">
-        <div className="flex items-center gap-2 text-xs font-bold text-[#90d8ff]">
+      <div className="absolute right-5 top-8 hidden rounded-2xl border border-[#2fae66]/40 bg-[#012241]/80 p-4 text-white shadow-[0_20px_50px_rgba(0, 112, 80,0.24)] backdrop-blur md:right-16 md:top-32 md:block">
+        <div className="flex items-center gap-2 text-xs font-bold text-[#7fdcae]">
           <Radar className="h-4 w-4" aria-hidden="true" />
           WAREHOUSE LIVE
         </div>

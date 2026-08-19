@@ -167,7 +167,7 @@ export function VolumeAnalysisPanel({
     [clientId, historicalVolumes, volumes]
   );
   const seriesOptions: { key: VolumeSeriesKey; label: string; color: string }[] = [
-    { key: "all", label: "전체", color: "#007050" },
+    { key: "all", label: "전체", color: "#012241" },
     { key: "inbound", label: "입고", color: "#007050" },
     { key: "outbound", label: "출고", color: "#f59e0b" }
   ];

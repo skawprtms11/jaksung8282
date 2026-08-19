@@ -93,7 +93,7 @@ export function MobileAppShell({
         <div className="bg-[#007050] px-3 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] text-white">
           <div className="mx-auto flex max-w-xl items-center gap-2">
             <div className="flex min-w-0 flex-1 flex-col justify-center leading-none">
-              <p className="text-xs font-bold text-blue-100">TPL사업부</p>
+              <p className="text-xs font-bold text-white/75">TPL사업부</p>
               <p className="mt-1 whitespace-nowrap text-[15px] font-black">주간자료 시스템</p>
             </div>
             <div className="ml-auto flex shrink-0 gap-1">
@@ -105,7 +105,7 @@ export function MobileAppShell({
               </label>
               <label className="w-[102px] min-w-0">
                 <span className="sr-only">화주</span>
-                <select value={selectedClientId} onChange={(event) => changeClient(event.target.value)} disabled={!selectedClientId} aria-label="화주 선택" className="h-8 w-full min-w-0 rounded-md border border-white/35 bg-white/14 px-1 !text-xs !font-black text-white outline-none focus:border-white disabled:text-blue-200">
+                <select value={selectedClientId} onChange={(event) => changeClient(event.target.value)} disabled={!selectedClientId} aria-label="화주 선택" className="h-8 w-full min-w-0 rounded-md border border-white/35 bg-white/14 px-1 !text-xs !font-black text-white outline-none focus:border-white disabled:text-white/50">
                   {clients.length ? clients.map((client) => <option key={client.id} value={client.id} className="text-[#012241]">{client.client_name}</option>) : <option value="" className="text-[#012241]">화주 없음</option>}
                 </select>
               </label>

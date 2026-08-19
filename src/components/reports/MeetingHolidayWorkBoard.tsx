@@ -123,7 +123,7 @@ function holidayCountCellClassName(count: number, tone: "employee" | "contract" 
     return "bg-[#faf6ef] text-slate-300";
   }
   return tone === "employee"
-    ? "bg-blue-50 text-[#007050] ring-1 ring-blue-100"
+    ? "bg-[#e6f1ec] text-[#007050] ring-1 ring-[#cbe7d3]"
     : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100";
 }
 

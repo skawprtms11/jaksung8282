@@ -358,7 +358,7 @@ export function NoticeBoard({
       <ActionMessage state={deleteState} />
 
       {visibleImportantNotices.length > 0 ? (
-        <div className="mb-3 rounded-2xl border border-blue-100 bg-[#faf6ef] p-3">
+        <div className="mb-3 rounded-2xl border border-[#e7ddcd] bg-[#faf6ef] p-3">
           <div className="mb-2 flex items-center gap-2 text-sm font-black text-[#012241]">
             <Pin className="h-4 w-4 text-[#007050]" aria-hidden="true" />
             중요 게시글
@@ -369,7 +369,7 @@ export function NoticeBoard({
                 key={notice.id}
                 type="button"
                 onClick={() => openNoticeDetail(notice)}
-                className="min-w-0 rounded-2xl border border-[#e7ddcd] bg-white px-3 py-2 text-left shadow-[0_10px_22px_rgba(16,34,61,0.04)] transition hover:border-blue-200 hover:text-[#007050]"
+                className="min-w-0 rounded-2xl border border-[#e7ddcd] bg-white px-3 py-2 text-left shadow-[0_10px_22px_rgba(16,34,61,0.04)] transition hover:border-[#c9e3d3] hover:text-[#007050]"
               >
                 <span className="block text-[11px] font-black text-slate-400">{formatShortDate(notice.created_at)}</span>
                 <span className="mt-1 block truncate text-sm font-black text-[#012241]">{notice.title}</span>
