@@ -22,7 +22,7 @@ export function ResetPasswordForm({ canUpdatePassword }: { canUpdatePassword: bo
             type="password"
             minLength={8}
             required
-            className="mt-1 h-12 w-full rounded-2xl border border-[#d9e4f2] bg-[#f8fbff] px-4 text-sm text-[#10223d] focus:border-[#075be8] focus:outline-none"
+            className="mt-1 h-12 w-full rounded-2xl border border-[#e4dac9] bg-[#fbf8f2] px-4 text-sm text-[#012241] focus:border-[#007050] focus:outline-none"
           />
         </div>
         <div>
@@ -35,7 +35,7 @@ export function ResetPasswordForm({ canUpdatePassword }: { canUpdatePassword: bo
             type="password"
             minLength={8}
             required
-            className="mt-1 h-12 w-full rounded-2xl border border-[#d9e4f2] bg-[#f8fbff] px-4 text-sm text-[#10223d] focus:border-[#075be8] focus:outline-none"
+            className="mt-1 h-12 w-full rounded-2xl border border-[#e4dac9] bg-[#fbf8f2] px-4 text-sm text-[#012241] focus:border-[#007050] focus:outline-none"
           />
         </div>
         <ActionMessage state={updateState} />
@@ -55,7 +55,7 @@ export function ResetPasswordForm({ canUpdatePassword }: { canUpdatePassword: bo
           name="email"
           type="email"
           required
-          className="mt-1 h-12 w-full rounded-2xl border border-[#d9e4f2] bg-[#f8fbff] px-4 text-sm text-[#10223d] focus:border-[#075be8] focus:outline-none"
+          className="mt-1 h-12 w-full rounded-2xl border border-[#e4dac9] bg-[#fbf8f2] px-4 text-sm text-[#012241] focus:border-[#007050] focus:outline-none"
         />
       </div>
       <ActionMessage state={state} />

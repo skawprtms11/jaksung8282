@@ -741,14 +741,14 @@ export function DepartmentSubmissionEditor({
   if (!departmentId) {
     return (
       <div className="space-y-3">
-        <section className="rounded-[1.4rem] border border-[#d9e7f7] bg-white/82 p-4 text-center shadow-[0_14px_34px_rgba(16,34,61,0.06)]">
-          <p className="text-sm font-black text-[#10223d]">전체 부서 조회 중입니다.</p>
+        <section className="rounded-[1.4rem] border border-[#e7ddcd] bg-white/82 p-4 text-center shadow-[0_14px_34px_rgba(16,34,61,0.06)]">
+          <p className="text-sm font-black text-[#012241]">전체 부서 조회 중입니다.</p>
           <p className="mt-1 text-xs font-bold text-slate-500">
             부서자료 작성과 확정은 최상단 부서 필터에서 특정 부서를 선택한 뒤 진행하세요.
           </p>
         </section>
         {children ? (
-          <div className="rounded-[1.4rem] border border-[#d9e7f7] bg-white/80 p-2 shadow-[0_14px_34px_rgba(16,34,61,0.06)]">
+          <div className="rounded-[1.4rem] border border-[#e7ddcd] bg-white/80 p-2 shadow-[0_14px_34px_rgba(16,34,61,0.06)]">
             {children}
           </div>
         ) : null}
@@ -763,10 +763,10 @@ export function DepartmentSubmissionEditor({
       <input type="hidden" name="contents" value={serializedContents} />
       <input type="hidden" name="department_id" value={departmentId} />
 
-      <div className="rounded-[1.4rem] border border-[#d9e7f7] bg-white/82 p-2 shadow-[0_14px_34px_rgba(16,34,61,0.06)]">
+      <div className="rounded-[1.4rem] border border-[#e7ddcd] bg-white/82 p-2 shadow-[0_14px_34px_rgba(16,34,61,0.06)]">
         <div className="space-y-2">
           <div className={cn(mobileMode ? "space-y-2" : "flex flex-wrap items-center justify-between gap-2")}>
-            <nav className={mobileMode ? cn("grid w-full gap-1 rounded-xl bg-[#f5f9ff] p-1", availableTabs.length === 4 ? "grid-cols-4" : "grid-cols-3") : REPORT_TAB_NAV_CLASS_NAME} role="tablist" aria-label="부서자료 화면 탭">
+            <nav className={mobileMode ? cn("grid w-full gap-1 rounded-xl bg-[#faf6ef] p-1", availableTabs.length === 4 ? "grid-cols-4" : "grid-cols-3") : REPORT_TAB_NAV_CLASS_NAME} role="tablist" aria-label="부서자료 화면 탭">
               {availableTabs.map((section) => {
                 const Icon = section.icon;
                 const isSelected = active === section.value;
@@ -792,7 +792,7 @@ export function DepartmentSubmissionEditor({
               })}
             </nav>
             <div className={mobileMode ? "w-full" : "shrink-0"}>
-              <div className={cn("border border-[#dbe8fb] bg-white/90 px-2 py-1.5 shadow-[0_10px_22px_rgba(16,34,61,0.05)]", mobileMode ? "flex items-end gap-2 rounded-md" : "rounded-full")}>
+              <div className={cn("border border-[#e7ddcd] bg-white/90 px-2 py-1.5 shadow-[0_10px_22px_rgba(16,34,61,0.05)]", mobileMode ? "flex items-end gap-2 rounded-md" : "rounded-full")}>
                 <WeekSelect
                   defaultWeekStartDate={weekStartDate}
                   compactWeekLabel
@@ -800,11 +800,11 @@ export function DepartmentSubmissionEditor({
                   className={mobileMode ? "grid min-w-0 flex-1 grid-cols-3 gap-1.5" : "flex flex-wrap items-center gap-1.5"}
                   labelClassName={mobileMode ? "min-w-0 text-sm font-black text-slate-500" : "flex items-center gap-1 text-[11px] font-black text-slate-500"}
                   weekLabelClassName={mobileMode ? "min-w-0 text-sm font-black text-slate-500" : "flex items-center gap-1 text-[11px] font-black text-slate-500"}
-                  controlClassName={mobileMode ? "mt-1 h-10 min-w-0 w-full rounded-md border border-[#d7e4f6] bg-[#f5f9ff] px-1 !text-sm !font-black text-[#10223d] outline-none" : "h-8 w-[78px] rounded-full border border-[#d7e4f6] bg-[#f5f9ff] px-2 text-sm font-black text-[#10223d] outline-none"}
+                  controlClassName={mobileMode ? "mt-1 h-10 min-w-0 w-full rounded-md border border-[#e4dac9] bg-[#faf6ef] px-1 !text-sm !font-black text-[#012241] outline-none" : "h-8 w-[78px] rounded-full border border-[#e4dac9] bg-[#faf6ef] px-2 text-sm font-black text-[#012241] outline-none"}
                 />
                 {mobileMode ? (
                   isSubmittedToDivision ? (
-                    <button type="submit" formAction={cancelAction} disabled={!canSubmit || isSubmissionBusy || isCancelWindowExpired} className="tool-button h-10 shrink-0 px-2 text-[11px] text-[#075be8] disabled:opacity-50" title={isCancelWindowExpired ? "확정 후 3일이 지난 부서자료는 확정취소할 수 없습니다." : undefined}><RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />{isCancellingSubmission ? "취소 중" : "확정취소"}</button>
+                    <button type="submit" formAction={cancelAction} disabled={!canSubmit || isSubmissionBusy || isCancelWindowExpired} className="tool-button h-10 shrink-0 px-2 text-[11px] text-[#007050] disabled:opacity-50" title={isCancelWindowExpired ? "확정 후 3일이 지난 부서자료는 확정취소할 수 없습니다." : undefined}><RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />{isCancellingSubmission ? "취소 중" : "확정취소"}</button>
                   ) : isDivisionApproved ? (
                     <span className="inline-flex h-10 shrink-0 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 text-[11px] font-black text-emerald-700"><CheckCircle2 className="h-4 w-4" aria-hidden="true" />승인완료</span>
                   ) : (
@@ -841,7 +841,7 @@ export function DepartmentSubmissionEditor({
                   type="submit"
                   formAction={cancelAction}
                   disabled={!canSubmit || isSubmissionBusy || isCancelWindowExpired}
-                  className="tool-button h-9 text-[#075be8] disabled:opacity-50"
+                  className="tool-button h-9 text-[#007050] disabled:opacity-50"
                   title={
                     !canSubmit
                       ? "확정취소는 부서장과 관리자만 가능합니다."
@@ -860,14 +860,14 @@ export function DepartmentSubmissionEditor({
       </div>
 
       {children && showOverviewAndReview ? (
-        <div className="rounded-[1.4rem] border border-[#d9e7f7] bg-white/80 p-2 shadow-[0_14px_34px_rgba(16,34,61,0.06)]">
+        <div className="rounded-[1.4rem] border border-[#e7ddcd] bg-white/80 p-2 shadow-[0_14px_34px_rgba(16,34,61,0.06)]">
           {children}
         </div>
       ) : null}
 
       {active === "common" ? commonRequestSlot : null}
 
-      <section className="rounded-2xl border border-[#d9e7f7] bg-white/86 p-3 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
+      <section className="rounded-2xl border border-[#e7ddcd] bg-white/86 p-3 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
         {active === "holiday_work" || active === "vacancy" || active === "volume" ? null : (
           mobileMode && active === "common" ? (
             <div className={cn(isMobileCommonExpanded && "mb-3")}>
@@ -923,7 +923,7 @@ export function DepartmentSubmissionEditor({
         )}
         {mobileMode && active === "common" && !isMobileCommonExpanded ? null : active === "volume" ? (
           volumeSlot ?? (
-            <div className="rounded-2xl border border-dashed border-[#b9cce6] px-4 py-6 text-center text-sm font-bold text-slate-500">
+            <div className="rounded-2xl border border-dashed border-[#d3c6b0] px-4 py-6 text-center text-sm font-bold text-slate-500">
               선택한 주차의 물동량 자료가 없습니다.
             </div>
           )
@@ -996,11 +996,11 @@ export function DepartmentSubmissionEditor({
             />
           </div>
         ) : active === "common" && commonSearchFilters && hasClientReportSearchFilters(commonSearchFilters) ? (
-          <div className="rounded-2xl border border-dashed border-[#b9cce6] px-4 py-6 text-center text-sm font-bold text-slate-500">
+          <div className="rounded-2xl border border-dashed border-[#d3c6b0] px-4 py-6 text-center text-sm font-bold text-slate-500">
             검색 조건에 맞는 부서 공통사항이 없습니다.
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-[#b9cce6] px-4 py-6 text-center text-sm font-bold text-slate-500">
+          <div className="rounded-2xl border border-dashed border-[#d3c6b0] px-4 py-6 text-center text-sm font-bold text-slate-500">
             아직 작성된 내용이 없습니다.
           </div>
         )}
@@ -1293,7 +1293,7 @@ function VacancyStatusBoard({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-2xl border border-[#d9e7f7] bg-white/88 p-3 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
+      <div className="rounded-2xl border border-[#e7ddcd] bg-white/88 p-3 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="section-doodle-title">공실현황 최근 1년간 추이</h2>
@@ -1306,7 +1306,7 @@ function VacancyStatusBoard({
                   type="checkbox"
                   checked={allCentersSelected}
                   onChange={() => setSelectedCenterIds(allCentersSelected ? [] : null)}
-                  className="h-4 w-4 accent-[#075be8]"
+                  className="h-4 w-4 accent-[#007050]"
                 />
                 전체센터
               </label>
@@ -1317,7 +1317,7 @@ function VacancyStatusBoard({
                   type="checkbox"
                   checked={effectiveSelectedCenterIds.includes(center.id)}
                   onChange={() => toggleCenter(center.id)}
-                  className="h-4 w-4 accent-[#075be8]"
+                  className="h-4 w-4 accent-[#007050]"
                 />
                 {center.centerName}
               </label>
@@ -1325,23 +1325,23 @@ function VacancyStatusBoard({
           </div>
         </div>
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(440px,0.9fr)]">
-          <div className="relative h-[224px] rounded-2xl border border-[#d9e7f7] bg-[#f8fbff] p-3">
-            <div className="absolute right-3 top-3 z-10 flex flex-wrap items-center justify-end gap-1.5 rounded-full border border-[#d9e7f7] bg-white/92 px-2 py-1 shadow-[0_8px_18px_rgba(16,34,61,0.06)]">
-              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-black text-[#10223d]">
+          <div className="relative h-[224px] rounded-2xl border border-[#e7ddcd] bg-[#fbf8f2] p-3">
+            <div className="absolute right-3 top-3 z-10 flex flex-wrap items-center justify-end gap-1.5 rounded-full border border-[#e7ddcd] bg-white/92 px-2 py-1 shadow-[0_8px_18px_rgba(16,34,61,0.06)]">
+              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-black text-[#012241]">
                 <input
                   type="checkbox"
                   checked={showSimpleStorage}
                   onChange={(event) => setShowSimpleStorage(event.target.checked)}
-                  className="h-3.5 w-3.5 accent-[#075be8]"
+                  className="h-3.5 w-3.5 accent-[#007050]"
                 />
                 단순보관
               </label>
-              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-black text-[#10223d]">
+              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-black text-[#012241]">
                 <input
                   type="checkbox"
                   checked={showVacancy}
                   onChange={(event) => setShowVacancy(event.target.checked)}
-                  className="h-3.5 w-3.5 accent-[#075be8]"
+                  className="h-3.5 w-3.5 accent-[#007050]"
                 />
                 공실면적
               </label>
@@ -1353,16 +1353,16 @@ function VacancyStatusBoard({
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={trendData} margin={{ top: 30, right: 18, left: 0, bottom: 4 }}>
-                  <CartesianGrid stroke="#dbe8fb" strokeDasharray="4 4" />
+                  <CartesianGrid stroke="#e7ddcd" strokeDasharray="4 4" />
                   <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 11, fontWeight: 700 }} axisLine={false} tickLine={false} minTickGap={16} />
                   <YAxis tick={{ fill: "#64748b", fontSize: 11, fontWeight: 700 }} axisLine={false} tickLine={false} width={58} />
                   <Tooltip
                     formatter={(value, name) => [formatArea(Number(value)), name === "simple_storage_area" ? "단순보관" : "공실면적"]}
                     labelFormatter={(label) => `${label} 월평균`}
-                    contentStyle={{ borderRadius: 16, border: "1px solid #d9e7f7", fontWeight: 800 }}
+                    contentStyle={{ borderRadius: 16, border: "1px solid #e7ddcd", fontWeight: 800 }}
                   />
                   {showSimpleStorage ? (
-                    <Line type="monotone" dataKey="simple_storage_area" name="단순보관" stroke="#0ea5e9" strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
+                    <Line type="monotone" dataKey="simple_storage_area" name="단순보관" stroke="#2fae66" strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
                   ) : null}
                   {showVacancy ? (
                     <Line type="monotone" dataKey="vacancy_area" name="공실면적" stroke="#f97316" strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
@@ -1371,8 +1371,8 @@ function VacancyStatusBoard({
               </ResponsiveContainer>
             )}
           </div>
-          <div className="h-[224px] rounded-2xl border border-[#d9e7f7] bg-[#f8fbff] p-3">
-            <div className="h-full overflow-x-hidden rounded-xl border border-[#d9e7f7] bg-white">
+          <div className="h-[224px] rounded-2xl border border-[#e7ddcd] bg-[#fbf8f2] p-3">
+            <div className="h-full overflow-x-hidden rounded-xl border border-[#e7ddcd] bg-white">
               <table className="w-full table-fixed text-left text-[11px]">
                 <colgroup>
                   <col className="w-[18%]" />
@@ -1383,7 +1383,7 @@ function VacancyStatusBoard({
                   <col className="w-[12%]" />
                   <col className="w-[22%]" />
                 </colgroup>
-                <thead className="bg-[#f1f6fd] text-[#10223d]">
+                <thead className="bg-[#faf6ef] text-[#012241]">
                   <tr>
                     <th className="px-2 py-2">구분</th>
                     <th className="px-1.5 py-2 text-right">1주차</th>
@@ -1397,13 +1397,13 @@ function VacancyStatusBoard({
                 <tbody>
                   {vacancySummaryRows.map((row) => (
                     <tr key={row.label} className="border-t border-slate-100">
-                      <td className="px-2 py-2 font-black text-[#10223d]">{row.label}</td>
+                      <td className="px-2 py-2 font-black text-[#012241]">{row.label}</td>
                       {row.values.map((value, index) => (
                         <td key={`${row.label}-${index}`} className="px-1.5 py-2 text-right font-bold text-slate-600">
                           {value}
                         </td>
                       ))}
-                      <td className="px-2 py-2 text-right font-black text-[#075be8]">{row.average}</td>
+                      <td className="px-2 py-2 text-right font-black text-[#007050]">{row.average}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1413,8 +1413,8 @@ function VacancyStatusBoard({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-[#d9e7f7] bg-white/88 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e5eef9] px-3 py-3">
+      <div className="rounded-2xl border border-[#e7ddcd] bg-white/88 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#ece3d4] px-3 py-3">
           <div>
             <h2 className="section-doodle-title">주차별 공실현황</h2>
             <p className="mt-1 text-xs font-bold text-slate-500">
@@ -1422,7 +1422,7 @@ function VacancyStatusBoard({
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {message ? <p className="text-xs font-black text-[#075be8]">{message}</p> : null}
+            {message ? <p className="text-xs font-black text-[#007050]">{message}</p> : null}
             <button type="button" onClick={onCreate} disabled={disabled || centerOptions.length === 0} className="tool-button tool-button-primary min-h-10 py-2 disabled:opacity-50">
               <Plus className="h-4 w-4" aria-hidden="true" />
               등록
@@ -1468,8 +1468,8 @@ function VacancyStatusBoard({
                   ].filter(Boolean);
                   return (
                     <tr key={record.id} className="border-t border-slate-100 align-top">
-                      <td className="px-2 py-2.5 font-black text-[#10223d]">{record.week_of_month}주차</td>
-                      <td className="break-words px-2 py-2.5 font-black text-[#10223d]">{record.center_name}</td>
+                      <td className="px-2 py-2.5 font-black text-[#012241]">{record.week_of_month}주차</td>
+                      <td className="break-words px-2 py-2.5 font-black text-[#012241]">{record.center_name}</td>
                       <td className="px-2 py-2.5 text-right font-bold">{formatArea(record.operating_area)}</td>
                       <td className="px-2 py-2.5 text-right font-bold text-sky-700">{formatArea(record.simple_storage_area)}</td>
                       <td className="px-2 py-2.5 text-right font-bold text-orange-600">{formatArea(record.vacancy_area)}</td>
@@ -1568,23 +1568,28 @@ function VacancyRecordDialog({
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/72 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="vacancy-dialog-title">
-        <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-[1.5rem] border border-white/80 bg-white/95 shadow-[0_28px_80px_rgba(16,34,61,0.24)] backdrop-blur-2xl">
-          <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-            <div>
-              <h2 id="vacancy-dialog-title" className="text-lg font-black text-slate-900">
-                {initialItem ? "공실현황 수정" : "공실현황 등록"}
-              </h2>
-              <p className="mt-1 text-sm font-semibold text-slate-500">
-                {selectedWeek.year}년 {selectedWeek.month}월 {selectedWeek.weekOfMonth}주차 기준으로 센터별 면적을 입력합니다.
-              </p>
+      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#012241]/60 p-4 backdrop-blur" role="dialog" aria-modal="true" aria-labelledby="vacancy-dialog-title">
+        <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-[1.75rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(1,34,65,0.24)]">
+          <div className="flex items-start justify-between gap-4 border-b border-[#e7ddcd] px-5 py-4">
+            <div className="flex items-start gap-3">
+              <span className="icon-badge icon-badge-green" aria-hidden="true">
+                <Building2 className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 id="vacancy-dialog-title" className="text-lg font-black text-[#012241]">
+                  {initialItem ? "공실현황 수정" : "공실현황 등록"}
+                </h2>
+                <p className="mt-1 text-sm font-semibold text-slate-500">
+                  {selectedWeek.year}년 {selectedWeek.month}월 {selectedWeek.weekOfMonth}주차 기준으로 센터별 면적을 입력합니다.
+                </p>
+              </div>
             </div>
             <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
-          <div className="max-h-[64vh] overflow-y-auto bg-[#f5f9ff] px-5 py-4">
-            <div className="glass-row grid gap-3 p-3 md:grid-cols-2">
+          <div className="max-h-[64vh] overflow-y-auto bg-white px-5 py-4">
+            <div className="grid gap-3 rounded-[1.25rem] border border-[#e4dac9] bg-[#faf6ef] p-3 md:grid-cols-2">
               <label className="text-xs font-black text-slate-600 md:col-span-2">
                 센터
                 <select
@@ -1631,7 +1636,7 @@ function VacancyRecordDialog({
               ) : null}
             </div>
           </div>
-          <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+          <div className="flex justify-end gap-2 border-t border-[#e7ddcd] bg-white px-5 py-4">
             <button type="button" onClick={onClose} className="tool-button" disabled={isPending}>
               취소
             </button>
@@ -1739,15 +1744,15 @@ function FacilityConstructionTable({
 
   return (
     <>
-    <div className="rounded-2xl border border-[#d9e7f7] bg-white/88 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e5eef9] px-3 py-3">
+    <div className="rounded-2xl border border-[#e7ddcd] bg-white/88 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ece3d4] px-3 py-3">
         <div className="flex flex-wrap items-center gap-2">
           <label className="section-chip cursor-pointer">
             <input
               type="checkbox"
               checked={allStatusesSelected}
               onChange={() => setSelectedStatuses(allStatusesSelected ? [] : facilityStatusOptions.map((option) => option.value))}
-              className="h-4 w-4 accent-[#075be8]"
+              className="h-4 w-4 accent-[#007050]"
             />
             전체
           </label>
@@ -1757,7 +1762,7 @@ function FacilityConstructionTable({
                 type="checkbox"
                 checked={selectedStatuses.includes(option.value)}
                 onChange={() => toggleStatus(option.value)}
-                className="h-4 w-4 accent-[#075be8]"
+                className="h-4 w-4 accent-[#007050]"
               />
               {option.label}
             </label>
@@ -1769,7 +1774,7 @@ function FacilityConstructionTable({
             <input
               value={searchKeyword}
               onChange={(event) => setSearchKeyword(event.target.value)}
-              className="mt-1 h-10 w-full rounded-full border border-[#d7e4f6] bg-[#f5f9ff] px-4 text-sm font-bold text-[#10223d] outline-none"
+              className="mt-1 h-10 w-full rounded-full border border-[#e4dac9] bg-[#faf6ef] px-4 text-sm font-bold text-[#012241] outline-none"
               placeholder="공사명, 공사내용, 진행업체"
             />
           </label>
@@ -1797,7 +1802,7 @@ function FacilityConstructionTable({
               <col className="w-[24%]" />
               <col className="w-[18%]" />
             </colgroup>
-            <thead className="bg-[#f1f6fd] text-[#10223d]">
+            <thead className="bg-[#faf6ef] text-[#012241]">
               <tr>
                 <th className="px-2 py-2.5">시작일</th>
                 <th className="px-2 py-2.5">공사내용</th>
@@ -1816,7 +1821,7 @@ function FacilityConstructionTable({
                   <td className="px-2 py-3"><p className="max-h-10 overflow-hidden break-words leading-5 text-slate-600">{item.construction_content || "-"}</p></td>
                   <td className="break-words px-2 py-3 font-bold">{item.contractor || "-"}</td>
                   <td className="px-1 py-3 text-center">
-                    <button type="button" onClick={() => setDetailItem(item)} className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-[#bfd4f5] bg-white px-2 text-[10px] font-black text-[#075be8]">
+                    <button type="button" onClick={() => setDetailItem(item)} className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-[#d8cbb4] bg-white px-2 text-[10px] font-black text-[#007050]">
                       <Eye className="h-3.5 w-3.5" aria-hidden="true" />상세
                     </button>
                   </td>
@@ -1845,7 +1850,7 @@ function FacilityConstructionTable({
                   checked={allVisibleSelected}
                   onChange={toggleVisibleRows}
                   disabled={disabled || filteredItems.length === 0}
-                  className="h-4 w-4 accent-[#075be8]"
+                  className="h-4 w-4 accent-[#007050]"
                   aria-label="시설공사 표시 목록 전체 선택"
                 />
               </th>
@@ -1881,13 +1886,13 @@ function FacilityConstructionTable({
                       checked={selectedIds.includes(item.id)}
                       onChange={() => toggleRow(item.id)}
                       disabled={disabled}
-                      className="h-4 w-4 accent-[#075be8]"
+                      className="h-4 w-4 accent-[#007050]"
                       aria-label={`${item.construction_name || "시설공사"} 선택`}
                     />
                   </td>
                   <td className="break-words px-2 py-2.5">{item.start_date || "-"}</td>
                   <td className="break-words px-2 py-2.5">{item.completion_date || "-"}</td>
-                  <td className="break-words px-2 py-2.5 font-black leading-5 text-[#10223d]">{item.construction_name || "-"}</td>
+                  <td className="break-words px-2 py-2.5 font-black leading-5 text-[#012241]">{item.construction_name || "-"}</td>
                   <td className="whitespace-pre-wrap break-words px-2 py-2.5 leading-5 text-slate-600">{item.construction_content || "-"}</td>
                   <td className="break-words px-2 py-2.5">{item.contractor || "-"}</td>
                   <td className="break-words px-2 py-2.5">{item.construction_amount || "-"}</td>
@@ -1965,7 +1970,7 @@ function FacilityConstructionDetailDialog({
             {details.map(([label, value]) => (
               <div key={label} className="grid grid-cols-[76px_minmax(0,1fr)] gap-3 py-3">
                 <dt className="text-xs font-black text-slate-500">{label}</dt>
-                <dd className="whitespace-pre-wrap break-words text-sm font-bold leading-5 text-[#10223d]">{value}</dd>
+                <dd className="whitespace-pre-wrap break-words text-sm font-bold leading-5 text-[#012241]">{value}</dd>
               </div>
             ))}
           </dl>
@@ -2011,21 +2016,26 @@ function FacilityConstructionDialog({
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/72 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="facility-dialog-title">
-        <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-[1.5rem] border border-white/80 bg-white/95 shadow-[0_28px_80px_rgba(16,34,61,0.24)] backdrop-blur-2xl">
-          <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-            <div>
-              <h2 id="facility-dialog-title" className="text-lg font-black text-slate-900">
-                {initialItem ? "시설공사 수정" : "시설공사 등록"}
-              </h2>
-              <p className="mt-1 text-sm font-semibold text-slate-500">공사 일정, 내용, 업체, 금액과 진행상태를 입력합니다.</p>
+      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#012241]/60 p-4 backdrop-blur" role="dialog" aria-modal="true" aria-labelledby="facility-dialog-title">
+        <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-[1.75rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(1,34,65,0.24)]">
+          <div className="flex items-start justify-between gap-4 border-b border-[#e7ddcd] px-5 py-4">
+            <div className="flex items-start gap-3">
+              <span className="icon-badge icon-badge-green" aria-hidden="true">
+                <Hammer className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 id="facility-dialog-title" className="text-lg font-black text-[#012241]">
+                  {initialItem ? "시설공사 수정" : "시설공사 등록"}
+                </h2>
+                <p className="mt-1 text-sm font-semibold text-slate-500">공사 일정, 내용, 업체, 금액과 진행상태를 입력합니다.</p>
+              </div>
             </div>
             <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
-          <div className="max-h-[64vh] overflow-y-auto bg-[#f5f9ff] px-5 py-4">
-            <div className="glass-row grid gap-3 p-3 md:grid-cols-2">
+          <div className="max-h-[64vh] overflow-y-auto bg-white px-5 py-4">
+            <div className="grid gap-3 rounded-[1.25rem] border border-[#e4dac9] bg-[#faf6ef] p-3 md:grid-cols-2">
               <label className="text-xs font-black text-slate-600">
                 시작일
                 <input
@@ -2111,7 +2121,7 @@ function FacilityConstructionDialog({
               ) : null}
             </div>
           </div>
-          <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+          <div className="flex justify-end gap-2 border-t border-[#e7ddcd] bg-white px-5 py-4">
             <button type="button" onClick={onClose} className="tool-button">
               취소
             </button>
@@ -2177,8 +2187,8 @@ function HolidayWorkTable({
 
   return (
     <>
-    <div className="rounded-2xl border border-[#d9e7f7] bg-white/88 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
-      <div className="flex flex-wrap items-center justify-end gap-2 border-b border-[#e5eef9] px-3 py-3">
+    <div className="rounded-2xl border border-[#e7ddcd] bg-white/88 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
+      <div className="flex flex-wrap items-center justify-end gap-2 border-b border-[#ece3d4] px-3 py-3">
         <button type="button" onClick={onCreateItem} disabled={disabled} className="tool-button tool-button-primary min-h-10 py-2 disabled:opacity-50">
           <Plus className="h-4 w-4" aria-hidden="true" />
           등록
@@ -2207,7 +2217,7 @@ function HolidayWorkTable({
               <col className="w-[18%]" />
               <col className="w-[18%]" />
             </colgroup>
-            <thead className="bg-[#f1f6fd] text-[#10223d]">
+            <thead className="bg-[#faf6ef] text-[#012241]">
               <tr>
                 <th className="px-1.5 py-2.5">일자</th>
                 <th className="px-1.5 py-2.5">화주</th>
@@ -2222,11 +2232,11 @@ function HolidayWorkTable({
               ) : items.map((item) => (
                 <tr key={item.id} className="border-t border-slate-100 align-middle">
                   <td className="whitespace-nowrap px-1.5 py-3 font-bold">{item.work_date ? item.work_date.slice(2).replaceAll("-", ".") : "-"}</td>
-                  <td className="break-words px-1.5 py-3 font-black text-[#10223d]">{item.client_name || "-"}</td>
+                  <td className="break-words px-1.5 py-3 font-black text-[#012241]">{item.client_name || "-"}</td>
                   <td className="break-words px-1.5 py-3 font-bold leading-4">{item.worker_names.length ? item.worker_names.join(", ") : "-"}</td>
                   <td className="px-1 py-3 text-center font-black">{item.contract_worker_count || "0"}</td>
                   <td className="px-1 py-3 text-center">
-                    <button type="button" onClick={() => setDetailItem(item)} className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-[#bfd4f5] bg-white px-1.5 text-[10px] font-black text-[#075be8]">
+                    <button type="button" onClick={() => setDetailItem(item)} className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-[#d8cbb4] bg-white px-1.5 text-[10px] font-black text-[#007050]">
                       <Eye className="h-3.5 w-3.5" aria-hidden="true" />상세
                     </button>
                   </td>
@@ -2254,7 +2264,7 @@ function HolidayWorkTable({
                   checked={allSelected}
                   onChange={toggleAll}
                   disabled={disabled || items.length === 0}
-                  className="h-4 w-4 accent-[#075be8]"
+                  className="h-4 w-4 accent-[#007050]"
                   aria-label="공휴일근무 전체 선택"
                 />
               </th>
@@ -2283,17 +2293,17 @@ function HolidayWorkTable({
                       checked={selectedIds.includes(item.id)}
                       onChange={() => toggleRow(item.id)}
                       disabled={disabled}
-                      className="h-4 w-4 accent-[#075be8]"
+                      className="h-4 w-4 accent-[#007050]"
                       aria-label={`${item.client_name || "공휴일근무"} 선택`}
                     />
                   </td>
                   <td className="break-words px-2 py-2.5">{item.work_date || "-"}</td>
-                  <td className="break-words px-2 py-2.5 font-black text-[#10223d]">{item.client_name || "-"}</td>
+                  <td className="break-words px-2 py-2.5 font-black text-[#012241]">{item.client_name || "-"}</td>
                   <td className="px-2 py-2.5">
                     {item.worker_names.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
                         {item.worker_names.map((workerName) => (
-                          <span key={workerName} className="inline-flex rounded-full border border-[#d9e7f7] bg-[#f5f9ff] px-2 py-0.5 text-[11px] font-black text-[#10223d]">
+                          <span key={workerName} className="inline-flex rounded-full border border-[#e7ddcd] bg-[#faf6ef] px-2 py-0.5 text-[11px] font-black text-[#012241]">
                             {workerName}
                           </span>
                         ))}
@@ -2371,7 +2381,7 @@ function HolidayWorkDetailDialog({
             {details.map(([label, value]) => (
               <div key={label} className="grid grid-cols-[76px_minmax(0,1fr)] gap-3 py-3">
                 <dt className="text-xs font-black text-slate-500">{label}</dt>
-                <dd className="whitespace-pre-wrap break-words text-sm font-bold leading-5 text-[#10223d]">{value}</dd>
+                <dd className="whitespace-pre-wrap break-words text-sm font-bold leading-5 text-[#012241]">{value}</dd>
               </div>
             ))}
           </dl>
@@ -2432,21 +2442,26 @@ function HolidayWorkDialog({
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/72 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="holiday-work-dialog-title">
-        <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-[1.5rem] border border-white/80 bg-white/95 shadow-[0_28px_80px_rgba(16,34,61,0.24)] backdrop-blur-2xl">
-          <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-            <div>
-              <h2 id="holiday-work-dialog-title" className="text-lg font-black text-slate-900">
-                {initialItem ? "공휴일근무 수정" : "공휴일근무 등록"}
-              </h2>
-              <p className="mt-1 text-sm font-semibold text-slate-500">공휴일 근무자와 근무사유, 청구 여부를 입력합니다.</p>
+      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#012241]/60 p-4 backdrop-blur" role="dialog" aria-modal="true" aria-labelledby="holiday-work-dialog-title">
+        <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-[1.75rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(1,34,65,0.24)]">
+          <div className="flex items-start justify-between gap-4 border-b border-[#e7ddcd] px-5 py-4">
+            <div className="flex items-start gap-3">
+              <span className="icon-badge icon-badge-green" aria-hidden="true">
+                <CalendarDays className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 id="holiday-work-dialog-title" className="text-lg font-black text-[#012241]">
+                  {initialItem ? "공휴일근무 수정" : "공휴일근무 등록"}
+                </h2>
+                <p className="mt-1 text-sm font-semibold text-slate-500">공휴일 근무자와 근무사유, 청구 여부를 입력합니다.</p>
+              </div>
             </div>
             <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
-          <div className="max-h-[64vh] overflow-y-auto bg-[#f5f9ff] px-5 py-4">
-            <div className="glass-row grid gap-3 p-3 md:grid-cols-2">
+          <div className="max-h-[64vh] overflow-y-auto bg-white px-5 py-4">
+            <div className="grid gap-3 rounded-[1.25rem] border border-[#e4dac9] bg-[#faf6ef] p-3 md:grid-cols-2">
               <label className="text-xs font-black text-slate-600">
                 일자
                 <input
@@ -2496,18 +2511,18 @@ function HolidayWorkDialog({
                 근무자
                 <div className="mt-1 rounded-2xl border border-slate-300 bg-white p-3">
                   {uniqueWorkerNames.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-[#b9cce6] px-3 py-4 text-center text-sm font-bold text-slate-400">
+                    <p className="rounded-xl border border-dashed border-[#d3c6b0] px-3 py-4 text-center text-sm font-bold text-slate-400">
                       선택 가능한 근무자가 없습니다.
                     </p>
                   ) : (
                     <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
                       {uniqueWorkerNames.map((workerName) => (
-                        <label key={workerName} className="flex cursor-pointer items-center gap-2 rounded-xl bg-[#f5f9ff] px-3 py-2 text-sm font-bold text-[#10223d]">
+                        <label key={workerName} className="flex cursor-pointer items-center gap-2 rounded-xl bg-[#faf6ef] px-3 py-2 text-sm font-bold text-[#012241]">
                           <input
                             type="checkbox"
                             checked={item.worker_names.includes(workerName)}
                             onChange={() => toggleWorker(workerName)}
-                            className="h-4 w-4 accent-[#075be8]"
+                            className="h-4 w-4 accent-[#007050]"
                           />
                           {workerName}
                         </label>
@@ -2551,7 +2566,7 @@ function HolidayWorkDialog({
               ) : null}
             </div>
           </div>
-          <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+          <div className="flex justify-end gap-2 border-t border-[#e7ddcd] bg-white px-5 py-4">
             <button type="button" onClick={onClose} className="tool-button">
               취소
             </button>
@@ -2605,7 +2620,7 @@ function PreviewBlock({
           {actionLabel}
         </button>
       </div>
-      <div className="min-h-24 rounded-2xl bg-[#f5f9ff] px-3 py-2 text-sm leading-6 text-slate-700">
+      <div className="min-h-24 rounded-2xl bg-[#faf6ef] px-3 py-2 text-sm leading-6 text-slate-700">
         {structured ? (
           structuredItems.length > 0 ? (
             <ol className="space-y-2">
@@ -2621,7 +2636,7 @@ function PreviewBlock({
                     {categories.find((category) => category.id === item.work_category_id)?.category_name ?? "기타"}
                   </span>
                   <span className="min-w-0">
-                    <span className="block break-words text-sm font-black leading-5 text-[#10223d]">
+                    <span className="block break-words text-sm font-black leading-5 text-[#012241]">
                       {item.title.trim() || "제목 없음"}
                     </span>
                     <span className="mt-0.5 block whitespace-pre-wrap break-words text-[13px] leading-5 text-slate-600">
@@ -2750,7 +2765,7 @@ function DepartmentContentPeriodDialog({
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
-          <div ref={commonScrollRef} className="max-h-[62vh] space-y-3 overflow-y-auto bg-[#f5f9ff] px-5 py-4">
+          <div ref={commonScrollRef} className="max-h-[62vh] space-y-3 overflow-y-auto bg-[#faf6ef] px-5 py-4">
             {isCommonSection ? (
               commonItems.map((item, index) => (
                 <div

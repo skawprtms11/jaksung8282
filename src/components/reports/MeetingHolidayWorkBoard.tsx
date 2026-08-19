@@ -120,10 +120,10 @@ function contractCount(item: HolidayWorkItem) {
 
 function holidayCountCellClassName(count: number, tone: "employee" | "contract" = "employee") {
   if (count < 1) {
-    return "bg-[#f5f9ff] text-slate-300";
+    return "bg-[#faf6ef] text-slate-300";
   }
   return tone === "employee"
-    ? "bg-blue-50 text-[#075be8] ring-1 ring-blue-100"
+    ? "bg-[#e6f1ec] text-[#007050] ring-1 ring-[#cbe7d3]"
     : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100";
 }
 
@@ -177,10 +177,10 @@ export function MeetingHolidayWorkBoard({
   return (
     <>
       <section className="grid gap-3 md:grid-cols-4">
-        <SummaryCard label="근무건수" value={`${summary.itemCount}건`} />
-        <SummaryCard label="정직원" value={`${summary.employeeCount}명`} />
-        <SummaryCard label="협력사" value={`${summary.contractCount}명`} />
-        <SummaryCard label="청구건수" value={`${summary.billedCount}건`} />
+        <SummaryCard label="근무건수" value={`${summary.itemCount}건`} badgeClassName="icon-badge-blue" />
+        <SummaryCard label="정직원" value={`${summary.employeeCount}명`} badgeClassName="icon-badge-green" />
+        <SummaryCard label="협력사" value={`${summary.contractCount}명`} badgeClassName="icon-badge-amber" />
+        <SummaryCard label="청구건수" value={`${summary.billedCount}건`} badgeClassName="icon-badge-pink" />
       </section>
 
       <section className="sketch-panel p-4">
@@ -188,11 +188,11 @@ export function MeetingHolidayWorkBoard({
           <div className="min-w-0">
             <h2 className="section-doodle-title">부서별 근무현황</h2>
           </div>
-          <p className="shrink-0 rounded-full border border-[#d9e7f7] bg-white/85 px-3 py-1.5 text-xs font-black text-slate-500 shadow-[0_10px_24px_rgba(16,34,61,0.04)]">
+          <p className="shrink-0 rounded-full border border-[#e7ddcd] bg-white/85 px-3 py-1.5 text-xs font-black text-slate-500 shadow-[0_10px_24px_rgba(16,34,61,0.04)]">
             {periodLabel}
           </p>
         </div>
-        <div className="overflow-x-auto rounded-2xl border border-[#d9e7f7] bg-white/88">
+        <div className="overflow-x-auto rounded-2xl border border-[#e7ddcd] bg-white/88">
           <table className="table-sticky w-full min-w-[1120px] table-fixed text-center text-xs">
             <colgroup>
               <col className="w-[14%]" />
@@ -205,9 +205,9 @@ export function MeetingHolidayWorkBoard({
             </colgroup>
             <thead>
               <tr>
-                <th rowSpan={2} className="px-3 py-3 text-left">부서</th>
+                <th rowSpan={2} className="px-3 py-3 text-left font-black !text-slate-500">부서</th>
                 {columns.map((column) => (
-                  <th key={column.key} colSpan={2} className="border-l border-[#d9e7f7] px-2 py-2">
+                  <th key={column.key} colSpan={2} className="border-l border-[#e7ddcd] px-2 py-2 font-black !text-slate-500">
                     {column.label} {column.weekday}
                   </th>
                 ))}
@@ -215,16 +215,16 @@ export function MeetingHolidayWorkBoard({
               <tr>
                 {columns.map((column) => (
                   <Fragment key={column.key}>
-                    <th key={`${column.key}-employee`} className="border-l border-[#d9e7f7] px-2 py-2">정직원</th>
-                    <th key={`${column.key}-contract`} className="px-2 py-2">협력사</th>
+                    <th key={`${column.key}-employee`} className="border-l border-[#e7ddcd] px-2 py-2 font-black !text-slate-500">정직원</th>
+                    <th key={`${column.key}-contract`} className="px-2 py-2 font-black !text-slate-500">협력사</th>
                   </Fragment>
                 ))}
               </tr>
             </thead>
             <tbody>
-              <tr className="border-t border-[#d9e7f7] bg-[#f8fbff]">
+              <tr className="border-t border-[#e7ddcd] bg-[#fbf8f2]">
                 <td className="px-3 py-3 text-left">
-                  <span className="inline-flex rounded-xl bg-white px-2 py-1 font-black text-[#075be8] shadow-[0_8px_18px_rgba(7,91,232,0.08)]">
+                  <span className="inline-flex rounded-xl bg-white px-2 py-1 font-black text-[#007050] shadow-[0_8px_18px_rgba(0, 112, 80,0.08)]">
                     합계
                   </span>
                 </td>
@@ -234,7 +234,7 @@ export function MeetingHolidayWorkBoard({
                   const contractorCount = dateItems.reduce((sum, item) => sum + contractCount(item), 0);
                   return (
                     <Fragment key={`summary-${column.key}`}>
-                      <td className="border-l border-[#d9e7f7] px-1.5 py-2">
+                      <td className="border-l border-[#e7ddcd] px-1.5 py-2">
                         <span className={`flex h-9 w-full items-center justify-center rounded-xl text-xs font-black ${holidayCountCellClassName(employeeCount)}`}>
                           {employeeCount}
                         </span>
@@ -274,7 +274,7 @@ export function MeetingHolidayWorkBoard({
                         type="button"
                         onClick={openDepartmentDetail}
                         disabled={periodItems.length === 0}
-                        className="max-w-full truncate rounded-xl px-2 py-1 text-left font-black text-[#10223d] underline-offset-4 transition hover:bg-[#f5f9ff] hover:text-[#075be8] hover:underline disabled:cursor-default disabled:text-slate-500 disabled:no-underline"
+                        className="max-w-full truncate rounded-xl px-2 py-1 text-left font-black text-[#012241] underline-offset-4 transition hover:bg-[#faf6ef] hover:text-[#007050] hover:underline disabled:cursor-default disabled:text-slate-500 disabled:no-underline"
                         title={periodItems.length > 0 ? "해당 부서의 기간 상세내역 보기" : "표시할 상세내역이 없습니다"}
                       >
                         {department.department_name}
@@ -286,7 +286,7 @@ export function MeetingHolidayWorkBoard({
                       const contractorCount = dateItems.reduce((sum, item) => sum + contractCount(item), 0);
                       return (
                         <Fragment key={`${department.id}-${column.key}`}>
-                          <td className="border-l border-[#eef3fa] px-1.5 py-2">
+                          <td className="border-l border-[#f4ede2] px-1.5 py-2">
                             <span className={`flex h-9 w-full items-center justify-center rounded-xl text-xs font-black ${holidayCountCellClassName(employeeCount)}`}>
                               {employeeCount}
                             </span>
@@ -312,15 +312,15 @@ export function MeetingHolidayWorkBoard({
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: string }) {
+function SummaryCard({ label, value, badgeClassName }: { label: string; value: string; badgeClassName: string }) {
   return (
-    <div className="rounded-2xl border border-[#d9e7f7] bg-white/88 px-4 py-3 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
-      <div className="flex items-center justify-between gap-3">
+    <div className="kpi-card px-4 py-3">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-black text-slate-500">{label}</p>
-          <p className="mt-1 text-xl font-black text-[#10223d]">{value}</p>
+          <p className="mt-1 text-xl font-black text-[#012241]">{value}</p>
         </div>
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#e8f1ff] text-[#075be8]">
+        <span className={`icon-badge ${badgeClassName}`}>
           <Users className="h-5 w-5" aria-hidden="true" />
         </span>
       </div>
@@ -338,15 +338,15 @@ function HolidayDetailDialog({ detail, onClose }: { detail: HolidayWorkDetail; o
   });
 
   return (
-    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="holiday-detail-title">
-      <div className="max-h-[88vh] w-full max-w-4xl overflow-hidden rounded-[1.5rem] border border-white/80 bg-white shadow-[0_28px_80px_rgba(16,34,61,0.26)]">
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-[#012241]/60 p-4 backdrop-blur" role="dialog" aria-modal="true" aria-labelledby="holiday-detail-title">
+      <div className="max-h-[88vh] w-full max-w-4xl overflow-hidden rounded-[1.75rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(1,34,65,0.26)]">
+        <div className="flex items-start justify-between gap-4 border-b border-[#e7ddcd] px-5 py-4">
           <div className="flex items-center gap-3">
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#e8f1ff] text-[#075be8]">
-              <CalendarDays className="h-5 w-5" aria-hidden="true" />
+            <span className="icon-badge icon-badge-green" aria-hidden="true">
+              <CalendarDays className="h-5 w-5" />
             </span>
             <div>
-              <h2 id="holiday-detail-title" className="text-lg font-black text-[#10223d]">
+              <h2 id="holiday-detail-title" className="text-lg font-black text-[#012241]">
                 공휴일근무 상세
               </h2>
               <p className="mt-1 text-sm font-bold text-slate-500">
@@ -358,10 +358,10 @@ function HolidayDetailDialog({ detail, onClose }: { detail: HolidayWorkDetail; o
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
-        <div className="max-h-[65vh] overflow-y-auto bg-[#f5f9ff] px-5 py-4">
+        <div className="max-h-[65vh] overflow-y-auto bg-white px-5 py-4">
           <div className="space-y-3">
             {sortedItems.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-[#d9e7f7] bg-white px-4 py-3">
+              <div key={item.id} className="rounded-[1.25rem] border border-[#e4dac9] bg-[#faf6ef] px-4 py-3">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   <span className="section-chip">{item.work_date.replaceAll("-", ".")}</span>
                   <span className="section-chip">{item.client_name || "-"}</span>
@@ -372,7 +372,7 @@ function HolidayDetailDialog({ detail, onClose }: { detail: HolidayWorkDetail; o
                 <div className="grid gap-3 text-sm md:grid-cols-[180px_1fr]">
                   <div>
                     <p className="text-xs font-black text-slate-500">근무자</p>
-                    <p className="mt-1 font-bold text-[#10223d]">{item.worker_names.join(", ") || "-"}</p>
+                    <p className="mt-1 font-bold text-[#012241]">{item.worker_names.join(", ") || "-"}</p>
                   </div>
                   <div>
                     <p className="text-xs font-black text-slate-500">근무사유</p>

@@ -2,16 +2,15 @@
 
 import Link, { useLinkStatus } from "next/link";
 import { useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
-  Bell,
   Building2,
   ChartNoAxesCombined,
+  ChevronRight,
   ClipboardCheck,
   FilePenLine,
   Home,
   LoaderCircle,
-  LogOut,
   PackageSearch,
   PanelLeftClose,
   UsersRound,
@@ -61,9 +60,9 @@ function prewarmPrimaryMenuModules() {
 function MenuIcon({ icon: Icon }: { icon: typeof Home }) {
   const { pending } = useLinkStatus();
   return pending ? (
-    <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
+    <LoaderCircle className="h-[18px] w-[18px] animate-spin" aria-hidden="true" />
   ) : (
-    <Icon className="h-5 w-5" aria-hidden="true" />
+    <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
   );
 }
 
@@ -77,6 +76,7 @@ export function Sidebar({
   onToggleHidden: () => void;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const menus = useMemo(
     () => [
       noticeMenu,
@@ -87,6 +87,14 @@ export function Sidebar({
       ...(canManageMasters(profile) ? adminMenus : [])
     ],
     [profile]
+  );
+
+  const menuSections = useMemo(
+    () => [
+      { label: "업무", items: menus.filter((menu) => !menu.href.startsWith("/admin")) },
+      { label: "관리", items: menus.filter((menu) => menu.href.startsWith("/admin")) }
+    ],
+    [menus]
   );
 
   useEffect(() => {
@@ -109,24 +117,34 @@ export function Sidebar({
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-20 hidden w-72 p-4 transition-transform duration-300 ease-out lg:block ${
+      className={`fixed inset-y-0 left-0 z-20 hidden w-72 transition-transform duration-300 ease-out lg:block ${
         isHidden ? "-translate-x-full" : "translate-x-0"
       }`}
       aria-hidden={isHidden}
     >
-      <div className="flex h-full flex-col rounded-[1.75rem] border border-white/80 bg-white/82 p-4 shadow-[0_24px_70px_rgba(16,34,61,0.13)] backdrop-blur-2xl">
+      <div className="flex h-full flex-col bg-[#012241] px-5 pb-6 pt-7 text-white shadow-[0_24px_70px_rgba(1,34,65,0.28)]">
         <div className="flex items-start justify-between gap-2">
-          <Link href="/notices" className="focus-ring block min-w-0 rounded-3xl px-2 py-2">
-            <div className="text-[1.95rem] font-black leading-none tracking-normal text-[#075be8]">TPL</div>
-            <div className="mt-1 text-[0.62rem] font-black uppercase tracking-[0.42em] text-[#0b2d5f]">
-              Logistics
+          <Link href="/notices" className="focus-ring block min-w-0 rounded-2xl px-1 py-1">
+            <div className="flex items-center gap-3">
+              <span
+                className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[11px] bg-gradient-to-br from-[#007050] to-[#00a978] shadow-[0_10px_22px_rgba(0,112,80,0.45)]"
+                aria-hidden="true"
+              >
+                <ChevronRight className="h-[18px] w-[18px] text-white" strokeWidth={3} />
+              </span>
+              <div className="min-w-0">
+                <div className="text-[1.85rem] font-black leading-none tracking-normal text-white">TPL</div>
+                <div className="mt-1 text-[0.62rem] font-black uppercase tracking-[0.42em] text-[#3ec98f]">
+                  Logistics
+                </div>
+              </div>
             </div>
-            <p className="mt-2 text-xs font-semibold text-slate-500">Weekly Operations Hub</p>
+            <p className="mt-2.5 text-xs font-semibold text-[#8496a8]">Weekly Operations Hub</p>
           </Link>
           <button
             type="button"
             onClick={onToggleHidden}
-            className="focus-ring mt-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#dbe8fb] bg-white/90 text-[#075be8] shadow-[0_12px_24px_rgba(16,34,61,0.08)] transition hover:-translate-y-0.5 hover:bg-[#eaf3ff]"
+            className="focus-ring mt-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/12 bg-white/8 text-[#c3d0dc] transition hover:bg-white/15 hover:text-white"
             aria-label="왼쪽 메뉴 숨기기"
             title="왼쪽 메뉴 숨기기"
           >
@@ -134,40 +152,55 @@ export function Sidebar({
           </button>
           </div>
 
-      <nav className="mt-4 min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1" aria-label="주요 메뉴">
-        {menus.map((menu) => {
-          const Icon = menu.icon;
-          return (
-            <Link
-              key={menu.href}
-              href={menu.href}
-              prefetch={fullPrefetchMenuHrefs.has(menu.href) ? true : "auto"}
-              onFocus={() => router.prefetch(menu.href)}
-              className="focus-ring group flex min-w-0 items-center gap-3 rounded-2xl border border-transparent px-3 py-2.5 text-sm font-bold text-[#203653] transition hover:-translate-y-0.5 hover:border-[#dbe8fb] hover:bg-[#eaf3ff] hover:text-[#075be8] hover:shadow-[0_16px_30px_rgba(7,91,232,0.12)]"
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#f2f7ff] text-[#0b2d5f] transition group-hover:bg-[#075be8] group-hover:text-white">
-                <MenuIcon icon={Icon} />
-              </span>
-              <span className="min-w-0 flex-1 truncate">{menu.label}</span>
-            </Link>
-          );
-        })}
+      <nav className="mt-6 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1" aria-label="주요 메뉴">
+        {menuSections.map((section) =>
+          section.items.length ? (
+            <div key={section.label} className="pb-3">
+              <p className="mb-3 px-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[#6d8095]">
+                {section.label}
+              </p>
+              <div className="space-y-1">
+                {section.items.map((menu) => {
+                  const Icon = menu.icon;
+                  const isActive = pathname === menu.href || pathname.startsWith(`${menu.href}/`);
+                  return (
+                    <Link
+                      key={menu.href}
+                      href={menu.href}
+                      prefetch={fullPrefetchMenuHrefs.has(menu.href) ? true : "auto"}
+                      onFocus={() => router.prefetch(menu.href)}
+                      aria-current={isActive ? "page" : undefined}
+                      className={`focus-ring group flex min-w-0 items-center gap-3 rounded-[14px] px-3.5 py-3 text-sm font-bold transition ${
+                        isActive
+                          ? "bg-[#007050] text-white shadow-[0_14px_28px_rgba(0,112,80,0.35)]"
+                          : "text-[#c3d0dc] hover:bg-white/8 hover:text-white"
+                      }`}
+                    >
+                      <span
+                        className={`flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[8px] transition ${
+                          isActive ? "bg-white/20 text-white" : "text-[#8fa3b5] group-hover:text-white"
+                        }`}
+                      >
+                        <MenuIcon icon={Icon} />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{menu.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null
+        )}
       </nav>
 
-      <div className="mt-3 shrink-0 space-y-3">
-        <div className="flex items-center justify-between px-2 text-xs font-bold text-slate-500">
-          <span className="inline-flex items-center gap-2">
-            <PackageSearch className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
-            KOR
-          </span>
-          <span className="inline-flex items-center gap-2">
-            <Bell className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
-            Live
-          </span>
-          <span className="inline-flex items-center gap-2">
-            <LogOut className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
-            Secure
-          </span>
+      <div className="mt-3 shrink-0">
+        <div className="flex items-center gap-2 rounded-2xl bg-white/6 px-4 py-3 text-xs font-bold text-[#8496a8]">
+          <span className="u-dot u-dot-green" aria-hidden="true" />
+          <span>KOR</span>
+          <span aria-hidden="true">·</span>
+          <span>Live</span>
+          <span aria-hidden="true">·</span>
+          <span>Secure</span>
         </div>
       </div>
       </div>

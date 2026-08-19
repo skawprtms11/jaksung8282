@@ -320,7 +320,7 @@ export function HuindungiWalkGame({
       <section className="sketch-panel overflow-hidden p-4">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-xl font-black text-[#10223d]">흰둥이의 산책</h2>
+            <h2 className="text-xl font-black text-[#012241]">흰둥이의 산책</h2>
             <p className="mt-1 text-sm text-slate-500">방향키 또는 버튼으로 위아래 이동하며 장애물을 피하세요.</p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -346,7 +346,7 @@ export function HuindungiWalkGame({
           ref={canvasRef}
           width={canvasWidth}
           height={canvasHeight}
-          className="aspect-[5/3] w-full rounded-[1.5rem] border border-[#d9e4f2] bg-[#eaf4ff] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]"
+          className="aspect-[5/3] w-full rounded-[1.5rem] border border-[#e4dac9] bg-[#f4ede2] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]"
         />
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <GuideCard icon={<Bone className="h-5 w-5" aria-hidden="true" />} title="장애물" description="뼈다귀와 개똥은 피하세요." />
@@ -362,37 +362,37 @@ export function HuindungiWalkGame({
 
       <aside className="sketch-panel p-4">
         <div className="mb-4 flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#e8f1ff] text-[#075be8]">
+          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#e6f1ec] text-[#007050]">
             <Medal className="h-5 w-5" aria-hidden="true" />
           </span>
           <div>
-            <h2 className="text-lg font-black text-[#10223d]">산책 랭킹</h2>
+            <h2 className="text-lg font-black text-[#012241]">산책 랭킹</h2>
             <p className="text-sm text-slate-500">{currentUserName}님의 최고 기록에 도전하세요.</p>
           </div>
         </div>
         {isRankingLoading ? (
-          <div className="rounded-[1.25rem] border border-dashed border-[#b9cce4] bg-white/70 p-6 text-center text-sm font-semibold text-slate-500">
+          <div className="rounded-[1.25rem] border border-dashed border-[#d3c6b0] bg-white/70 p-6 text-center text-sm font-semibold text-slate-500">
             랭킹을 불러오는 중입니다.
           </div>
         ) : rankings.length === 0 ? (
-          <div className="rounded-[1.25rem] border border-dashed border-[#b9cce4] bg-white/70 p-6 text-center text-sm font-semibold text-slate-500">
+          <div className="rounded-[1.25rem] border border-dashed border-[#d3c6b0] bg-white/70 p-6 text-center text-sm font-semibold text-slate-500">
             아직 등록된 점수가 없습니다.
           </div>
         ) : (
           <ol className="space-y-2">
             {rankings.map((ranking, index) => (
-              <li key={ranking.id} className="rounded-2xl border border-[#d9e4f2] bg-white/82 p-3 shadow-[0_12px_26px_rgba(16,34,61,0.05)]">
+              <li key={ranking.id} className="rounded-2xl border border-[#e4dac9] bg-white/82 p-3 shadow-[0_12px_26px_rgba(16,34,61,0.05)]">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-black text-[#10223d]">
-                      <span className="mr-2 text-[#075be8]">#{index + 1}</span>
+                    <p className="text-sm font-black text-[#012241]">
+                      <span className="mr-2 text-[#007050]">#{index + 1}</span>
                       {ranking.userName}
                     </p>
                     <p className="mt-1 truncate text-xs font-semibold text-slate-500">
                       {ranking.departmentName ?? "부서 미지정"} · {ranking.durationSeconds}s · Lv.{ranking.maxLevel} · 간식 {ranking.snackCount}
                     </p>
                   </div>
-                  <span className="shrink-0 text-lg font-black text-[#075be8]">{ranking.score.toLocaleString("ko-KR")}</span>
+                  <span className="shrink-0 text-lg font-black text-[#007050]">{ranking.score.toLocaleString("ko-KR")}</span>
                 </div>
               </li>
             ))}
@@ -405,18 +405,18 @@ export function HuindungiWalkGame({
 
 function HudCard({ label, value, active = false }: { label: string; value: string; active?: boolean }) {
   return (
-    <div className={`rounded-2xl border px-4 py-3 ${active ? "border-[#5fd4a6] bg-emerald-50" : "border-[#d9e4f2] bg-white/76"}`}>
+    <div className={`rounded-2xl border px-4 py-3 ${active ? "border-[#2fae66] bg-emerald-50" : "border-[#e4dac9] bg-white/76"}`}>
       <p className="text-xs font-bold text-slate-500">{label}</p>
-      <p className={`mt-1 text-xl font-black ${active ? "text-emerald-700" : "text-[#10223d]"}`}>{value}</p>
+      <p className={`mt-1 text-xl font-black ${active ? "text-emerald-700" : "text-[#012241]"}`}>{value}</p>
     </div>
   );
 }
 
 function GuideCard({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
   return (
-    <div className="rounded-2xl border border-[#d9e4f2] bg-white/76 p-3">
-      <div className="flex items-center gap-2 text-sm font-black text-[#10223d]">
-        <span className="text-[#075be8]">{icon}</span>
+    <div className="rounded-2xl border border-[#e4dac9] bg-white/76 p-3">
+      <div className="flex items-center gap-2 text-sm font-black text-[#012241]">
+        <span className="text-[#007050]">{icon}</span>
         {title}
       </div>
       <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
@@ -445,9 +445,9 @@ function drawScene(canvas: HTMLCanvasElement | null, hud: Hud, dogLane: number, 
 
 function drawVillage(context: CanvasRenderingContext2D) {
   const skyGradient = context.createLinearGradient(0, 0, 0, canvasHeight);
-  skyGradient.addColorStop(0, "#dff2ff");
-  skyGradient.addColorStop(0.46, "#f7fbff");
-  skyGradient.addColorStop(1, "#dceafa");
+  skyGradient.addColorStop(0, "#e6f4ee");
+  skyGradient.addColorStop(0.46, "#fbf8f2");
+  skyGradient.addColorStop(1, "#ece3d4");
   context.fillStyle = skyGradient;
   context.fillRect(0, 0, canvasWidth, canvasHeight);
 
@@ -460,7 +460,7 @@ function drawVillage(context: CanvasRenderingContext2D) {
   drawCloud(context, 690, 104, 0.74);
 
   const hillGradient = context.createLinearGradient(0, 118, 0, 250);
-  hillGradient.addColorStop(0, "#bce9cc");
+  hillGradient.addColorStop(0, "#cbe7d3");
   hillGradient.addColorStop(1, "#e6f6ed");
   context.fillStyle = hillGradient;
   context.beginPath();
@@ -473,38 +473,38 @@ function drawVillage(context: CanvasRenderingContext2D) {
   context.closePath();
   context.fill();
 
-  drawHouse(context, 74, 120, "#ffffff", "#3f8cff");
+  drawHouse(context, 74, 120, "#ffffff", "#1f9e77");
   drawHouse(context, 206, 112, "#fdf7ea", "#ef7d61");
   drawHouse(context, 612, 118, "#ffffff", "#6fbf9f");
-  drawHouse(context, 738, 106, "#f7fbff", "#7b8ce8");
+  drawHouse(context, 738, 106, "#fbf8f2", "#7b8ce8");
   drawFence(context, 40, 196, 820);
   drawTree(context, 48, 118);
   drawTree(context, 548, 126);
   drawTree(context, 846, 132);
   drawStreetLamp(context, 438, 118);
 
-  context.fillStyle = "#bcd8ef";
+  context.fillStyle = "#d3c6b0";
   context.fillRect(0, 430, canvasWidth, 110);
-  context.fillStyle = "#e7f0f9";
+  context.fillStyle = "#ece3d4";
   context.fillRect(0, 452, canvasWidth, 88);
 
   const pathGradient = context.createLinearGradient(0, 146, 0, 452);
   pathGradient.addColorStop(0, "#ffffff");
-  pathGradient.addColorStop(1, "#eff6ff");
+  pathGradient.addColorStop(1, "#f4ede2");
   context.fillStyle = pathGradient;
   roundRect(context, 28, 146, 844, 306, 30);
   context.fill();
-  context.strokeStyle = "#c8daee";
+  context.strokeStyle = "#d8cbb4";
   context.lineWidth = 2;
   context.stroke();
 
   context.fillStyle = "rgba(95, 212, 166, 0.18)";
   roundRect(context, 28, 146, 844, 36, 30);
   context.fill();
-  context.fillStyle = "rgba(7, 91, 232, 0.06)";
+  context.fillStyle = "rgba(0, 112, 80, 0.06)";
   roundRect(context, 28, 414, 844, 38, 28);
   context.fill();
-  context.strokeStyle = "rgba(7,91,232,0.16)";
+  context.strokeStyle = "rgba(0, 112, 80,0.16)";
   context.lineWidth = 2;
   for (const lane of lanes) {
     context.beginPath();
@@ -523,7 +523,7 @@ function drawTree(context: CanvasRenderingContext2D, x: number, y: number) {
   context.beginPath();
   context.arc(x, y, 28, 0, Math.PI * 2);
   context.fill();
-  context.fillStyle = "#9be5bd";
+  context.fillStyle = "#9bd8b5";
   context.beginPath();
   context.arc(x - 16, y + 6, 18, 0, Math.PI * 2);
   context.arc(x + 15, y + 5, 18, 0, Math.PI * 2);
@@ -548,7 +548,7 @@ function drawDog(context: CanvasRenderingContext2D, x: number, y: number, runnin
   context.ellipse(x + 42, y + 58, 42 * shadowScale, 11 * shadowScale, 0, 0, Math.PI * 2);
   context.fill();
   if (running) {
-    context.fillStyle = "rgba(7,91,232,0.12)";
+    context.fillStyle = "rgba(0, 112, 80,0.12)";
     context.beginPath();
     context.arc(x - 12, y + 34, 4, 0, Math.PI * 2);
     context.arc(x - 27, y + 48, 3, 0, Math.PI * 2);
@@ -606,7 +606,7 @@ function drawDog(context: CanvasRenderingContext2D, x: number, y: number, runnin
   context.lineTo(50, -25);
   context.stroke();
 
-  context.strokeStyle = "#25a7e8";
+  context.strokeStyle = "#2fae66";
   context.lineWidth = 5;
   context.beginPath();
   context.moveTo(18, -6);
@@ -663,12 +663,12 @@ function drawHouse(context: CanvasRenderingContext2D, x: number, y: number, wall
   context.lineTo(x + 86, y + 8);
   context.closePath();
   context.fill();
-  context.fillStyle = "#dff2ff";
+  context.fillStyle = "#e6f4ee";
   roundRect(context, x + 13, y + 18, 18, 18, 4);
   context.fill();
   roundRect(context, x + 49, y + 18, 18, 18, 4);
   context.fill();
-  context.fillStyle = "#94b8d9";
+  context.fillStyle = "#c0b199";
   roundRect(context, x + 32, y + 33, 16, 27, 5);
   context.fill();
   context.restore();
@@ -694,14 +694,14 @@ function drawFence(context: CanvasRenderingContext2D, x: number, y: number, widt
 
 function drawStreetLamp(context: CanvasRenderingContext2D, x: number, y: number) {
   context.save();
-  context.strokeStyle = "#8aa7c4";
+  context.strokeStyle = "#a99a80";
   context.lineWidth = 4;
   context.beginPath();
   context.moveTo(x, y);
   context.lineTo(x, y + 96);
   context.stroke();
   context.fillStyle = "#fff4ba";
-  context.strokeStyle = "#6e8aa9";
+  context.strokeStyle = "#7c8a76";
   roundRect(context, x - 16, y - 18, 32, 24, 10);
   context.fill();
   context.stroke();
@@ -801,7 +801,7 @@ function drawOverlay(context: CanvasRenderingContext2D, hud: Hud) {
   context.fillStyle = "rgba(255,255,255,0.76)";
   context.fillRect(0, 0, canvasWidth, canvasHeight);
   context.textAlign = "center";
-  context.fillStyle = "#10223d";
+  context.fillStyle = "#012241";
   context.font = "900 40px sans-serif";
   context.fillText(hud.status === "idle" ? "흰둥이와 산책을 시작하세요" : "산책 종료", canvasWidth / 2, 230);
   context.font = "700 18px sans-serif";

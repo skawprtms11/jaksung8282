@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { BadgeCheck, CheckCircle2, MessageSquarePlus, Pencil, Save, Trash2, X } from "lucide-react";
+import { BadgeCheck, CheckCircle2, ClipboardList, MessageSquarePlus, Pencil, Save, Trash2, X } from "lucide-react";
 import {
   closeReportItemRequestAction,
   deleteReportItemRequestAction,
@@ -73,17 +73,17 @@ export type MeetingItemDetailSelection = {
   item: MeetingReportItem;
 };
 
-function importanceIconClassName(importance: Importance) {
+function importanceDotClassName(importance: Importance) {
   if (importance === "very_high") {
-    return "border-red-100 bg-red-50 text-red-600";
+    return "u-dot-pink";
   }
   if (importance === "high") {
-    return "border-orange-100 bg-orange-50 text-orange-500";
+    return "u-dot-amber";
   }
   if (importance === "medium") {
-    return "border-emerald-100 bg-emerald-50 text-emerald-600";
+    return "u-dot-green";
   }
-  return "border-slate-200 bg-slate-50 text-slate-500";
+  return "u-dot-blue";
 }
 
 function periodLabel(period: ItemPeriod) {
@@ -211,9 +211,9 @@ export function MeetingMaterialsTable({
           </colgroup>
           <thead>
             <tr>
-              <th className="px-3 py-3">화주</th>
-              <th className="px-3 py-3">금주 실시사항</th>
-              <th className="px-3 py-3">차주 예정사항</th>
+              <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">화주</th>
+              <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">금주 실시사항</th>
+              <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">차주 예정사항</th>
             </tr>
           </thead>
           <tbody>
@@ -222,10 +222,10 @@ export function MeetingMaterialsTable({
               return (
                 <tr
                   key={report.id}
-                  className={cn("border-t align-top", isCommonRow ? "border-[#bfd9ff] bg-[#eef6ff]" : "border-slate-100")}
+                  className={cn("border-t align-top", isCommonRow ? "border-[#d8cbb4] bg-[#f4ede2]" : "border-[#eef2f6]")}
                 >
                   <td className="px-3 py-4">
-                    <div className={cn("font-black", isCommonRow ? "text-[#075be8]" : "text-[#10223d]")}>
+                    <div className={cn("font-black", isCommonRow ? "text-[#007050]" : "text-[#012241]")}>
                       {report.clients?.client_name ?? "-"}
                     </div>
                     <div className="mt-1 text-xs font-bold text-slate-400">{report.departments?.department_name ?? "-"}</div>
@@ -280,15 +280,10 @@ function MeetingWorkItemList({
         const hasResult = row.weekly_report_item_requests.some((request) => Boolean(request.result_content));
         const hasClosed = row.weekly_report_item_requests.some((request) => Boolean(request.closed_at));
         return (
-          <li key={`${period}-${row.id}-${index}`} className={cn("flex gap-2.5 rounded-2xl px-3 py-2.5", isCommon ? "bg-white/82" : "bg-[#f8fbff]")}>
-            <span
-              className={cn(
-                "mt-0.5 inline-flex h-7 min-w-11 shrink-0 items-center justify-center rounded-xl border px-2 text-xs font-black",
-                importanceIconClassName(row.importance)
-              )}
-              title={row.work_categories?.category_name ?? "기타"}
-            >
-              {row.work_categories?.category_name ?? "기타"}
+          <li key={`${period}-${row.id}-${index}`} className={cn("flex gap-2.5 rounded-2xl px-3 py-2.5", isCommon ? "bg-white/82" : "bg-[#fbf8f2]")}>
+            <span className="mt-1.5 inline-flex shrink-0 items-center gap-1.5" title={row.work_categories?.category_name ?? "기타"}>
+              <span className={cn("u-dot", importanceDotClassName(row.importance))} aria-hidden="true" />
+              <span className="text-[11px] font-bold text-slate-500">{row.work_categories?.category_name ?? "기타"}</span>
             </span>
             <span className="min-w-0">
               <button
@@ -296,11 +291,11 @@ function MeetingWorkItemList({
                 onClick={() => onOpen(row)}
                 className="group flex max-w-full items-center gap-1.5 text-left"
               >
-                <span className="block break-words text-[15px] font-black leading-6 text-[#10223d] underline-offset-4 group-hover:text-[#075be8] group-hover:underline">
+                <span className="block break-words text-[15px] font-black leading-6 text-[#012241] underline-offset-4 group-hover:text-[#007050] group-hover:underline">
                   {row.title?.trim() || "제목 없음"}
                 </span>
                 {hasRequest ? (
-                  <MessageSquarePlus className="h-4 w-4 shrink-0 text-[#075be8]" aria-label="요청사항 등록됨" />
+                  <MessageSquarePlus className="h-4 w-4 shrink-0 text-[#007050]" aria-label="요청사항 등록됨" />
                 ) : null}
                 {hasResult ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" aria-label="처리결과 등록됨" /> : null}
                 {hasClosed ? <BadgeCheck className="h-4 w-4 shrink-0 text-violet-600" aria-label="종결됨" /> : null}
@@ -446,37 +441,45 @@ export function MeetingItemDetailDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="meeting-item-detail-title">
-      <div className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-[1.5rem] border border-white/80 bg-white shadow-[0_28px_80px_rgba(16,34,61,0.26)]">
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-          <div>
-            <div className="mb-2 flex flex-wrap gap-2">
-              <span className="section-chip">{selected.clientName}</span>
-              <span className="section-chip">{selected.departmentName}</span>
-              <span className="section-chip">{periodLabel(selected.item.item_period)}</span>
-              <span className={cn("inline-flex rounded-full border px-3 py-1 text-xs font-black", importanceIconClassName(selected.item.importance))}>
-                {selected.item.work_categories?.category_name ?? "기타"}
-              </span>
+    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-[#012241]/60 p-4 backdrop-blur" role="dialog" aria-modal="true" aria-labelledby="meeting-item-detail-title">
+      <div className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-[1.75rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(1,34,65,0.26)]">
+        <div className="flex items-start justify-between gap-4 border-b border-[#eee6d8] px-6 py-5">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="icon-badge icon-badge-green">
+              <ClipboardList className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <h2 id="meeting-item-detail-title" className="text-xl font-black text-[#012241]">
+                {selected.item.title?.trim() || "제목 없음"}
+              </h2>
+              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold text-slate-500">
+                <span>{selected.clientName}</span>
+                <span aria-hidden="true">·</span>
+                <span>{selected.departmentName}</span>
+                <span aria-hidden="true">·</span>
+                <span>{periodLabel(selected.item.item_period)}</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className={cn("u-dot", importanceDotClassName(selected.item.importance))} aria-hidden="true" />
+                  {selected.item.work_categories?.category_name ?? "기타"}
+                </span>
+              </p>
             </div>
-            <h2 id="meeting-item-detail-title" className="text-xl font-black text-[#10223d]">
-              {selected.item.title?.trim() || "제목 없음"}
-            </h2>
           </div>
           <button type="button" onClick={onClose} className="icon-tool-button" aria-label="상세 팝업 닫기">
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
 
-        <div className="overflow-y-auto bg-[#f5f9ff] px-5 py-5">
-          <section className="rounded-2xl border border-[#d9e7f7] bg-white px-4 py-4">
-            <p className="mb-2 text-sm font-black text-[#10223d]">내용</p>
+        <div className="overflow-y-auto bg-white px-6 py-5">
+          <section className="rounded-[1.25rem] border border-[#e7ddcd] bg-[#faf6ef] px-4 py-4">
+            <p className="mb-2 text-sm font-black text-[#012241]">내용</p>
             <div className="min-h-32 whitespace-pre-wrap text-sm leading-7 text-slate-700">{selected.item.content || "-"}</div>
           </section>
 
-          <section className="mt-4 rounded-2xl border border-[#d9e7f7] bg-white px-4 py-4">
+          <section className="mt-4 rounded-[1.25rem] border border-[#e7ddcd] bg-[#faf6ef] px-4 py-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-black text-[#10223d]">요청사항</p>
+                <p className="text-sm font-black text-[#012241]">요청사항</p>
                 <p className="text-xs font-bold text-slate-500">내용 확인 중 필요한 요청과 처리결과를 기록합니다.</p>
               </div>
               {requestable ? (
@@ -488,13 +491,13 @@ export function MeetingItemDetailDialog({
             </div>
 
             {!requestable ? (
-              <p className="rounded-xl border border-dashed border-[#b9cce4] px-3 py-5 text-center text-xs font-bold text-slate-400">
+              <p className="rounded-xl border border-dashed border-[#d3c6b0] px-3 py-5 text-center text-xs font-bold text-slate-400">
                 요청사항을 등록할 수 있는 항목 정보를 확인할 수 없습니다.
               </p>
             ) : null}
 
             {isRequestFormOpen && requestable ? (
-              <div className="mb-3 rounded-2xl border border-[#d9e7f7] bg-[#f8fbff] p-3">
+              <div className="mb-3 rounded-2xl border border-[#e7ddcd] bg-white p-3">
                 <label className="block text-xs font-black text-slate-500" htmlFor="new-report-item-request">
                   요청사항
                 </label>
@@ -502,7 +505,7 @@ export function MeetingItemDetailDialog({
                   id="new-report-item-request"
                   value={requestText}
                   onChange={(event) => setRequestText(event.target.value)}
-                  className="mt-2 min-h-24 w-full rounded-2xl border border-[#d7e4f6] bg-white px-3 py-3 text-sm font-bold text-[#10223d] outline-none focus:border-[#075be8]"
+                  className="mt-2 min-h-24 w-full rounded-2xl border border-[#e4dac9] bg-white px-3 py-3 text-sm font-bold text-[#012241] outline-none focus:border-[#007050]"
                   placeholder="요청사항을 입력하세요."
                 />
                 <div className="mt-2 flex justify-end gap-2">
@@ -518,7 +521,7 @@ export function MeetingItemDetailDialog({
             ) : null}
 
             {requests.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-[#b9cce4] px-3 py-5 text-center text-xs font-bold text-slate-400">
+              <p className="rounded-xl border border-dashed border-[#d3c6b0] px-3 py-5 text-center text-xs font-bold text-slate-400">
                 등록된 요청사항이 없습니다.
               </p>
             ) : (
@@ -534,10 +537,10 @@ export function MeetingItemDetailDialog({
                     !isClosed &&
                     (canManageAllRequests || request.created_by === currentUserId || request.result_created_by === currentUserId);
                   return (
-                    <article key={request.id} className="rounded-2xl border border-[#e2ecf8] bg-[#f8fbff] p-3">
+                    <article key={request.id} className="rounded-2xl border border-[#e7ddcd] bg-white p-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-xs font-black text-[#075be8]">
+                          <p className="text-xs font-black text-[#007050]">
                             {request.request_author_name}
                             {request.request_author_department_name ? ` · ${request.request_author_department_name}` : ""}
                           </p>
@@ -587,7 +590,7 @@ export function MeetingItemDetailDialog({
                           <textarea
                             value={editingRequestText}
                             onChange={(event) => setEditingRequestText(event.target.value)}
-                            className="min-h-20 w-full rounded-2xl border border-[#d7e4f6] bg-white px-3 py-3 text-sm font-bold text-[#10223d] outline-none focus:border-[#075be8]"
+                            className="min-h-20 w-full rounded-2xl border border-[#e4dac9] bg-white px-3 py-3 text-sm font-bold text-[#012241] outline-none focus:border-[#007050]"
                           />
                           <div className="mt-2 flex justify-end gap-2">
                             <button type="button" onClick={() => setEditingRequestId(null)} className="tool-button min-h-8 py-1 text-xs">
@@ -599,7 +602,7 @@ export function MeetingItemDetailDialog({
                           </div>
                         </div>
                       ) : (
-                        <p className="mt-3 whitespace-pre-wrap text-sm font-bold leading-6 text-[#10223d]">{request.request_content}</p>
+                        <p className="mt-3 whitespace-pre-wrap text-sm font-bold leading-6 text-[#012241]">{request.request_content}</p>
                       )}
 
                       {isClosed ? (
@@ -613,7 +616,7 @@ export function MeetingItemDetailDialog({
                         </div>
                       ) : null}
 
-                      <div className="mt-3 rounded-2xl border border-[#d9e7f7] bg-white p-3">
+                      <div className="mt-3 rounded-2xl border border-[#e7ddcd] bg-[#faf6ef] p-3">
                         <div className="mb-2 flex items-center justify-between gap-3">
                           <p className="text-xs font-black text-emerald-700">처리결과</p>
                           {request.result_content && canEditResult ? (
@@ -653,7 +656,7 @@ export function MeetingItemDetailDialog({
                                 setEditingResultId(request.id);
                                 setResultText(event.target.value);
                               }}
-                              className="min-h-20 w-full rounded-2xl border border-[#d7e4f6] bg-[#f8fbff] px-3 py-3 text-sm font-bold text-[#10223d] outline-none focus:border-[#075be8]"
+                              className="min-h-20 w-full rounded-2xl border border-[#e4dac9] bg-white px-3 py-3 text-sm font-bold text-[#012241] outline-none focus:border-[#007050]"
                               placeholder="처리결과를 입력하세요."
                               disabled={!canEditResult}
                             />
@@ -681,7 +684,7 @@ export function MeetingItemDetailDialog({
               </div>
             )}
 
-            {message ? <p className="mt-3 rounded-xl bg-[#eef6ff] px-3 py-2 text-xs font-black text-[#075be8]">{message}</p> : null}
+            {message ? <p className="mt-3 rounded-xl bg-[#f4ede2] px-3 py-2 text-xs font-black text-[#007050]">{message}</p> : null}
           </section>
         </div>
       </div>

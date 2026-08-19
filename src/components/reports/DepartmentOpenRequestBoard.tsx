@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle2, ClipboardList, Clock3, MessageSquareText } from "lucide-react";
+import { ClipboardList } from "lucide-react";
 import {
   MeetingItemDetailDialog,
   type MeetingItemDetailSelection,
   type MeetingReportItemRequest
 } from "@/components/reports/MeetingMaterialsTable";
+import { cn } from "@/lib/utils/cn";
 import { formatDateTime } from "@/lib/utils/labels";
 
 export type DepartmentOpenRequestItem = {
@@ -70,7 +71,16 @@ export function DepartmentOpenRequestBoard({
   onDataChanged?: () => void;
   compact?: boolean;
 }) {
-  const [rows, setRows] = useState(requests);
+  const [rows, setRows] = useState(() => {
+    const seen = new Set<string>();
+    return requests.filter((request) => {
+      if (seen.has(request.requestId)) {
+        return false;
+      }
+      seen.add(request.requestId);
+      return true;
+    });
+  });
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
 
   const selected = useMemo(
@@ -120,65 +130,65 @@ export function DepartmentOpenRequestBoard({
 
   return (
     <>
-      <section
-        className="overflow-hidden rounded-2xl border border-[#cfe0f4] bg-white/90 shadow-[0_12px_30px_rgba(16,34,61,0.05)]"
-        aria-labelledby="department-open-request-title"
-      >
-        <div className={`flex flex-wrap items-center justify-between gap-2 border-b border-[#e2ebf5] ${compact ? "px-3 py-0.5" : "px-4 py-3"}`}>
+      <section className="panel-blush overflow-hidden" aria-labelledby="department-open-request-title">
+        <div className={`flex flex-wrap items-center justify-between gap-2 border-b border-[#012241]/10 ${compact ? "px-3 py-1.5" : "px-4 py-3"}`}>
           <div className="flex items-center gap-2.5">
-            <span className={`inline-flex items-center justify-center rounded-lg border border-[#cfe0f4] bg-[#eef6ff] text-[#075be8] ${compact ? "h-7 w-7" : "h-8 w-8"}`}>
+            <span className={`inline-flex items-center justify-center rounded-xl bg-white/70 text-[#007050] ${compact ? "h-7 w-7" : "h-8 w-8"}`}>
               <ClipboardList className="h-4 w-4" aria-hidden="true" />
             </span>
-            <h2 id="department-open-request-title" className="text-sm font-black text-[#10223d]">
+            <h2 id="department-open-request-title" className="text-sm font-black text-[#012241]">
               {title}
             </h2>
           </div>
-          <span className="inline-flex h-7 items-center rounded-full border border-[#cfe0f4] bg-[#f5f9ff] px-2.5 text-xs font-black text-[#075be8]">
-            미종결 {rows.length}건
-          </span>
+        </div>
+
+        <div className={compact ? "px-3 pt-2" : "px-4 pt-3"}>
+          <div className={`rounded-[1.1rem] bg-white/75 ring-1 ring-white/80 shadow-[0_8px_20px_rgba(1,34,65,0.06)] ${compact ? "px-3 py-2" : "px-4 py-3"}`}>
+            <p className="text-2xl font-black leading-none tabular-nums text-[#012241]">{rows.length}</p>
+            <p className="mt-1 text-xs font-black text-[#4a5a6a]">미종결 요청</p>
+          </div>
         </div>
 
         {rows.length === 0 ? (
-          <p className={`text-center text-xs font-bold text-slate-400 ${compact ? "px-3 py-3" : "px-4 py-5"}`}>{emptyMessage}</p>
+          <p className={`text-center text-xs font-bold text-[#4a5a6a] ${compact ? "px-3 py-3" : "px-4 py-5"}`}>{emptyMessage}</p>
         ) : (
-          <div className="divide-y divide-[#e8eff7]">
-            {rows.map((request) => (
-              <article key={request.requestId} className={`grid lg:grid-cols-[170px_minmax(0,1fr)_minmax(240px,0.8fr)_110px] lg:items-center ${compact ? "gap-2 px-3 py-0.5" : "gap-3 px-4 py-3"}`}>
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-black text-[#075be8]">{request.sourceLabel}</p>
-                  <p className={`${compact ? "mt-0.5" : "mt-1"} flex items-center gap-1 text-[11px] font-bold text-slate-400`}>
-                    <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
-                    {request.weekLabel}
-                  </p>
-                </div>
-                <div className={`min-w-0 ${compact ? "flex items-center gap-2" : ""}`}>
-                  <span className={`${compact ? "shrink-0" : "mb-1"} inline-flex rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-black text-slate-600`}>
-                    {request.categoryName}
-                  </span>
+          <div className={compact ? "px-3 pb-2" : "px-4 pb-3"}>
+            {rows.map((request, index) => (
+              <article
+                key={request.requestId}
+                className={cn(
+                  "flex items-start gap-3 border-t border-[#012241]/10",
+                  compact ? "py-2" : "py-3",
+                  index === 0 && "border-t-0"
+                )}
+              >
+                <span
+                  className={cn("u-dot mt-1.5", request.resultContent ? "u-dot-green" : "u-dot-amber")}
+                  aria-hidden="true"
+                />
+                <div className="min-w-0 flex-1">
                   <button
                     type="button"
                     onClick={() => setSelectedRequestId(request.requestId)}
-                    className={`${compact ? "min-w-0 truncate text-[13px]" : "block max-w-full text-sm"} text-left font-black leading-5 text-[#10223d] underline-offset-4 hover:text-[#075be8] hover:underline`}
-                    style={compact ? { fontSize: "13px" } : undefined}
+                    className={cn(
+                      "block max-w-full text-left font-black leading-5 text-[#012241] underline-offset-4 hover:text-[#007050] hover:underline",
+                      compact ? "truncate text-[13px]" : "text-sm"
+                    )}
                   >
                     {request.title}
                   </button>
-                </div>
-                <div className="min-w-0">
-                  <p className="flex items-center gap-1 text-[11px] font-black text-slate-500">
-                    <MessageSquareText className="h-3.5 w-3.5" aria-hidden="true" />
-                    요청내용
+                  <p className="mt-1 truncate text-[11px] font-bold text-[#4a5a6a]">
+                    {request.sourceLabel} · {request.categoryName} · {request.resultContent ? "처리결과 등록" : "처리대기"} ·{" "}
+                    {request.weekLabel} · {formatDateTime(request.requestCreatedAt)} 등록
                   </p>
-                  <p className={`${compact ? "mt-0.5 line-clamp-1" : "mt-1 line-clamp-2"} whitespace-pre-wrap text-xs font-bold leading-5 text-slate-600`}>
+                  <p
+                    className={cn(
+                      "mt-1 whitespace-pre-wrap text-xs font-semibold leading-5 text-[#3a4a5a]",
+                      compact ? "line-clamp-1" : "line-clamp-2"
+                    )}
+                  >
                     {request.requestContent}
                   </p>
-                </div>
-                <div className="lg:text-right">
-                  <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-black ${request.resultContent ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-amber-100 bg-amber-50 text-amber-700"}`}>
-                    {request.resultContent ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> : null}
-                    {request.resultContent ? "처리결과 등록" : "처리대기"}
-                  </span>
-                  <p className={`${compact ? "mt-0.5" : "mt-1"} text-[10px] font-bold text-slate-400`}>{formatDateTime(request.requestCreatedAt)}</p>
                 </div>
               </article>
             ))}

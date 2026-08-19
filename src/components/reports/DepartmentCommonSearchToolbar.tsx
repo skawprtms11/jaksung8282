@@ -27,7 +27,7 @@ const importanceOptions: { value: Importance; label: string }[] = [
 ];
 
 const controlClassName =
-  "mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-2.5 text-sm font-semibold text-[#10223d] outline-none transition focus:border-[#075be8] focus:ring-2 focus:ring-[#075be8]/15";
+  "mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-2.5 text-sm font-semibold text-[#012241] outline-none transition focus:border-[#007050] focus:ring-2 focus:ring-[#007050]/15";
 
 export function DepartmentCommonSearchToolbar({
   categories,
@@ -144,7 +144,7 @@ export function DepartmentCommonSearchToolbar({
     <div className="min-w-0 flex-1">
       <div className={`flex flex-wrap justify-end gap-2 ${inlineQuickSearch ? "items-center" : "items-end"}`}>
         {hasSearch ? (
-          <span className="self-center whitespace-nowrap text-xs font-black text-[#075be8]">검색결과 {resultCount}건</span>
+          <span className="self-center whitespace-nowrap text-xs font-black text-[#007050]">검색결과 {resultCount}건</span>
         ) : null}
         <label className={`min-w-[190px] flex-1 text-xs font-bold text-slate-600 lg:max-w-[360px] ${inlineQuickSearch ? "flex items-center gap-2" : ""}`}>
           <span className={inlineQuickSearch ? "shrink-0 whitespace-nowrap" : ""}>제목 검색</span>
@@ -185,7 +185,7 @@ export function DepartmentCommonSearchToolbar({
       </div>
 
       {detailOpen ? (
-        <div id={detailsId} className="mt-2 border-t border-[#e2ebf5] pt-2">
+        <div id={detailsId} className="mt-2 border-t border-[#e7ddcd] pt-2">
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
             <label className="text-xs font-bold text-slate-600">
               업무구분

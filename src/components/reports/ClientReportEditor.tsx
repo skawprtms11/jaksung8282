@@ -63,11 +63,11 @@ const importanceOptions: { value: Importance; label: string }[] = [
   { value: "low", label: "낮음" }
 ];
 
-function importanceIconClassName(importance: Importance) {
-  if (importance === "very_high") return "border-red-100 bg-red-50 text-red-600";
-  if (importance === "high") return "border-orange-100 bg-orange-50 text-orange-500";
-  if (importance === "medium") return "border-emerald-100 bg-emerald-50 text-emerald-600";
-  return "border-slate-200 bg-slate-50 text-slate-500";
+function importanceDotClassName(importance: Importance) {
+  if (importance === "very_high") return "u-dot-pink";
+  if (importance === "high") return "u-dot-amber";
+  if (importance === "medium") return "u-dot-green";
+  return "u-dot-blue";
 }
 
 const volumeTypeOptions: { value: VolumeType; label: string }[] = [
@@ -358,21 +358,21 @@ function MobileReportPreview({
   onOpenVolumes: () => void;
 }) {
   return (
-    <section className="overflow-hidden rounded-md border border-[#cddbee] bg-white shadow-[0_8px_20px_rgba(16,34,61,0.04)]">
-      <div className="flex min-h-12 items-center border-b border-[#cddbee] bg-white px-3 py-2.5">
+    <section className="overflow-hidden rounded-md border border-[#ddd2bf] bg-white shadow-[0_8px_20px_rgba(16,34,61,0.04)]">
+      <div className="flex min-h-12 items-center border-b border-[#ddd2bf] bg-white px-3 py-2.5">
         <div className="min-w-0">
           <p className="text-[10px] font-black text-slate-500">화주</p>
-          <h2 className="truncate text-base font-black text-[#10223d]">{clientName}</h2>
+          <h2 className="truncate text-base font-black text-[#012241]">{clientName}</h2>
         </div>
       </div>
       <MobileItemPreviewSection title="금주 실시사항" items={currentItems} categories={categories} disabled={disabled} onEdit={onOpenCurrent} />
       <MobileItemPreviewSection title="차주 예정사항" items={nextItems} categories={categories} disabled={disabled} onEdit={onOpenNext} withTopBorder />
-      <section className="border-t border-[#cddbee] bg-white">
-        <div className="flex min-h-11 items-center gap-2 border-b border-[#e5eef9] bg-[#f5f9ff] px-3 py-2"><Boxes className="h-4 w-4 text-[#075be8]" aria-hidden="true" /><h2 className="text-sm font-black text-[#10223d]">물동량</h2><span className="text-[10px] font-black text-slate-500">{volumes.length}건</span><button type="button" onClick={onOpenVolumes} disabled={disabled} className="icon-tool-button ml-auto h-8 w-8 text-[#075be8] disabled:opacity-45" aria-label="물동량 작성" title={disabled ? "확정된 자료입니다." : "물동량 작성"}><Pencil className="h-4 w-4" aria-hidden="true" /></button></div>
+      <section className="border-t border-[#ddd2bf] bg-white">
+        <div className="flex min-h-11 items-center gap-2 border-b border-[#ece3d4] bg-[#faf6ef] px-3 py-2"><Boxes className="h-4 w-4 text-[#007050]" aria-hidden="true" /><h2 className="text-sm font-black text-[#012241]">물동량</h2><span className="text-[10px] font-black text-slate-500">{volumes.length}건</span><button type="button" onClick={onOpenVolumes} disabled={disabled} className="icon-tool-button ml-auto h-8 w-8 text-[#007050] disabled:opacity-45" aria-label="물동량 작성" title={disabled ? "확정된 자료입니다." : "물동량 작성"}><Pencil className="h-4 w-4" aria-hidden="true" /></button></div>
         {volumes.length ? <div className="divide-y divide-slate-100">{volumes.map((volume, index) => (
           <div key={`${volume.volume_type}-${index}`} className="flex items-start justify-between gap-3 px-3 py-2.5">
-            <div className="min-w-0"><p className="text-xs font-black text-[#10223d]">{volumeTypeOptions.find((option) => option.value === volume.volume_type)?.label ?? "기타"}</p>{volume.note ? <p className="mt-0.5 break-words text-[11px] leading-4 text-slate-500">{volume.note}</p> : null}</div>
-            <p className="shrink-0 text-xs font-black text-[#075be8]">{Number(volume.quantity || 0).toLocaleString("ko-KR")} {volume.custom_unit || volume.unit}</p>
+            <div className="min-w-0"><p className="text-xs font-black text-[#012241]">{volumeTypeOptions.find((option) => option.value === volume.volume_type)?.label ?? "기타"}</p>{volume.note ? <p className="mt-0.5 break-words text-[11px] leading-4 text-slate-500">{volume.note}</p> : null}</div>
+            <p className="shrink-0 text-xs font-black text-[#007050]">{Number(volume.quantity || 0).toLocaleString("ko-KR")} {volume.custom_unit || volume.unit}</p>
           </div>
         ))}</div> : <p className="px-3 py-5 text-center text-[11px] font-bold text-slate-400">등록된 물동량이 없습니다.</p>}
       </section>
@@ -382,12 +382,15 @@ function MobileReportPreview({
 
 function MobileItemPreviewSection({ title, items, categories, disabled, onEdit, withTopBorder = false }: { title: string; items: ItemDraft[]; categories: Category[]; disabled: boolean; onEdit: () => void; withTopBorder?: boolean }) {
   return (
-    <section className={cn("bg-white", withTopBorder && "border-t border-[#cddbee]")}>
-      <div className="flex min-h-11 items-center gap-2 border-b border-[#e5eef9] bg-[#f5f9ff] px-3 py-2"><ClipboardList className="h-4 w-4 text-[#075be8]" aria-hidden="true" /><h2 className="text-sm font-black text-[#10223d]">{title}</h2><span className="text-[10px] font-black text-slate-500">{items.length}건</span><button type="button" onClick={onEdit} disabled={disabled} className="icon-tool-button ml-auto h-8 w-8 text-[#075be8] disabled:opacity-45" aria-label={`${title} 작성`} title={disabled ? "확정된 자료입니다." : `${title} 작성`}><Pencil className="h-4 w-4" aria-hidden="true" /></button></div>
+    <section className={cn("bg-white", withTopBorder && "border-t border-[#ddd2bf]")}>
+      <div className="flex min-h-11 items-center gap-2 border-b border-[#ece3d4] bg-[#faf6ef] px-3 py-2"><ClipboardList className="h-4 w-4 text-[#007050]" aria-hidden="true" /><h2 className="text-sm font-black text-[#012241]">{title}</h2><span className="text-[10px] font-black text-slate-500">{items.length}건</span><button type="button" onClick={onEdit} disabled={disabled} className="icon-tool-button ml-auto h-8 w-8 text-[#007050] disabled:opacity-45" aria-label={`${title} 작성`} title={disabled ? "확정된 자료입니다." : `${title} 작성`}><Pencil className="h-4 w-4" aria-hidden="true" /></button></div>
       {items.length ? <div className="divide-y divide-slate-100">{items.map((item, index) => (
         <article key={`${item.title}-${index}`} className="flex gap-2 px-3 py-2.5">
-          <span className={cn("mt-0.5 inline-flex h-7 min-w-11 shrink-0 items-center justify-center rounded-xl border px-2 text-[10px] font-black", importanceIconClassName(item.importance))} title={`중요도 ${importanceOptions.find((option) => option.value === item.importance)?.label ?? "낮음"}`}>{categories.find((category) => category.id === item.work_category_id)?.category_name ?? "기타"}</span>
-          <div className="min-w-0"><h3 className="break-words text-xs font-black text-[#10223d]">{item.title || "제목 없음"}</h3><p className="mt-1 whitespace-pre-wrap break-words text-[11px] leading-5 text-slate-600">{item.content || "내용 없음"}</p></div>
+          <span className="mt-1 inline-flex shrink-0 items-center gap-1.5" title={`중요도 ${importanceOptions.find((option) => option.value === item.importance)?.label ?? "낮음"}`}>
+            <span className={cn("u-dot", importanceDotClassName(item.importance))} aria-hidden="true" />
+            <span className="text-[10px] font-bold text-slate-500">{categories.find((category) => category.id === item.work_category_id)?.category_name ?? "기타"}</span>
+          </span>
+          <div className="min-w-0"><h3 className="break-words text-xs font-black text-[#012241]">{item.title || "제목 없음"}</h3><p className="mt-1 whitespace-pre-wrap break-words text-[11px] leading-5 text-slate-600">{item.content || "내용 없음"}</p></div>
         </article>
       ))}</div> : <p className="px-3 py-5 text-center text-[11px] font-bold text-slate-400">등록된 내용이 없습니다.</p>}
     </section>
@@ -420,12 +423,12 @@ function EditorLaunchCard({
         onClick={onOpen}
         disabled={disabled}
         title={disabled ? "확정된 자료는 확정취소 후 수정할 수 있습니다." : undefined}
-        className="flex h-[92px] min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 text-center text-[#10223d] transition-colors hover:bg-[#f5f9ff] disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex h-[92px] min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 text-center text-[#012241] transition-colors hover:bg-[#faf6ef] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        <Icon className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
+        <Icon className="h-4 w-4 text-[#007050]" aria-hidden="true" />
         <span className="max-w-full break-keep text-[11px] font-black leading-4">{title}</span>
         <span className="text-[10px] font-black text-slate-500">{count}건</span>
-        <span className="mt-0.5 inline-flex h-6 items-center justify-center gap-1 rounded-md border border-[#bfd4f5] bg-[#f5f9ff] px-2 text-[10px] font-black text-[#075be8]">
+        <span className="mt-0.5 inline-flex h-6 items-center justify-center gap-1 rounded-md border border-[#d8cbb4] bg-[#faf6ef] px-2 text-[10px] font-black text-[#007050]">
           {disabled ? <Save className="h-3 w-3" aria-hidden="true" /> : <Plus className="h-3 w-3" aria-hidden="true" />}
           {disabled ? "확정완료" : "작성"}
         </span>
@@ -437,7 +440,7 @@ function EditorLaunchCard({
     <article className="metric-card p-3">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#e8f1ff] text-[#075be8] shadow-[0_10px_22px_rgba(7,91,232,0.10)]">
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#e6f1ec] text-[#007050] shadow-[0_10px_22px_rgba(0, 112, 80,0.10)]">
             <Icon className="h-5 w-5" aria-hidden="true" />
           </span>
           <h2 className="truncate font-black text-slate-900">{title}</h2>
@@ -486,22 +489,27 @@ function ItemDialog({
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/72 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="item-dialog-title">
-      <div className="max-h-[88vh] w-full max-w-5xl overflow-hidden rounded-[1.5rem] border border-white/80 bg-white/94 shadow-[0_28px_80px_rgba(16,34,61,0.22)] backdrop-blur-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-          <div>
-            <h2 id="item-dialog-title" className="text-lg font-black text-slate-900">
-              {title}
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">중요도, 업무구분, 내용을 입력하면 아래 미리보기에 바로 표시됩니다.</p>
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#012241]/60 p-4 backdrop-blur" role="dialog" aria-modal="true" aria-labelledby="item-dialog-title">
+      <div className="max-h-[88vh] w-full max-w-5xl overflow-hidden rounded-[1.75rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(1,34,65,0.22)]">
+        <div className="flex items-start justify-between gap-4 border-b border-[#eee6d8] px-6 py-5">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="icon-badge icon-badge-green">
+              <ClipboardList className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <h2 id="item-dialog-title" className="text-lg font-black text-[#012241]">
+                {title}
+              </h2>
+              <p className="mt-1 text-sm font-semibold text-slate-500">중요도, 업무구분, 내용을 입력하면 아래 미리보기에 바로 표시됩니다.</p>
+            </div>
           </div>
           <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
-        <div className="max-h-[62vh] space-y-3 overflow-y-auto bg-[#f5f9ff] px-5 py-4">
+        <div className="max-h-[62vh] space-y-3 overflow-y-auto bg-white px-6 py-5">
           {dialogItems.map(({ item, actualIndex }) => (
-            <div key={`${period}-${actualIndex}`} className="glass-row grid gap-3 p-3 md:grid-cols-[84px_105px_minmax(280px,0.95fr)_minmax(420px,1.45fr)_auto]">
+            <div key={`${period}-${actualIndex}`} className="grid gap-3 rounded-[1.25rem] border border-[#e7ddcd] bg-[#faf6ef] p-4 md:grid-cols-[84px_105px_minmax(280px,0.95fr)_minmax(420px,1.45fr)_auto]">
               <label className="text-xs font-black text-slate-600">
                 중요도
                 <select
@@ -561,7 +569,7 @@ function ItemDialog({
             </div>
           ))}
         </div>
-        <div className="flex flex-wrap justify-between gap-2 border-t border-slate-200 px-5 py-4">
+        <div className="flex flex-wrap justify-between gap-2 border-t border-[#eee6d8] px-6 py-4">
           <button type="button" onClick={onAdd} className="tool-button">
             <Plus className="h-4 w-4" aria-hidden="true" />
             항목 추가
@@ -598,22 +606,27 @@ function VolumeDialog({
 }) {
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/72 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="volume-dialog-title">
-      <div className="max-h-[88vh] w-full max-w-5xl overflow-hidden rounded-[1.5rem] border border-white/80 bg-white/94 shadow-[0_28px_80px_rgba(16,34,61,0.22)] backdrop-blur-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-          <div>
-            <h2 id="volume-dialog-title" className="text-lg font-black text-slate-900">
-              금주 물동량 작성
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">입고, 출고, 재고 등 여러 물동량을 등록할 수 있습니다.</p>
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#012241]/60 p-4 backdrop-blur" role="dialog" aria-modal="true" aria-labelledby="volume-dialog-title">
+      <div className="max-h-[88vh] w-full max-w-5xl overflow-hidden rounded-[1.75rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(1,34,65,0.22)]">
+        <div className="flex items-start justify-between gap-4 border-b border-[#eee6d8] px-6 py-5">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="icon-badge icon-badge-green">
+              <Boxes className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <h2 id="volume-dialog-title" className="text-lg font-black text-[#012241]">
+                금주 물동량 작성
+              </h2>
+              <p className="mt-1 text-sm font-semibold text-slate-500">입고, 출고, 재고 등 여러 물동량을 등록할 수 있습니다.</p>
+            </div>
           </div>
           <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
-        <div className="max-h-[62vh] space-y-3 overflow-y-auto bg-[#f5f9ff] px-5 py-4">
+        <div className="max-h-[62vh] space-y-3 overflow-y-auto bg-white px-6 py-5">
           {volumes.map((volume, index) => (
-            <div key={index} className="glass-row grid gap-2 p-3 md:grid-cols-[130px_130px_130px_1fr_auto]">
+            <div key={index} className="grid gap-2 rounded-[1.25rem] border border-[#e7ddcd] bg-[#faf6ef] p-4 md:grid-cols-[130px_130px_130px_1fr_auto]">
               <label className="text-xs font-black text-slate-600">
                 구분
                 <select
@@ -668,7 +681,7 @@ function VolumeDialog({
             </div>
           ))}
         </div>
-        <div className="flex flex-wrap justify-between gap-2 border-t border-slate-200 px-5 py-4">
+        <div className="flex flex-wrap justify-between gap-2 border-t border-[#eee6d8] px-6 py-4">
           <button type="button" onClick={onAdd} className="tool-button">
             <Plus className="h-4 w-4" aria-hidden="true" />
             물동량 추가

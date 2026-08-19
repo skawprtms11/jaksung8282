@@ -133,7 +133,7 @@ export function MeetingMaterialsWorkspace({
   }, []);
 
   return <div className="space-y-4">
-    <div className="rounded-[1.4rem] border border-[#d9e7f7] bg-white/82 p-2 shadow-[0_14px_34px_rgba(16,34,61,0.06)]">
+    <div className="rounded-[1.4rem] border border-[#e7ddcd] bg-white/82 p-2 shadow-[0_14px_34px_rgba(16,34,61,0.06)]">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <MeetingMaterialsTabNav
           activeTab={activeTab}

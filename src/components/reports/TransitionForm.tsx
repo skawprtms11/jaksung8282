@@ -29,7 +29,7 @@ export function ClientReportTransitionForm({
       <input type="hidden" name="report_id" value={reportId} />
       <input type="hidden" name="next_status" value={nextStatus} />
       {nextStatus === "rejected" ? (
-        <textarea name="comment" required rows={2} placeholder="반려사유" className="w-full rounded-2xl border border-[#d9e4f2] bg-[#f8fbff] px-3 py-2 text-sm text-[#10223d]" />
+        <textarea name="comment" required rows={2} placeholder="반려사유" className="w-full rounded-2xl border border-[#e4dac9] bg-[#fbf8f2] px-3 py-2 text-sm text-[#012241]" />
       ) : (
         <input type="hidden" name="comment" value={label} />
       )}
@@ -62,7 +62,7 @@ export function DepartmentTransitionForm({
       <input type="hidden" name="submission_id" value={submissionId} />
       <input type="hidden" name="next_status" value={nextStatus} />
       {nextStatus === "division_rejected" ? (
-        <textarea name="comment" required rows={2} placeholder="반려사유" className="w-full rounded-2xl border border-[#d9e4f2] bg-[#f8fbff] px-3 py-2 text-sm text-[#10223d]" />
+        <textarea name="comment" required rows={2} placeholder="반려사유" className="w-full rounded-2xl border border-[#e4dac9] bg-[#fbf8f2] px-3 py-2 text-sm text-[#012241]" />
       ) : (
         <input type="hidden" name="comment" value={label} />
       )}

@@ -21,10 +21,10 @@ export function MobileDepartmentConfirmedReports({ clients, reports }: { clients
   }).length;
 
   return (
-    <section className="mt-3 overflow-hidden rounded-md border border-[#cddbee] bg-white">
-      <header className="flex min-h-11 items-center gap-2 border-b border-[#e5eef9] bg-[#f5f9ff] px-3 py-2">
-        <ClipboardCheck className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
-        <h2 className="text-[13px] font-black text-[#10223d]">확정된 화주자료</h2>
+    <section className="mt-3 overflow-hidden rounded-md border border-[#ddd2bf] bg-white">
+      <header className="flex min-h-11 items-center gap-2 border-b border-[#ece3d4] bg-[#faf6ef] px-3 py-2">
+        <ClipboardCheck className="h-4 w-4 text-[#007050]" aria-hidden="true" />
+        <h2 className="text-[13px] font-black text-[#012241]">확정된 화주자료</h2>
         <span className="ml-auto text-[11px] font-black text-slate-600">{completedCount}/{clients.length}</span>
       </header>
       {clients.length ? (
@@ -35,7 +35,7 @@ export function MobileDepartmentConfirmedReports({ clients, reports }: { clients
             if (!report || !isConfirmed) {
               return (
                 <div key={client.id} className="flex min-h-12 items-center gap-2 px-3 py-3">
-                  <h3 className="min-w-0 flex-1 truncate text-sm font-black text-[#10223d]">{client.client_name}</h3>
+                  <h3 className="min-w-0 flex-1 truncate text-sm font-black text-[#012241]">{client.client_name}</h3>
                   <span className="inline-flex shrink-0 items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-black text-slate-500">미확정</span>
                 </div>
               );
@@ -43,7 +43,7 @@ export function MobileDepartmentConfirmedReports({ clients, reports }: { clients
             return (
               <details key={client.id} className="group">
                 <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-3">
-                  <div className="min-w-0"><h3 className="truncate text-sm font-black text-[#10223d]">{client.client_name}</h3><p className="mt-0.5 text-[10px] font-bold text-slate-400">{report.weekLabel}</p></div>
+                  <div className="min-w-0"><h3 className="truncate text-sm font-black text-[#012241]">{client.client_name}</h3><p className="mt-0.5 text-[10px] font-bold text-slate-400">{report.weekLabel}</p></div>
                   <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-700"><BadgeCheck className="h-3 w-3" aria-hidden="true" />확정</span>
                   <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" aria-hidden="true" />
                 </summary>
@@ -73,7 +73,7 @@ function ConfirmedItemSection({ title, rows }: { title: string; rows: SavedClien
       {rows.length ? <div className="mt-1 space-y-2">{rows.map((row, index) => (
         <div key={`${row.title}-${index}`} className="flex gap-2">
           <span className={cn("mt-0.5 inline-flex h-7 min-w-11 shrink-0 items-center justify-center rounded-xl border px-2 text-[10px] font-black", importanceIconClassName(row.importance))} title={`중요도 ${importanceLabels[row.importance]}`}>{row.categoryName}</span>
-          <div className="min-w-0"><p className="break-words text-xs font-black text-[#10223d]">{row.title}</p><p className="mt-0.5 whitespace-pre-wrap break-words text-[11px] leading-5 text-slate-600">{row.content}</p></div>
+          <div className="min-w-0"><p className="break-words text-xs font-black text-[#012241]">{row.title}</p><p className="mt-0.5 whitespace-pre-wrap break-words text-[11px] leading-5 text-slate-600">{row.content}</p></div>
         </div>
       ))}</div> : <p className="mt-1 text-[11px] text-slate-400">등록 없음</p>}
     </div>

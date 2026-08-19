@@ -1,34 +1,34 @@
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Circle,
-  CircleDashed,
-  RotateCcw,
-  Send,
-  ShieldCheck
-} from "lucide-react";
 import type { ClientReportStatus, DepartmentSubmissionStatus, Importance } from "@/types/enums";
 import { cn } from "@/lib/utils/cn";
 
-const clientStatus: Record<ClientReportStatus, { label: string; className: string; icon: typeof Circle }> = {
-  draft: { label: "저장", className: "border-slate-200 bg-slate-50 text-slate-700", icon: CircleDashed },
-  submitted: { label: "확정", className: "border-blue-200 bg-blue-50 text-blue-700", icon: Send },
-  approved: { label: "승인", className: "border-emerald-200 bg-emerald-50 text-emerald-700", icon: CheckCircle2 },
-  rejected: { label: "반려", className: "border-rose-200 bg-rose-50 text-rose-700", icon: AlertTriangle }
+type StatusTone = "green" | "blue" | "amber" | "pink";
+
+const toneDotClassName: Record<StatusTone, string> = {
+  green: "u-dot-green",
+  blue: "u-dot-blue",
+  amber: "u-dot-amber",
+  pink: "u-dot-pink"
 };
 
-const departmentStatus: Record<DepartmentSubmissionStatus, { label: string; className: string; icon: typeof Circle }> = {
-  draft: { label: "작성 중", className: "border-slate-200 bg-slate-50 text-slate-700", icon: CircleDashed },
-  submitted_to_division: { label: "사업부 검토", className: "border-blue-200 bg-blue-50 text-blue-700", icon: Send },
-  division_approved: { label: "사업부 승인", className: "border-emerald-200 bg-emerald-50 text-emerald-700", icon: ShieldCheck },
-  division_rejected: { label: "사업부 반려", className: "border-rose-200 bg-rose-50 text-rose-700", icon: RotateCcw }
+const clientStatus: Record<ClientReportStatus, { label: string; tone: StatusTone }> = {
+  draft: { label: "저장", tone: "amber" },
+  submitted: { label: "확정", tone: "blue" },
+  approved: { label: "승인", tone: "green" },
+  rejected: { label: "반려", tone: "pink" }
 };
 
-const importance: Record<Importance, { label: string; className: string; icon: typeof Circle }> = {
-  very_high: { label: "매우높음", className: "border-red-200 bg-red-50 text-red-700", icon: AlertTriangle },
-  high: { label: "높음", className: "border-orange-200 bg-orange-50 text-orange-700", icon: AlertTriangle },
-  medium: { label: "보통", className: "border-emerald-200 bg-emerald-50 text-emerald-700", icon: Circle },
-  low: { label: "낮음", className: "border-slate-200 bg-slate-50 text-slate-600", icon: CircleDashed }
+const departmentStatus: Record<DepartmentSubmissionStatus, { label: string; tone: StatusTone }> = {
+  draft: { label: "작성 중", tone: "amber" },
+  submitted_to_division: { label: "사업부 검토", tone: "blue" },
+  division_approved: { label: "사업부 승인", tone: "green" },
+  division_rejected: { label: "사업부 반려", tone: "pink" }
+};
+
+const importance: Record<Importance, { label: string; tone: StatusTone }> = {
+  very_high: { label: "매우높음", tone: "pink" },
+  high: { label: "높음", tone: "amber" },
+  medium: { label: "보통", tone: "green" },
+  low: { label: "낮음", tone: "blue" }
 };
 
 export function StatusBadge({
@@ -44,10 +44,9 @@ export function StatusBadge({
       : type === "department"
         ? departmentStatus[value as DepartmentSubmissionStatus]
         : importance[value as Importance];
-  const Icon = item.icon;
   return (
-    <span className={cn("inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold", item.className)}>
-      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+    <span className="inline-flex items-center gap-2 text-xs font-bold text-[#012241]">
+      <span className={cn("u-dot", toneDotClassName[item.tone])} aria-hidden="true" />
       {item.label}
     </span>
   );

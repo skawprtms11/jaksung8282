@@ -87,7 +87,7 @@ export default async function MobilePage({ searchParams }: { searchParams: Promi
   }
 
   if (!departmentId) {
-    return <main className="min-h-dvh bg-[#f4f7fb] px-5 py-16 text-center"><h1 className="text-lg font-black">소속부서를 확인할 수 없습니다.</h1><p className="mt-2 text-sm font-bold text-slate-500">관리자에게 소속부서 등록을 요청하세요.</p></main>;
+    return <main className="min-h-dvh bg-[#faf6ef] px-5 py-16 text-center"><h1 className="text-lg font-black">소속부서를 확인할 수 없습니다.</h1><p className="mt-2 text-sm font-bold text-slate-500">관리자에게 소속부서 등록을 요청하세요.</p></main>;
   }
 
   const [{ data: departmentData }, { data: categoryData }, { data: linkData }, { data: assignmentData }] = await Promise.all([
@@ -141,7 +141,7 @@ export default async function MobilePage({ searchParams }: { searchParams: Promi
       reviewSlot={<MobileDepartmentConfirmedReports clients={linkedClients} reports={departmentReports} />}
     />
   ) : (
-    <section className="border-y border-[#d9e7f7] bg-white px-5 py-10 text-center"><BuildingLockNotice role={roleLabel(profile.app_role)} /></section>
+    <section className="border-y border-[#e7ddcd] bg-white px-5 py-10 text-center"><BuildingLockNotice role={roleLabel(profile.app_role)} /></section>
   );
 
   return (

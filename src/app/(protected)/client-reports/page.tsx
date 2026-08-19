@@ -87,7 +87,7 @@ const ClientReportsWorkspace = dynamic(
   () => import("@/components/reports/ClientReportsWorkspace").then((mod) => mod.ClientReportsWorkspace),
   {
     loading: () => (
-      <div className="sketch-panel flex min-h-64 items-center justify-center p-4 text-sm font-black text-slate-500">
+      <div className="kpi-card flex min-h-64 items-center justify-center p-4 text-sm font-black text-slate-500">
         화주자료 화면을 불러오는 중입니다.
       </div>
     )

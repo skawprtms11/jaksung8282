@@ -53,7 +53,7 @@ export function LoginForm({ redirectTo, departments }: { redirectTo: string; dep
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            className="mt-1 h-12 w-full rounded-2xl border border-[#d9e4f2] bg-[#f8fbff] px-4 text-sm text-[#10223d] focus:border-[#075be8] focus:outline-none"
+            className="mt-1 h-12 w-full rounded-2xl border border-[#e4dac9] bg-[#fbf8f2] px-4 text-sm text-[#012241] focus:border-[#007050] focus:outline-none"
           />
         </div>
         <div>
@@ -65,7 +65,7 @@ export function LoginForm({ redirectTo, departments }: { redirectTo: string; dep
             name="password"
             type="password"
             required
-            className="mt-1 h-12 w-full rounded-2xl border border-[#d9e4f2] bg-[#f8fbff] px-4 text-sm text-[#10223d] focus:border-[#075be8] focus:outline-none"
+            className="mt-1 h-12 w-full rounded-2xl border border-[#e4dac9] bg-[#fbf8f2] px-4 text-sm text-[#012241] focus:border-[#007050] focus:outline-none"
           />
         </div>
         <label className="flex items-center gap-2 text-sm font-bold text-slate-600">
@@ -85,7 +85,7 @@ export function LoginForm({ redirectTo, departments }: { redirectTo: string; dep
             사용자 가입
           </button>
         </div>
-        <Link href="/reset-password" className="block text-sm font-bold text-[#075be8]">
+        <Link href="/reset-password" className="block text-sm font-bold text-[#007050]">
           비밀번호 재설정
         </Link>
       </form>
@@ -109,10 +109,10 @@ function RegistrationRequestDialog({
   return (
     <ModalPortal>
       <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="registration-request-title">
-        <form action={action} className="max-h-[88vh] w-full max-w-2xl overflow-hidden rounded-[1.5rem] border border-[#d9e4f2] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
-          <div className="flex items-start justify-between gap-4 border-b border-[#d9e4f2] px-5 py-4">
+        <form action={action} className="max-h-[88vh] w-full max-w-2xl overflow-hidden rounded-[1.5rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
+          <div className="flex items-start justify-between gap-4 border-b border-[#e4dac9] px-5 py-4">
             <div>
-              <h2 id="registration-request-title" className="text-lg font-black text-[#10223d]">사용자 가입 요청</h2>
+              <h2 id="registration-request-title" className="text-lg font-black text-[#012241]">사용자 가입 요청</h2>
               <p className="mt-1 text-sm text-slate-500">회사 이메일과 소속 부서를 입력하면 승인 후 사용할 수 있습니다.</p>
             </div>
             <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
@@ -157,7 +157,7 @@ function RegistrationRequestDialog({
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-[#d9e4f2] px-5 py-4">
+          <div className="flex justify-end gap-2 border-t border-[#e4dac9] px-5 py-4">
             <button type="button" onClick={onClose} className="tool-button">닫기</button>
             <SubmitButton>
               <UserPlus className="h-4 w-4" aria-hidden="true" />

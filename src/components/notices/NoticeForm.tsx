@@ -31,7 +31,7 @@ export function NoticeForm({ notice }: { notice?: NoticeFormValue }) {
             id="notice_type"
             name="notice_type"
             defaultValue={notice?.notice_type ?? "general"}
-            className="mt-1 h-10 w-full rounded-2xl border border-[#d9e4f2] bg-[#f8fbff] px-3 text-sm text-[#10223d]"
+            className="mt-1 h-10 w-full rounded-2xl border border-[#e4dac9] bg-[#fbf8f2] px-3 text-sm text-[#012241]"
           >
             <option value="general">일반</option>
             <option value="important">중요</option>
@@ -60,7 +60,7 @@ export function NoticeForm({ notice }: { notice?: NoticeFormValue }) {
           required
           maxLength={200}
           defaultValue={notice?.title}
-          className="mt-1 h-10 w-full rounded-2xl border border-[#d9e4f2] bg-[#f8fbff] px-3 text-sm text-[#10223d]"
+          className="mt-1 h-10 w-full rounded-2xl border border-[#e4dac9] bg-[#fbf8f2] px-3 text-sm text-[#012241]"
         />
       </div>
       <div>
@@ -73,7 +73,7 @@ export function NoticeForm({ notice }: { notice?: NoticeFormValue }) {
           required
           rows={6}
           defaultValue={notice?.content}
-          className="mt-1 w-full rounded-2xl border border-[#d9e4f2] bg-[#f8fbff] px-3 py-2 text-sm text-[#10223d]"
+          className="mt-1 w-full rounded-2xl border border-[#e4dac9] bg-[#fbf8f2] px-3 py-2 text-sm text-[#012241]"
         />
       </div>
       <div className="grid gap-4 md:grid-cols-2">
@@ -86,7 +86,7 @@ export function NoticeForm({ notice }: { notice?: NoticeFormValue }) {
             name="publish_start_date"
             type="date"
             defaultValue={notice?.publish_start_date ?? ""}
-            className="mt-1 h-10 w-full rounded-2xl border border-[#d9e4f2] bg-[#f8fbff] px-3 text-sm text-[#10223d]"
+            className="mt-1 h-10 w-full rounded-2xl border border-[#e4dac9] bg-[#fbf8f2] px-3 text-sm text-[#012241]"
           />
         </div>
         <div>
@@ -98,7 +98,7 @@ export function NoticeForm({ notice }: { notice?: NoticeFormValue }) {
             name="publish_end_date"
             type="date"
             defaultValue={notice?.publish_end_date ?? ""}
-            className="mt-1 h-10 w-full rounded-2xl border border-[#d9e4f2] bg-[#f8fbff] px-3 text-sm text-[#10223d]"
+            className="mt-1 h-10 w-full rounded-2xl border border-[#e4dac9] bg-[#fbf8f2] px-3 text-sm text-[#012241]"
           />
         </div>
       </div>

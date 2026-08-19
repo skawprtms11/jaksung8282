@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import { Building2, LogOut, PackageSearch, PanelLeftOpen, ShieldCheck } from "lucide-react";
+import { Building2, LogOut, PackageSearch, PanelLeftOpen } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { signOutAction } from "@/actions/auth";
 import { pickDefaultClientId, pickDefaultDepartmentId } from "@/lib/auth/default-scope";
@@ -167,7 +167,10 @@ function HeaderScopeFilter({
   const activeMeetingTab = searchParams.get("tab") ?? "collection";
   const isMeetingMaterialsTab = pathname === "/meeting-materials" && activeMeetingTab === "materials";
   const restrictMeetingMaterialsAll =
-    pathname === "/meeting-materials" && activeMeetingTab === "materials" && !selectedClientId;
+    pathname === "/meeting-materials" &&
+    activeMeetingTab === "materials" &&
+    !selectedClientId &&
+    profile.app_role !== "admin";
   const restrictClientReportsAll = isClientWritePage && !selectedDepartmentId;
   const restrictDepartmentReportsAll = isDepartmentReportPage && !selectedDepartmentId;
   const preferredDepartmentId = pickDefaultDepartmentId(activeOptions.departments, profile.app_role);
@@ -338,15 +341,16 @@ function HeaderScopeFilter({
   }
 
   return (
-    <div className="hidden items-center gap-2 rounded-full border border-[#dbe8fb] bg-white/90 px-2 py-1.5 shadow-[0_12px_26px_rgba(16,34,61,0.06)] xl:flex">
-      <label className="flex items-center gap-1.5 rounded-full bg-[#f5f9ff] px-2 py-1 text-xs font-black text-slate-500">
-        <Building2 className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
+    <div className="hidden items-center gap-2.5 xl:flex">
+      <label className="filter-pill cursor-pointer">
+        <Building2 className="h-4 w-4 text-[#007050]" aria-hidden="true" />
+        <span className="cap">부서</span>
         <span className="sr-only">부서 필터</span>
         <select
           value={effectiveDepartmentId}
           onChange={(event) => handleDepartmentChange(event.target.value)}
           disabled={isPending || isLoadingOptions}
-          className="h-8 w-36 bg-transparent text-sm font-black text-[#10223d] outline-none"
+          className="h-6 w-32 cursor-pointer appearance-none bg-transparent text-sm font-black text-[#012241] outline-none"
           aria-label="부서 필터"
         >
           {isLoadingOptions ? <option value="">부서 불러오는 중</option> : null}
@@ -360,14 +364,15 @@ function HeaderScopeFilter({
           ))}
         </select>
       </label>
-      <label className="flex items-center gap-1.5 rounded-full bg-[#f5f9ff] px-2 py-1 text-xs font-black text-slate-500">
-        <PackageSearch className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
+      <label className="filter-pill cursor-pointer">
+        <PackageSearch className="h-4 w-4 text-[#007050]" aria-hidden="true" />
+        <span className="cap">화주</span>
         <span className="sr-only">화주 필터</span>
         <select
           value={effectiveClientId}
           onChange={(event) => updateFilter(effectiveDepartmentId, event.target.value)}
           disabled={isPending || isLoadingOptions}
-          className="h-8 w-36 bg-transparent text-sm font-black text-[#10223d] outline-none"
+          className="h-6 w-32 cursor-pointer appearance-none bg-transparent text-sm font-black text-[#012241] outline-none"
           aria-label="화주 필터"
         >
           {isLoadingOptions ? <option value="">화주 불러오는 중</option> : null}
@@ -382,7 +387,7 @@ function HeaderScopeFilter({
         </select>
       </label>
       {isMeetingMaterialsTab ? (
-        <div className="flex items-center gap-1 border-l border-[#dbe8fb] pl-2" aria-label="부서 자료 이동">
+        <div className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1.5 shadow-[0_8px_20px_rgba(1,34,65,0.06)]" aria-label="부서 자료 이동">
           <button
             type="button"
             onClick={() => (previousDepartment ? handleDepartmentPager(previousDepartment.id) : undefined)}
@@ -390,7 +395,7 @@ function HeaderScopeFilter({
             onMouseEnter={() => (adjacentDepartmentHrefs.previous ? router.prefetch(adjacentDepartmentHrefs.previous) : undefined)}
             onTouchStart={() => (adjacentDepartmentHrefs.previous ? router.prefetch(adjacentDepartmentHrefs.previous) : undefined)}
             disabled={!previousDepartment || isPending || isLoadingOptions}
-            className="focus-ring flex h-9 w-9 items-center justify-center rounded-full border border-[#dbe8fb] bg-white text-[#075be8] shadow-[0_8px_18px_rgba(7,91,232,0.08)] transition hover:-translate-x-0.5 hover:border-[#9fc2f6] hover:bg-[#eaf3ff] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-x-0"
+            className="focus-ring flex h-8 w-8 items-center justify-center rounded-full bg-[#f1f5f3] text-[#007050] transition hover:-translate-x-0.5 hover:bg-[#e2ebe7] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-x-0"
             aria-label={previousDepartment ? `이전 부서 ${previousDepartment.department_name} 조회` : "이전 부서 없음"}
             title={previousDepartment ? `이전 부서: ${previousDepartment.department_name}` : "이전 부서 없음"}
           >
@@ -405,7 +410,7 @@ function HeaderScopeFilter({
             onMouseEnter={() => (adjacentDepartmentHrefs.next ? router.prefetch(adjacentDepartmentHrefs.next) : undefined)}
             onTouchStart={() => (adjacentDepartmentHrefs.next ? router.prefetch(adjacentDepartmentHrefs.next) : undefined)}
             disabled={!nextDepartment || isPending || isLoadingOptions}
-            className="focus-ring flex h-9 w-9 items-center justify-center rounded-full border border-[#dbe8fb] bg-white text-[#075be8] shadow-[0_8px_18px_rgba(7,91,232,0.08)] transition hover:translate-x-0.5 hover:border-[#9fc2f6] hover:bg-[#eaf3ff] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-x-0"
+            className="focus-ring flex h-8 w-8 items-center justify-center rounded-full bg-[#f1f5f3] text-[#007050] transition hover:translate-x-0.5 hover:bg-[#e2ebe7] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-x-0"
             aria-label={nextDepartment ? `다음 부서 ${nextDepartment.department_name} 조회` : "다음 부서 없음"}
             title={nextDepartment ? `다음 부서: ${nextDepartment.department_name}` : "다음 부서 없음"}
           >
@@ -435,31 +440,29 @@ export function Header({
   const shouldShowFilters = filteredRoutes.has(pathname) && (pathname !== "/meeting-materials" || canViewMeetingMaterials(profile));
 
   return (
-    <header className="sticky top-0 z-10 px-4 py-4 backdrop-blur-xl lg:px-6">
-      <div className="grid min-h-16 gap-3 rounded-[1.5rem] border border-white/80 bg-white/80 px-5 py-3 shadow-[0_18px_45px_rgba(16,34,61,0.08)] backdrop-blur-2xl md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-        <div className="flex min-w-0 items-center gap-4">
+    <header className="sticky top-0 z-10 bg-[#f3ece1]/85 px-4 pb-3 pt-5 backdrop-blur-xl lg:px-10 lg:pt-7">
+      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+        <div className="flex min-w-0 items-start gap-3">
           <button
             type="button"
             onClick={onToggleSidebar}
-            className="focus-ring hidden h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#dbe8fb] bg-white/90 text-[#075be8] shadow-[0_12px_26px_rgba(16,34,61,0.06)] transition hover:-translate-y-0.5 hover:bg-[#eaf3ff] lg:flex"
+            className="focus-ring mt-1 hidden h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#007050] shadow-[0_8px_20px_rgba(1,34,65,0.06)] transition hover:-translate-y-0.5 hover:bg-[#f4ede2] lg:flex"
             aria-label={isSidebarHidden ? "왼쪽 메뉴 펼치기" : "왼쪽 메뉴 숨기기"}
             title={isSidebarHidden ? "왼쪽 메뉴 펼치기" : "왼쪽 메뉴 숨기기"}
           >
             <PanelLeftOpen className={`h-5 w-5 transition-transform ${isSidebarHidden ? "" : "rotate-180"}`} aria-hidden="true" />
           </button>
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#075be8] text-white shadow-[0_16px_30px_rgba(7,91,232,0.25)]">
-            <ShieldCheck className="h-5 w-5" aria-hidden="true" />
-          </div>
-          <div>
-            <h1 className="truncate text-xl font-black tracking-normal text-[#10223d]">{meta.title}</h1>
-            <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">{meta.description}</p>
+          <div className="min-w-0">
+            <p className="u-eyebrow">Weekly Operations</p>
+            <h1 className="u-page-title mt-1 truncate !text-[1.375rem]">{meta.title}</h1>
+            <p className="mt-1 truncate text-xs font-semibold text-[#5b6b7c]">{meta.description}</p>
           </div>
         </div>
-        <div className="flex items-center justify-between gap-4 md:justify-end">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 md:justify-end">
           {shouldShowFilters ? <HeaderScopeFilter pathname={pathname} profile={profile} options={filterOptions} /> : null}
-          <div className="min-w-0 rounded-full border border-[#dbe8fb] bg-white/90 px-4 py-2 text-right shadow-[0_12px_26px_rgba(16,34,61,0.06)]">
-            <p className="truncate text-sm font-black text-[#10223d]">{profile.full_name}</p>
-            <p className="truncate text-xs font-semibold text-slate-500">
+          <div className="min-w-0 rounded-full bg-white px-4 py-2 text-right shadow-[0_8px_20px_rgba(1,34,65,0.06)]">
+            <p className="truncate text-sm font-black text-[#012241]">{profile.full_name}</p>
+            <p className="truncate text-xs font-semibold text-[#5b6b7c]">
               {roleLabel(profile.app_role)} · {profile.department_name ?? "부서 미지정"}
             </p>
           </div>

@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import dynamic from "next/dynamic";
+import { CheckCircle2, ClipboardList, Percent } from "lucide-react";
 import type { VolumeChartRow } from "@/components/charts/VolumeComparisonChart";
 import { TableShell } from "@/components/common/TableShell";
 import { MeetingMaterialsWorkspace } from "@/components/reports/MeetingMaterialsWorkspace";
@@ -10,8 +11,10 @@ import type {
 import type { MeetingOpenRequestItem, MeetingPriorityItem } from "@/components/reports/MeetingPriorityPanel";
 import { MeetingMaterialsWeekFilter } from "@/components/reports/MeetingMaterialsWeekFilter";
 import { DepartmentCommonSearchToolbar } from "@/components/reports/DepartmentCommonSearchToolbar";
+import { DepartmentMemoButton } from "@/components/reports/DepartmentMemoButton";
+import { MemoStatusButton } from "@/components/reports/MemoStatusButton";
 import type { DepartmentOpenRequestItem } from "@/components/reports/DepartmentOpenRequestBoard";
-import { pickDefaultDepartmentId } from "@/lib/auth/default-scope";
+import { loadWeekMemosAction, type WeekMemoItem } from "@/actions/reports";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { canViewMeetingMaterials, isAdmin, type ProfileSummary } from "@/lib/auth/permissions";
 import {
@@ -314,7 +317,7 @@ function MeetingMaterialsAccessDenied() {
   return (
     <section className="sketch-panel p-6">
       <div className="mx-auto max-w-2xl text-center">
-        <p className="text-lg font-black text-[#10223d]">회의자료 접근 권한이 없습니다.</p>
+        <p className="text-lg font-black text-[#012241]">회의자료 접근 권한이 없습니다.</p>
         <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
           회의자료는 관리자, 부서장, 매니저 권한 사용자만 조회할 수 있습니다.
         </p>
@@ -625,7 +628,10 @@ function filterMeetingMaterialSearch(
   filters: ClientReportSearchFilters,
   categoryIdByName: Map<string, string>
 ): MeetingReportRow | null {
-  const matchingItems = filterClientReportSearchItems(
+  // 빠른 검색어(query)는 회의자료 탭에서 제목·내용·업무구분(카테고리명)을 모두 대상으로 한다.
+  // 나머지 상세 필터(기간·업무구분 선택·중요도·상세검색)는 공유 라이브러리에 그대로 위임한다.
+  const { query, ...detailFilters } = filters;
+  const baseItems = filterClientReportSearchItems(
     {
       week_start_date: weekStartDate,
       weekly_client_report_items: report.weekly_client_report_items.map((item) => ({
@@ -637,8 +643,19 @@ function filterMeetingMaterialSearch(
         content: item.content
       }))
     },
-    filters
+    detailFilters
   );
+  const term = query?.trim().toLowerCase();
+  const matchingItems = term
+    ? baseItems.filter((item) => {
+        const source = item.source;
+        return (
+          (source.title ?? "").toLowerCase().includes(term) ||
+          (source.content ?? "").toLowerCase().includes(term) ||
+          (source.work_categories?.category_name ?? "").toLowerCase().includes(term)
+        );
+      })
+    : baseItems;
   return matchingItems.length > 0
     ? { ...report, weekly_client_report_items: matchingItems.map((item) => item.source) }
     : null;
@@ -646,18 +663,18 @@ function filterMeetingMaterialSearch(
 
 function compactDepartmentStatus(status: DepartmentSubmissionStatus | null) {
   if (!status) {
-    return { label: "미작성", className: "border-slate-200 bg-slate-50 text-slate-600" };
+    return { label: "미작성", dotClassName: "bg-slate-300", textClassName: "text-slate-500" };
   }
   if (status === "draft") {
-    return { label: "작성 중", className: "border-slate-200 bg-slate-50 text-slate-700" };
+    return { label: "작성 중", dotClassName: "u-dot-amber", textClassName: "text-[#012241]" };
   }
   if (status === "submitted_to_division") {
-    return { label: "검토", className: "border-blue-200 bg-blue-50 text-blue-700" };
+    return { label: "검토", dotClassName: "u-dot-blue", textClassName: "text-[#012241]" };
   }
   if (status === "division_approved") {
-    return { label: "승인", className: "border-emerald-200 bg-emerald-50 text-emerald-700" };
+    return { label: "승인", dotClassName: "u-dot-green", textClassName: "text-[#007050]" };
   }
-  return { label: "반려", className: "border-rose-200 bg-rose-50 text-rose-700" };
+  return { label: "반려", dotClassName: "u-dot-pink", textClassName: "text-[#c2566d]" };
 }
 
 export default async function MeetingMaterialsPage({
@@ -715,6 +732,9 @@ async function MeetingMaterialsContent({
 }) {
   const searchFilters = parseClientReportSearchFilters(params);
   const hasSearchFilters = hasClientReportSearchFilters(searchFilters);
+  // 전체부서(admin·부서/화주 미선택 materials): 회의자료 목록은 스킵하고 확인요청만 전체 부서 기준으로 노출한다.
+  const isMaterialsAllDept =
+    activeTab === "materials" && isAdmin(profile) && !params.department_id && !params.client_id;
   const supabase = await createSupabaseServerClient();
   let departments: DepartmentRow[] = [];
   let clients: ClientSummaryRow[] = [];
@@ -770,9 +790,11 @@ async function MeetingMaterialsContent({
       workCategories = rpcData.workCategories;
       volumeTrendReports = rpcData.volumeTrendReports;
       previousVolumeTrendReports = rpcData.previousVolumeTrendReports;
+      // 전체부서 materials면 RPC가 강제한 기본 부서 스코프를 무시하고 확인요청을 전체 부서 기준으로 조회한다.
+      const requestDepartmentFilter = isMaterialsAllDept ? null : rpcData.resolvedDepartmentId;
       let openRequestRows = rpcData.openRequests;
       if ((activeTab === "collection" || activeTab === "materials") && compatibilityRequestData) {
-        const departmentFilter = rpcData.resolvedDepartmentId;
+        const departmentFilter = requestDepartmentFilter;
         openRequestRows = compatibilityRequestData.filter((request) => {
           if (request.target_type === "client_item") {
             const report = request.weekly_client_report_items?.weekly_client_reports;
@@ -790,20 +812,33 @@ async function MeetingMaterialsContent({
           );
         });
       }
+      const seenOpenRequestIds = new Set<string>();
+      openRequestRows = openRequestRows.filter((request) => {
+        if (seenOpenRequestIds.has(request.id)) {
+          return false;
+        }
+        seenOpenRequestIds.add(request.id);
+        return true;
+      });
       if (activeTab === "collection" || activeTab === "materials") {
         confirmationRequestItems = makeConfirmationRequestItems(
           openRequestRows as unknown as import("@/lib/reports/meeting-materials-tab-data").OpenRequestQueryRow[],
           workCategories,
-          rpcData.resolvedDepartmentId ?? undefined,
+          requestDepartmentFilter ?? undefined,
           params.client_id
         );
         if (activeTab === "collection") {
           openRequestItems = makePriorityOpenRequestItems(confirmationRequestItems);
         }
       }
-      commonReports = activeTab === "materials" ? makeCommonMeetingRows(submissions, departments, workCategories) : [];
-      if (activeTab === "materials") {
-        commonReports = attachCommonMaterialRequests(commonReports, rpcData.commonMaterialRequests);
+      if (isMaterialsAllDept) {
+        reports = [];
+        commonReports = [];
+      } else {
+        commonReports = activeTab === "materials" ? makeCommonMeetingRows(submissions, departments, workCategories) : [];
+        if (activeTab === "materials") {
+          commonReports = attachCommonMaterialRequests(commonReports, rpcData.commonMaterialRequests);
+        }
       }
     } else {
       console.warn("[meeting-materials] Falling back to legacy queries", rpcError?.message ?? "invalid RPC payload");
@@ -813,30 +848,21 @@ async function MeetingMaterialsContent({
       } catch {
         dataClient = supabase;
       }
-    let materialsDepartmentLimit: string | undefined;
-    let prefetchedDepartments: DepartmentRow[] | null = null;
-    if (isAdmin(profile) && activeTab === "materials" && !params.department_id && !params.client_id) {
-      if (!prefetchedDepartments) {
-        const { data: defaultDepartments } = await dataClient
-          .from("departments")
-          .select("id,department_name")
-          .eq("is_active", true)
-          .order("sort_order", { ascending: true })
-          .order("department_name", { ascending: true });
-        prefetchedDepartments = (defaultDepartments ?? []) as DepartmentRow[];
-      }
-      materialsDepartmentLimit = pickDefaultDepartmentId(prefetchedDepartments, profile.app_role) || undefined;
-    }
-    const departmentFilter = isAdmin(profile) ? params.department_id ?? materialsDepartmentLimit : profile.department_id;
+    // 전체부서 materials는 기본 부서를 강제하지 않고 부서 미선택(null)을 유지한다.
+    const departmentFilter = isAdmin(profile) ? params.department_id ?? undefined : profile.department_id;
+    const skipMaterialsList = isMaterialsAllDept;
     const needsDepartments =
       activeTab === "collection" ||
       activeTab === "volumes" ||
       activeTab === "holiday" ||
-      activeTab === "facility" ||
-      Boolean(prefetchedDepartments);
+      activeTab === "facility";
     const needsClients = activeTab === "collection";
-    const needsReports = activeTab === "collection" || activeTab === "materials";
-    const needsSubmissions = activeTab === "collection" || activeTab === "materials" || activeTab === "holiday" || activeTab === "facility";
+    const needsReports = activeTab === "collection" || (activeTab === "materials" && !skipMaterialsList);
+    const needsSubmissions =
+      activeTab === "collection" ||
+      (activeTab === "materials" && !skipMaterialsList) ||
+      activeTab === "holiday" ||
+      activeTab === "facility";
     const contentSectionFilter = getDepartmentContentSection(activeTab);
     const previousReportMonth = getPreviousReportMonth(selectedWeek.year, selectedWeek.month);
 
@@ -852,13 +878,7 @@ async function MeetingMaterialsContent({
       previousVolumeTrendResult
     ] = await Promise.all([
       needsDepartments
-        ? prefetchedDepartments
-          ? Promise.resolve({
-              data: departmentFilter
-                ? prefetchedDepartments.filter((department) => department.id === departmentFilter)
-                : prefetchedDepartments
-            })
-          : (() => {
+        ? (() => {
             let query = dataClient
               .from("departments")
               .select("id,department_name")
@@ -965,7 +985,7 @@ async function MeetingMaterialsContent({
       activeTab === "materials" || activeTab === "collection"
         ? dataClient.from("work_categories").select("id,category_name").eq("is_active", true).order("sort_order", { ascending: true })
         : Promise.resolve({ data: [] }),
-      activeTab === "materials"
+      activeTab === "materials" && !skipMaterialsList
         ? (() => {
             let query = dataClient
               .from("weekly_report_item_requests")
@@ -1075,6 +1095,30 @@ async function MeetingMaterialsContent({
       : materialRows;
   const { clientCountMap, writtenClientMap } =
     activeTab === "collection" ? countByDepartment(clients, reports) : { clientCountMap: new Map(), writtenClientMap: new Map() };
+
+  const memoDepartmentId = activeTab === "materials" && isAdmin(profile) ? params.department_id ?? null : null;
+  let initialMemoContent = "";
+  if (memoDepartmentId && supabase) {
+    const { data: memoRow } = await supabase
+      .from("department_meeting_memos")
+      .select("content")
+      .eq("department_id", memoDepartmentId)
+      .eq("week_start_date", selectedWeek.weekStartDate)
+      .maybeSingle();
+    initialMemoContent = memoRow?.content ?? "";
+  }
+  const memoDepartmentName = memoDepartmentId
+    ? departments.find((department) => department.id === memoDepartmentId)?.department_name ?? null
+    : null;
+
+  let weekMemoItems: WeekMemoItem[] = [];
+  if (activeTab === "materials" && isAdmin(profile)) {
+    const weekMemos = await loadWeekMemosAction({ week_start_date: selectedWeek.weekStartDate });
+    if (weekMemos.ok) {
+      weekMemoItems = weekMemos.items;
+    }
+  }
+
   return (
     <>
       {activeTab === "collection" ? (
@@ -1089,8 +1133,26 @@ async function MeetingMaterialsContent({
       ) : null}
       {activeTab === "materials" ? (
         <div className="space-y-2">
-          <div className="rounded-md border border-[#d9e7f7] bg-white/90 px-2 py-0.5 shadow-[0_10px_26px_rgba(16,34,61,0.05)]">
-            <DepartmentCommonSearchToolbar
+          <div className="flex items-stretch gap-2">
+            {isAdmin(profile) ? (
+              <MemoStatusButton
+                weekStartDate={selectedWeek.weekStartDate}
+                canView={isAdmin(profile)}
+                initialItems={weekMemoItems}
+                initialCount={weekMemoItems.length}
+              />
+            ) : null}
+            {isAdmin(profile) ? (
+              <DepartmentMemoButton
+                departmentId={memoDepartmentId}
+                weekStartDate={selectedWeek.weekStartDate}
+                initialContent={initialMemoContent}
+                canEdit={isAdmin(profile)}
+                departmentName={memoDepartmentName}
+              />
+            ) : null}
+            <div className="min-w-0 flex-1 rounded-md border border-[#e7ddcd] bg-white/90 px-2 py-0.5 shadow-[0_10px_26px_rgba(16,34,61,0.05)]">
+              <DepartmentCommonSearchToolbar
               key={Object.values(searchFilters).join("|")}
               categories={workCategories}
               filters={searchFilters}
@@ -1100,6 +1162,7 @@ async function MeetingMaterialsContent({
               showQuickReset
               inlineQuickSearch
             />
+            </div>
           </div>
           <DepartmentOpenRequestBoard
             requests={confirmationRequestItems}
@@ -1109,13 +1172,19 @@ async function MeetingMaterialsContent({
             emptyMessage="진행 중인 확인요청이 없습니다."
             compact
           />
-          <MeetingMaterialsTable
-            key={`materials-${selectedWeek.weekStartDate}-${params.department_id ?? "all"}-${params.client_id ?? "all"}-${Object.values(searchFilters).join("-")}`}
-            reports={filteredMaterialRows}
-            currentUserId={profile?.id ?? ""}
-            canManageAllRequests={isAdmin(profile)}
-            emptyTitle={hasSearchFilters ? "검색 조건에 맞는 회의자료가 없습니다." : "선택한 주차의 회의자료가 없습니다."}
-          />
+          {isMaterialsAllDept ? (
+            <section className="sketch-panel flex min-h-44 items-center justify-center p-6 text-center">
+              <p className="text-sm font-black text-slate-500">부서를 선택하면 회의자료가 표시됩니다.</p>
+            </section>
+          ) : (
+            <MeetingMaterialsTable
+              key={`materials-${selectedWeek.weekStartDate}-${params.department_id ?? "all"}-${params.client_id ?? "all"}-${Object.values(searchFilters).join("-")}`}
+              reports={filteredMaterialRows}
+              currentUserId={profile?.id ?? ""}
+              canManageAllRequests={isAdmin(profile)}
+              emptyTitle={hasSearchFilters ? "검색 조건에 맞는 회의자료가 없습니다." : "선택한 주차의 회의자료가 없습니다."}
+            />
+          )}
         </div>
       ) : null}
       {activeTab === "volumes" ? <VolumesView chartRows={chartRows} departmentRows={departmentVolumeRows} /> : null}
@@ -1146,97 +1215,144 @@ function CollectionView({
   const completedClientCount = departments.reduce((sum, department) => sum + (writtenClientMap.get(department.id)?.size ?? 0), 0);
   const completionRate = totalClientCount > 0 ? Math.round((completedClientCount / totalClientCount) * 100) : 0;
   return (
-    <div className="grid w-full gap-3 xl:grid-cols-2">
-      <MeetingPriorityPanel items={priorityItems} openRequests={openRequestItems} />
-      <section className="sketch-panel p-3">
-        <div className="mb-3 flex min-h-[54px] items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-black text-[#10223d]">부서별 작성 모니터링</p>
-            <p className="text-xs font-bold text-slate-500">작성완료 여부를 빠르게 확인합니다.</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-[#d9e7f7] bg-[#f8fbff] px-2.5 py-1.5 shadow-[0_10px_22px_rgba(16,34,61,0.04)]">
-            <div className="w-24 shrink-0">
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <span className="text-[10px] font-black text-slate-500">작성진행률</span>
-                <span className="text-[11px] font-black text-[#075be8]">{completionRate}%</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-[#e8f1ff]">
-                <span className="block h-full rounded-full bg-gradient-to-r from-[#0ea5e9] to-[#075be8]" style={{ width: `${completionRate}%` }} />
-              </div>
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <article className="kpi-card p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[11px] font-black text-slate-500">총건수</p>
+              <p className="mt-1.5 text-3xl leading-none tabular-nums text-[#012241]" style={{ fontWeight: 850 }}>{totalClientCount}</p>
             </div>
-            <div className="grid grid-cols-3 gap-1 text-center">
-              <div className="min-w-[52px] rounded-xl bg-white px-1.5 py-1">
-                <span className="block text-[10px] font-black text-slate-400">총건수</span>
-                <span className="block text-xs font-black text-[#10223d]">{totalClientCount}</span>
+            <span className="icon-badge icon-badge-blue" aria-hidden="true">
+              <ClipboardList className="h-5 w-5" />
+            </span>
+          </div>
+        </article>
+        <article className="kpi-card p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[11px] font-black text-slate-500">완료건수</p>
+              <p className="mt-1.5 text-3xl leading-none tabular-nums text-[#007050]" style={{ fontWeight: 850 }}>
+                {completedClientCount}
+                <span className="ml-1 text-[11px] font-bold text-slate-400">/ {totalClientCount}</span>
+              </p>
+            </div>
+            <span className="icon-badge icon-badge-green" aria-hidden="true">
+              <CheckCircle2 className="h-5 w-5" />
+            </span>
+          </div>
+          <div className="mini-bar mt-2.5">
+            <i style={{ width: `${completionRate}%` }} />
+          </div>
+        </article>
+        <article className="kpi-card p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[11px] font-black text-slate-500">완료율</p>
+              <p className="mt-1.5 text-3xl leading-none tabular-nums text-[#012241]" style={{ fontWeight: 850 }}>
+                {completionRate}
+                <span className="ml-0.5 text-[11px] font-bold text-slate-400">%</span>
+              </p>
+            </div>
+            <span className="icon-badge icon-badge-amber" aria-hidden="true">
+              <Percent className="h-5 w-5" />
+            </span>
+          </div>
+          <div className="mini-bar mt-2.5">
+            <i style={{ width: `${completionRate}%` }} />
+          </div>
+        </article>
+      </div>
+      <div className="grid w-full gap-3 xl:grid-cols-2">
+        <MeetingPriorityPanel items={priorityItems} openRequests={openRequestItems} />
+        <section className="kpi-card p-3">
+          <div className="mb-3 flex min-h-[38px] flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-black text-[#012241]">부서별 작성 모니터링</p>
               </div>
-              <div className="min-w-[58px] rounded-xl bg-white px-1.5 py-1">
-                <span className="block text-[10px] font-black text-slate-400">완료건수</span>
-                <span className="block text-xs font-black text-[#075be8]">{completedClientCount}</span>
-              </div>
-              <div className="min-w-[52px] rounded-xl bg-white px-1.5 py-1">
-                <span className="block text-[10px] font-black text-slate-400">완료율</span>
-                <span className="block text-xs font-black text-emerald-600">{completionRate}%</span>
-              </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-black text-slate-500">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="u-dot u-dot-green" aria-hidden="true" />
+                승인
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="u-dot u-dot-blue" aria-hidden="true" />
+                검토
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="u-dot u-dot-amber" aria-hidden="true" />
+                작성 중
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="u-dot u-dot-pink" aria-hidden="true" />
+                반려
+              </span>
             </div>
           </div>
-        </div>
-        <TableShell>
-          <table className="table-sticky w-full table-fixed text-left text-[13px]">
-            <colgroup>
-              <col className="w-[34%]" />
-              <col className="w-[15%]" />
-              <col className="w-[15%]" />
-              <col className="w-[18%]" />
-              <col className="w-[18%]" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th className="px-2 py-2.5">부서</th>
-                <th className="px-2 py-2.5">화주</th>
-                <th className="px-2 py-2.5">완료율</th>
-                <th className="px-2 py-2.5">상태</th>
-                <th className="px-2 py-2.5">확정일</th>
-              </tr>
-            </thead>
-            <tbody>
-              {departments.map((department) => {
-                const totalClients = clientCountMap.get(department.id) ?? 0;
-                const writtenClients = writtenClientMap.get(department.id)?.size ?? 0;
-                const departmentCompletionRate = totalClients > 0 ? Math.round((writtenClients / totalClients) * 100) : 0;
-                const submission = submissions.find((row) => row.department_id === department.id);
-                const status = compactDepartmentStatus(submission?.status ?? null);
-                return (
-                  <tr key={department.id} className="border-t border-slate-100">
-                    <td className="truncate px-2 py-1.5 text-[12px] font-black text-[#10223d]" title={department.department_name}>
-                      {department.department_name}
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <span className="font-black text-[#075be8]">{writtenClients}</span>
-                      <span className="text-slate-400"> / {totalClients}</span>
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <span
-                        className={cn(
-                          "font-black",
-                          departmentCompletionRate === 100 ? "text-emerald-600" : "text-slate-600"
-                        )}
-                      >
-                        {departmentCompletionRate}%
-                      </span>
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <span className={cn("inline-flex rounded-full border px-2 py-0.5 font-black", status.className)}>
-                        {status.label}
-                      </span>
-                    </td>
-                    <td className="truncate px-2 py-1.5">{formatCompactDate(submission?.finalized_at)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </TableShell>
-      </section>
+          <TableShell>
+            <table className="table-sticky w-full table-fixed text-left text-sm">
+              <colgroup>
+                <col className="w-[28%]" />
+                <col className="w-[14%]" />
+                <col className="w-[24%]" />
+                <col className="w-[17%]" />
+                <col className="w-[17%]" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="px-2 py-2.5">부서</th>
+                  <th className="px-2 py-2.5">화주</th>
+                  <th className="px-2 py-2.5">완료율</th>
+                  <th className="px-2 py-2.5">상태</th>
+                  <th className="px-2 py-2.5">확정일</th>
+                </tr>
+              </thead>
+              <tbody>
+                {departments.map((department) => {
+                  const totalClients = clientCountMap.get(department.id) ?? 0;
+                  const writtenClients = writtenClientMap.get(department.id)?.size ?? 0;
+                  const departmentCompletionRate = totalClients > 0 ? Math.round((writtenClients / totalClients) * 100) : 0;
+                  const submission = submissions.find((row) => row.department_id === department.id);
+                  const status = compactDepartmentStatus(submission?.status ?? null);
+                  return (
+                    <tr key={department.id} className="border-t border-slate-100">
+                      <td className="truncate px-2 py-1.5 text-sm font-black text-[#012241]" title={department.department_name}>
+                        {department.department_name}
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <span className="font-black text-[#007050]">{writtenClients}</span>
+                        <span className="text-slate-400"> / {totalClients}</span>
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <span className="flex items-center gap-2">
+                          <span className="mini-bar block min-w-8 flex-1" aria-hidden="true">
+                            <i style={{ width: `${departmentCompletionRate}%` }} />
+                          </span>
+                          <span
+                            className={cn(
+                              "shrink-0 font-black tabular-nums",
+                              departmentCompletionRate === 100 ? "text-emerald-600" : "text-slate-600"
+                            )}
+                          >
+                            {departmentCompletionRate}%
+                          </span>
+                        </span>
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <span className={cn("inline-flex items-center gap-1.5 font-black", status.textClassName)}>
+                          <span className={cn("u-dot", status.dotClassName)} aria-hidden="true" />
+                          {status.label}
+                        </span>
+                      </td>
+                      <td className="truncate px-2 py-1.5">{formatCompactDate(submission?.finalized_at)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </TableShell>
+        </section>
+      </div>
     </div>
   );
 }
@@ -1279,17 +1395,17 @@ function VolumesView({
               <tbody>
                 {weekRows.map((row) => (
                   <tr key={row.name} className="border-t border-slate-100">
-                    <td className="px-3 py-2 font-black text-[#10223d]">{row.name}</td>
+                    <td className="px-3 py-2 font-black text-[#012241]">{row.name}</td>
                     <td className="px-2 py-2 text-right font-bold">{row.inbound.toLocaleString("ko-KR")}</td>
                     <td className="px-2 py-2 text-right font-bold">{row.outbound.toLocaleString("ko-KR")}</td>
-                    <td className="px-3 py-2 text-right font-black text-[#10223d]">{row.total.toLocaleString("ko-KR")}</td>
+                    <td className="px-3 py-2 text-right font-black text-[#012241]">{row.total.toLocaleString("ko-KR")}</td>
                   </tr>
                 ))}
-                <tr className="border-t border-[#cfddec] bg-[#f5f9ff]">
-                  <td className="px-3 py-2.5 font-black text-[#10223d]">합계</td>
+                <tr className="border-t border-[#ddd2bf] bg-[#faf6ef]">
+                  <td className="px-3 py-2.5 font-black text-[#012241]">합계</td>
                   <td className="px-2 py-2.5 text-right font-black text-emerald-700">{monthlyTotal.inbound.toLocaleString("ko-KR")}</td>
                   <td className="px-2 py-2.5 text-right font-black text-blue-700">{monthlyTotal.outbound.toLocaleString("ko-KR")}</td>
-                  <td className="px-3 py-2.5 text-right font-black text-[#10223d]">{monthlyTotal.total.toLocaleString("ko-KR")}</td>
+                  <td className="px-3 py-2.5 text-right font-black text-[#012241]">{monthlyTotal.total.toLocaleString("ko-KR")}</td>
                 </tr>
               </tbody>
             </table>

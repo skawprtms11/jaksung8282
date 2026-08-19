@@ -46,10 +46,10 @@ const facilityStatusOptions: { value: FacilityConstructionStatus; label: string 
   { value: "completed", label: "완료" }
 ];
 
-const facilityStatusClassNames: Record<FacilityConstructionStatus, string> = {
-  planned: "border-slate-200 bg-slate-50 text-slate-600",
-  in_progress: "border-blue-200 bg-blue-50 text-blue-700",
-  completed: "border-emerald-200 bg-emerald-50 text-emerald-700"
+const facilityStatusDotClassNames: Record<FacilityConstructionStatus, string> = {
+  planned: "u-dot-amber",
+  in_progress: "u-dot-blue",
+  completed: "u-dot-green"
 };
 
 function normalizeFacilityStatus(value: unknown): FacilityConstructionStatus {
@@ -137,7 +137,7 @@ export function MeetingFacilityConstructionBoard({
     <section className="sketch-panel p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#e8f1ff] text-[#075be8]">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#e6f1ec] text-[#007050]">
             <Hammer className="h-5 w-5" aria-hidden="true" />
           </span>
           <div>
@@ -148,15 +148,15 @@ export function MeetingFacilityConstructionBoard({
         <span className="section-chip">총 {filteredRows.length}건</span>
       </div>
 
-      <div className="rounded-2xl border border-[#d9e7f7] bg-white/88 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e5eef9] px-3 py-3">
+      <div className="rounded-2xl border border-[#e7ddcd] bg-white/88 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ece3d4] px-3 py-3">
           <div className="flex flex-wrap items-center gap-2">
             <label className="section-chip cursor-pointer">
               <input
                 type="checkbox"
                 checked={allStatusesSelected}
                 onChange={() => setSelectedStatuses(allStatusesSelected ? [] : facilityStatusOptions.map((option) => option.value))}
-                className="h-4 w-4 accent-[#075be8]"
+                className="h-4 w-4 accent-[#007050]"
               />
               전체
             </label>
@@ -166,7 +166,7 @@ export function MeetingFacilityConstructionBoard({
                   type="checkbox"
                   checked={selectedStatuses.includes(option.value)}
                   onChange={() => toggleStatus(option.value)}
-                  className="h-4 w-4 accent-[#075be8]"
+                  className="h-4 w-4 accent-[#007050]"
                 />
                 {option.label}
               </label>
@@ -177,7 +177,7 @@ export function MeetingFacilityConstructionBoard({
             <input
               value={searchKeyword}
               onChange={(event) => setSearchKeyword(event.target.value)}
-              className="mt-1 h-10 w-full rounded-full border border-[#d7e4f6] bg-[#f5f9ff] px-4 text-sm font-bold text-[#10223d] outline-none"
+              className="mt-1 h-10 w-full rounded-full border border-[#e4dac9] bg-[#faf6ef] px-4 text-sm font-bold text-[#012241] outline-none"
               placeholder="공사명, 공사내용, 진행업체"
             />
           </label>
@@ -198,15 +198,15 @@ export function MeetingFacilityConstructionBoard({
             </colgroup>
             <thead>
               <tr>
-                <th className="px-2 py-2.5">부서</th>
-                <th className="px-2 py-2.5">시작일</th>
-                <th className="px-2 py-2.5">완료일</th>
-                <th className="px-2 py-2.5">공사명(전자결제 제목)</th>
-                <th className="px-2 py-2.5">공사내용</th>
-                <th className="px-2 py-2.5">진행업체</th>
-                <th className="px-2 py-2.5">공사금액</th>
-                <th className="px-2 py-2.5">상태</th>
-                <th className="px-2 py-2.5">비고</th>
+                <th className="px-2 py-2.5 font-black !text-slate-500">부서</th>
+                <th className="px-2 py-2.5 font-black !text-slate-500">시작일</th>
+                <th className="px-2 py-2.5 font-black !text-slate-500">완료일</th>
+                <th className="px-2 py-2.5 font-black !text-slate-500">공사명(전자결제 제목)</th>
+                <th className="px-2 py-2.5 font-black !text-slate-500">공사내용</th>
+                <th className="px-2 py-2.5 font-black !text-slate-500">진행업체</th>
+                <th className="px-2 py-2.5 font-black !text-slate-500">공사금액</th>
+                <th className="px-2 py-2.5 font-black !text-slate-500">상태</th>
+                <th className="px-2 py-2.5 font-black !text-slate-500">비고</th>
               </tr>
             </thead>
             <tbody>
@@ -225,15 +225,16 @@ export function MeetingFacilityConstructionBoard({
               ) : (
                 filteredRows.map((row) => (
                   <tr key={`${row.department_name}-${row.id}`} className="border-t border-slate-100 align-top">
-                    <td className="break-words px-2 py-2.5 font-black text-[#10223d]">{row.department_name}</td>
+                    <td className="break-words px-2 py-2.5 font-black text-[#012241]">{row.department_name}</td>
                     <td className="break-words px-2 py-2.5">{row.start_date || "-"}</td>
                     <td className="break-words px-2 py-2.5">{row.completion_date || "-"}</td>
-                    <td className="break-words px-2 py-2.5 font-black leading-5 text-[#10223d]">{row.construction_name || "-"}</td>
+                    <td className="break-words px-2 py-2.5 font-black leading-5 text-[#012241]">{row.construction_name || "-"}</td>
                     <td className="whitespace-pre-wrap break-words px-2 py-2.5 leading-5 text-slate-600">{row.construction_content || "-"}</td>
                     <td className="break-words px-2 py-2.5">{row.contractor || "-"}</td>
                     <td className="break-words px-2 py-2.5">{row.construction_amount || "-"}</td>
                     <td className="px-1.5 py-2.5">
-                      <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-black ${facilityStatusClassNames[row.status]}`}>
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-[#012241]">
+                        <span className={`u-dot ${facilityStatusDotClassNames[row.status]}`} aria-hidden="true" />
                         {facilityStatusOptions.find((option) => option.value === row.status)?.label ?? "예정"}
                       </span>
                     </td>
