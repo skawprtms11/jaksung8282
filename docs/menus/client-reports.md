@@ -46,7 +46,7 @@
 2. `ClientReportEditor`: 선택 화주/주차의 금주·차주 항목과 물동량 작성
 3. `ClientReportsTable`: 조회 보고서, 상태, 담당자, 업무 항목, 물동량, 일괄 동작
 4. 항목 작성 팝업: 업무구분, 중요도, 제목, 내용
-5. 물동량 팝업: 유형, 수량, 단위, 사용자 단위, 비고
+5. 물동량 팝업: 유형, 수량, 단위(`EA` 고정 표시, 선택 불가), 비고
 
 선택 화주·주차에 수정 가능한 기존 보고서가 있으면 이어서 작성한다. 검색 중에는 일치한 항목만 표에 표시하고 물동량은 검색 결과에서 숨긴다. 편집 원본은 필터링되지 않은 보고서를 유지해야 한다. 목록이 기간 검색으로 선택 주차를 벗어나도 편집 폼은 선택 주차의 기존 보고서를 그대로 불러온다.
 
@@ -76,7 +76,7 @@
 
 - `volume_type`: 핵심 화면은 `inbound`, `outbound`를 사용하며 enum의 다른 타입도 DB 호환상 존재한다.
 - `quantity`: 0 이상
-- `unit`: `EA`, `BOX`, `CASE`, `PLT`, `case_count`, `TON`, `CBM`, `etc`
+- `unit`: 등록은 `EA` 고정이다. `VOLUME_UNIT` 상수(`src/types/enums.ts`)와 `clientReportSchema`의 `z.literal(VOLUME_UNIT)`가 강제하므로 편집기를 거치지 않는 호출도 `EA` 외 값은 거부된다. DB `volume_unit` enum에는 `BOX`, `CASE`, `PLT`, `case_count`, `TON`, `CBM`, `etc`도 여전히 존재하지만 롤백 대비 호환용일 뿐 신규 등록에는 쓰이지 않는다. 기존 행은 2026-08-19에 전량 `EA`로 재라벨링했고 수량 값은 바꾸지 않았다.
 - `custom_unit`, `note`, `sort_order`
 
 ### 보고서

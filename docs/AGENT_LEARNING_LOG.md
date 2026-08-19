@@ -47,6 +47,14 @@
 **교훈**: `cd "<프로젝트 경로>" &&` 프리픽스 금지. 명령은 bare로 작성하고, 프로젝트 밖 파일은 절대경로 사용. `cd`는 **다른 저장소**로 옮길 때만, 그것도 `&&` 없이 단독 호출로. 일반화하면 — **allowlist를 늘리기 전에 명령 문자열이 기존 패턴과 매칭되는지부터 확인할 것.** 규칙이 부실한 게 아니라 규칙이 안 걸리고 있었음.
 **파일**: `CLAUDE.md` (🚫 No `cd` prefix 절) · `.claude/settings.json` · 메모리 `no-cd-prefix-in-bash.md`
 
+### 2026-08-19 — [부장] 물동량 EA 통일 작업에서 메뉴 문서 갱신 누락
+
+**상황**: 화주자료 물동량을 EA 단위로만 등록하도록 코드·데이터를 수정해 PR #26으로 머지. 이후 대표님이 "메뉴별 md 문서가 제대로 관리되는지" 점검을 지시.
+**실수/오판**: `docs/menus/README.md`의 계약("기능 계약이 바뀌면 코드와 같은 작업에서 해당 메뉴 문서를 갱신한다")을 어기고 문서 없이 코드만 머지. `client-reports.md`는 8종 단위 나열을, `mobile-app.md`는 "단위별로 집계"를 그대로 갖고 있었음. #23에서도 `user-management.md`(사번 규칙)와 `department-reports.md`(fail-closed)가 누락됨.
+**원인**: 부장이 팀 디스패치 없이 직접 처리한 작업이라 doc-sync-team 게이트를 거치지 않았고, 검수 체크리스트에도 문서 대조 항목이 없었음. 팀을 거친 #20·#21은 문서가 함께 갱신된 것과 대조적.
+**교훈**: 직접 처리하는 1인 작업일수록 문서 게이트를 스스로 대신해야 한다. 기능 계약이 바뀌는 커밋은 머지 전에 `docs/menus/README.md`의 공유 코드 표를 열어 영향 문서를 대조할 것. verifier 의뢰서에 "메뉴 문서 동기화 여부" 항목을 상시 포함.
+**파일**: `docs/menus/client-reports.md:49,79` · `docs/menus/mobile-app.md:44` · `docs/menus/user-management.md` · `docs/menus/department-reports.md`
+
 ---
 
 ## 🎯 자주 반복되는 카테고리 (주의 영역)

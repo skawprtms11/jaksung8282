@@ -45,8 +45,8 @@
 
 가입 요청은 `/login`의 가입 기능과 `requestUserRegistrationAction`이 시작한다.
 
-1. 이메일, 8자 이상 비밀번호와 확인, 사번, 성명, 활성 부서를 검증한다.
-2. 같은 이메일 또는 사번의 활성 profile과 pending 요청이 없는지 확인한다.
+1. 이메일, 8자 이상 비밀번호와 확인, 사번, 성명, 활성 부서를 검증한다. 사번은 `employeeNoSchema`(`src/lib/validations/common.ts`)로 영문·숫자·하이픈(`[A-Za-z0-9-]`)만 허용한다. 이 제약은 인증 전 service-role 경로에서 PostgREST 필터 메타문자가 섞여 들어가는 것을 막기 위한 것이며, 가입 요청과 관리자 사용자 등록(`userSchema`) 양쪽에 적용된다.
+2. 같은 이메일 또는 사번의 활성 profile과 pending 요청이 없는지 이메일·사번 컬럼별 개별 조회로 확인한다(`requestUserRegistrationAction`). 과거의 `.or()` 단일 쿼리는 검색어 보간으로 우회될 수 있어 제거했다.
 3. Supabase Admin Auth로 email-confirmed 사용자를 만든다.
 4. 같은 Auth ID로 `app_role = client_owner`, `is_active = false` profile을 upsert한다.
 5. `user_registration_requests`에 `pending` 행을 저장한다.
@@ -120,6 +120,7 @@ Auth Admin 기능에는 서버의 `SUPABASE_SERVICE_ROLE_KEY`가 필요하다. �
 - 활성 profile이 없는 사용자는 보호 화면을 사용할 수 없어야 한다.
 - 비관리자 승인자는 다른 부서 요청을 처리할 수 없어야 한다.
 - 이메일과 사번 중복 검사를 가입 요청과 관리자 생성 모두에서 일관되게 처리한다.
+- 인증 전(가입 요청) 경로를 포함해 사용자 입력값을 PostgREST 필터 문자열에 직접 보간하지 않는다. 사번은 `employeeNoSchema`로 문자셋을 제한하고, 중복 검사는 컬럼별 `.eq()` 쿼리로 분리한다.
 - 역할 이름을 바꾸면 enum, UI label, permission helper, RLS/RPC, 테스트를 함께 수정한다.
 - 사용자 미사용이 과거 작성자 ID, 승인 이력, 댓글 snapshot을 삭제하지 않아야 한다.
 - 관리자 클라이언트 조회에 부서 범위 조건을 빼지 않는다.

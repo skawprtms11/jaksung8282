@@ -19,6 +19,8 @@
 - 관리자도 실제 작성·확정을 하려면 특정 부서를 선택해야 한다.
 - 헤더에서 부서와 화주를 선택한다. 화주 필터 기본값은 `전체 화주`이며, 화주 미선택 시 해당 부서에 활성 연결된 모든 화주의 자료를 조회한다. 특정 화주를 선택한 경우에만 해당 화주로 범위를 좁힌다.
 - 화면의 disabled 상태와 `save_department_submission_atomic`, 공실 server action의 권한 검사를 함께 유지한다.
+- 관리자가 아닌 사용자의 부서 범위를 확정하지 못하면(`profile.department_id`가 비어 있으면) 부서 조건이 걸린 모든 조회(화주 검토 목록, 요약 카드, 제출 lookup, 등록 화주 수, 사업부 요청사항 등)는 실행하지 않고 빈 결과를 돌려준다(`isDepartmentScopeBlocked`, `src/app/(protected)/department-reports/page.tsx`). 부서 조건이 빠진 채 전체 부서를 읽는 경로는 없다.
+- 비관리자의 URL `department_id`는 조회에 반영되지 않는다. 부서 범위가 비어 있을 때 URL 값으로 대체하던 `departmentFilter ?? params.department_id` 폴백은 제거됐다.
 
 ## 3. URL과 로컬 상태
 
@@ -101,7 +103,7 @@ URL 범위:
 - 입력 화면이 아니라 화주자료 `weekly_volumes`의 월/주차별 집계 화면이다.
 - 입고는 `inbound`, 출고는 `outbound`, 합계는 둘의 합으로 계산한다.
 - 우측 상단 선택값에 따라 한 지표만 행 데이터로 표시한다.
-- 화주별 등록현황과 단위를 함께 고려하며 별도 합계 row를 저장하지 않는다.
+- 화면은 화주별 등록현황을 `unit`별로 묶어 합산하며(`DepartmentVolumeBoard.tsx`), 별도 합계 row를 저장하지 않는다. 화주자료 물동량 등록은 `EA`로 고정되어 있어 신규 데이터는 사실상 한 단위로만 집계된다. 2026-08-19 이전 데이터도 `EA`로 재라벨링되어 있어 다른 단위 값은 남아 있지 않다.
 
 ### 시설공사
 
