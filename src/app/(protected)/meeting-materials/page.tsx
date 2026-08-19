@@ -1180,6 +1180,7 @@ async function MeetingMaterialsContent({
             <MeetingMaterialsTable
               key={`materials-${selectedWeek.weekStartDate}-${params.department_id ?? "all"}-${params.client_id ?? "all"}-${Object.values(searchFilters).join("-")}`}
               reports={filteredMaterialRows}
+              weekLabel={`${selectedWeek.month}월${selectedWeek.weekOfMonth}주차`}
               currentUserId={profile?.id ?? ""}
               canManageAllRequests={isAdmin(profile)}
               emptyTitle={hasSearchFilters ? "검색 조건에 맞는 회의자료가 없습니다." : "선택한 주차의 회의자료가 없습니다."}

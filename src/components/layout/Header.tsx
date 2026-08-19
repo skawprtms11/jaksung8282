@@ -197,6 +197,17 @@ function HeaderScopeFilter({
       }),
     [activeOptions.clients, assignedClientIdSet, effectiveDepartmentId, isClientWritePage, profile.app_role]
   );
+  // 전체부서 모드에서는 여러 부서에 연결된 화주가 department_client_links 기준으로 같은 id로 반복 등장하므로 표시용으로만 dedup한다.
+  const clientOptions = useMemo(() => {
+    const seenClientIds = new Set<string>();
+    return departmentScopedClients.filter((client) => {
+      if (seenClientIds.has(client.id)) {
+        return false;
+      }
+      seenClientIds.add(client.id);
+      return true;
+    });
+  }, [departmentScopedClients]);
   const requiresClientSelection = isClientWritePage;
   const fallbackClientId = requiresClientSelection && effectiveDepartmentId ? pickDefaultClientId(departmentScopedClients, profile.app_role) : "";
   const effectiveClientId = selectedClientId || fallbackClientId;
@@ -379,7 +390,7 @@ function HeaderScopeFilter({
           <option value="" disabled={requiresClientSelection}>
             {requiresClientSelection ? "화주 선택" : "전체 화주"}
           </option>
-          {departmentScopedClients.map((client) => (
+          {clientOptions.map((client) => (
             <option key={client.id} value={client.id}>
               {client.client_name}
             </option>
