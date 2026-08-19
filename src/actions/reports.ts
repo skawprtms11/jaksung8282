@@ -788,6 +788,96 @@ export async function loadDepartmentSubmissionAction({
   return { ok: true, submission: data ? (data as unknown as DepartmentSubmissionLoadRow) : null };
 }
 
+const MEETING_MEMO_MAX_LENGTH = 5000;
+
+export async function loadDepartmentMemoAction({
+  department_id,
+  week_start_date
+}: {
+  department_id: string;
+  week_start_date: string;
+}): Promise<{ ok: boolean; message?: string; content: string }> {
+  const parsedDepartmentId = idSchema.safeParse(department_id);
+  if (!parsedDepartmentId.success || !/^\d{4}-\d{2}-\d{2}$/.test(week_start_date)) {
+    return { ok: false, message: "조회 조건을 확인하세요.", content: "" };
+  }
+
+  const { profile } = await getCurrentUserProfile();
+  if (!profile?.is_active) {
+    return { ok: false, message: "사용자 정보가 없거나 비활성화 상태입니다.", content: "" };
+  }
+  if (!isAdmin(profile)) {
+    return { ok: false, message: "부서 메모는 관리자만 조회할 수 있습니다.", content: "" };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요.", content: "" };
+  }
+
+  const { data, error } = await supabase
+    .from("department_meeting_memos")
+    .select("content")
+    .eq("department_id", department_id)
+    .eq("week_start_date", week_start_date)
+    .maybeSingle();
+  if (error) {
+    return { ok: false, message: safeErrorMessage(error.message), content: "" };
+  }
+
+  return { ok: true, content: data?.content ?? "" };
+}
+
+export async function saveDepartmentMemoAction({
+  department_id,
+  week_start_date,
+  content
+}: {
+  department_id: string;
+  week_start_date: string;
+  content: string;
+}): Promise<{ ok: boolean; message?: string }> {
+  const parsedDepartmentId = idSchema.safeParse(department_id);
+  if (!parsedDepartmentId.success || !/^\d{4}-\d{2}-\d{2}$/.test(week_start_date)) {
+    return { ok: false, message: "저장 조건을 확인하세요." };
+  }
+  if (typeof content !== "string" || content.length > MEETING_MEMO_MAX_LENGTH) {
+    return { ok: false, message: `메모는 ${MEETING_MEMO_MAX_LENGTH.toLocaleString()}자 이하로 입력하세요.` };
+  }
+
+  const { profile } = await getCurrentUserProfile();
+  if (!profile?.is_active) {
+    return { ok: false, message: "사용자 정보가 없거나 비활성화 상태입니다." };
+  }
+  if (!isAdmin(profile)) {
+    return { ok: false, message: "부서 메모는 관리자만 작성할 수 있습니다." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요." };
+  }
+
+  const { error } = await supabase
+    .from("department_meeting_memos")
+    .upsert(
+      {
+        department_id,
+        week_start_date,
+        content,
+        updated_by: profile.id,
+        updated_at: new Date().toISOString()
+      },
+      { onConflict: "department_id,week_start_date" }
+    );
+  if (error) {
+    return { ok: false, message: safeErrorMessage(error.message) };
+  }
+
+  revalidatePath("/meeting-materials");
+  return { ok: true, message: "부서 메모를 저장했습니다." };
+}
+
 function canManageDepartmentData(profile: NonNullable<Awaited<ReturnType<typeof getCurrentUserProfile>>["profile"]>, departmentId: string) {
   return (
     isAdmin(profile) ||

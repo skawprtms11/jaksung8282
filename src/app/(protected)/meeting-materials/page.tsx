@@ -11,6 +11,7 @@ import type {
 import type { MeetingOpenRequestItem, MeetingPriorityItem } from "@/components/reports/MeetingPriorityPanel";
 import { MeetingMaterialsWeekFilter } from "@/components/reports/MeetingMaterialsWeekFilter";
 import { DepartmentCommonSearchToolbar } from "@/components/reports/DepartmentCommonSearchToolbar";
+import { DepartmentMemoButton } from "@/components/reports/DepartmentMemoButton";
 import type { DepartmentOpenRequestItem } from "@/components/reports/DepartmentOpenRequestBoard";
 import { pickDefaultDepartmentId } from "@/lib/auth/default-scope";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
@@ -1076,6 +1077,22 @@ async function MeetingMaterialsContent({
       : materialRows;
   const { clientCountMap, writtenClientMap } =
     activeTab === "collection" ? countByDepartment(clients, reports) : { clientCountMap: new Map(), writtenClientMap: new Map() };
+
+  const memoDepartmentId = activeTab === "materials" && isAdmin(profile) ? params.department_id ?? null : null;
+  let initialMemoContent = "";
+  if (memoDepartmentId && supabase) {
+    const { data: memoRow } = await supabase
+      .from("department_meeting_memos")
+      .select("content")
+      .eq("department_id", memoDepartmentId)
+      .eq("week_start_date", selectedWeek.weekStartDate)
+      .maybeSingle();
+    initialMemoContent = memoRow?.content ?? "";
+  }
+  const memoDepartmentName = memoDepartmentId
+    ? departments.find((department) => department.id === memoDepartmentId)?.department_name ?? null
+    : null;
+
   return (
     <>
       {activeTab === "collection" ? (
@@ -1090,8 +1107,18 @@ async function MeetingMaterialsContent({
       ) : null}
       {activeTab === "materials" ? (
         <div className="space-y-2">
-          <div className="rounded-md border border-[#e7ddcd] bg-white/90 px-2 py-0.5 shadow-[0_10px_26px_rgba(16,34,61,0.05)]">
-            <DepartmentCommonSearchToolbar
+          <div className="flex items-stretch gap-2">
+            {isAdmin(profile) ? (
+              <DepartmentMemoButton
+                departmentId={memoDepartmentId}
+                weekStartDate={selectedWeek.weekStartDate}
+                initialContent={initialMemoContent}
+                canEdit={isAdmin(profile)}
+                departmentName={memoDepartmentName}
+              />
+            ) : null}
+            <div className="min-w-0 flex-1 rounded-md border border-[#e7ddcd] bg-white/90 px-2 py-0.5 shadow-[0_10px_26px_rgba(16,34,61,0.05)]">
+              <DepartmentCommonSearchToolbar
               key={Object.values(searchFilters).join("|")}
               categories={workCategories}
               filters={searchFilters}
@@ -1101,6 +1128,7 @@ async function MeetingMaterialsContent({
               showQuickReset
               inlineQuickSearch
             />
+            </div>
           </div>
           <DepartmentOpenRequestBoard
             requests={confirmationRequestItems}

@@ -399,6 +399,22 @@ export type Tables = {
     };
     Update: Partial<Tables["department_weekly_submissions"]["Row"]>;
   };
+  department_meeting_memos: {
+    Row: {
+      id: string;
+      department_id: string;
+      week_start_date: string;
+      content: string;
+      updated_by: string | null;
+      created_at: string;
+      updated_at: string;
+    };
+    Insert: Partial<Tables["department_meeting_memos"]["Row"]> & {
+      department_id: string;
+      week_start_date: string;
+    };
+    Update: Partial<Tables["department_meeting_memos"]["Row"]>;
+  };
   department_weekly_contents: {
     Row: {
       id: string;
