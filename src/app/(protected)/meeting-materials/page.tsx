@@ -627,7 +627,10 @@ function filterMeetingMaterialSearch(
   filters: ClientReportSearchFilters,
   categoryIdByName: Map<string, string>
 ): MeetingReportRow | null {
-  const matchingItems = filterClientReportSearchItems(
+  // 빠른 검색어(query)는 회의자료 탭에서 제목·내용·업무구분(카테고리명)을 모두 대상으로 한다.
+  // 나머지 상세 필터(기간·업무구분 선택·중요도·상세검색)는 공유 라이브러리에 그대로 위임한다.
+  const { query, ...detailFilters } = filters;
+  const baseItems = filterClientReportSearchItems(
     {
       week_start_date: weekStartDate,
       weekly_client_report_items: report.weekly_client_report_items.map((item) => ({
@@ -639,8 +642,19 @@ function filterMeetingMaterialSearch(
         content: item.content
       }))
     },
-    filters
+    detailFilters
   );
+  const term = query?.trim().toLowerCase();
+  const matchingItems = term
+    ? baseItems.filter((item) => {
+        const source = item.source;
+        return (
+          (source.title ?? "").toLowerCase().includes(term) ||
+          (source.content ?? "").toLowerCase().includes(term) ||
+          (source.work_categories?.category_name ?? "").toLowerCase().includes(term)
+        );
+      })
+    : baseItems;
   return matchingItems.length > 0
     ? { ...report, weekly_client_report_items: matchingItems.map((item) => item.source) }
     : null;
