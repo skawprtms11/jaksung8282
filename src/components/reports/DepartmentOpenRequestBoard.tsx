@@ -71,7 +71,16 @@ export function DepartmentOpenRequestBoard({
   onDataChanged?: () => void;
   compact?: boolean;
 }) {
-  const [rows, setRows] = useState(requests);
+  const [rows, setRows] = useState(() => {
+    const seen = new Set<string>();
+    return requests.filter((request) => {
+      if (seen.has(request.requestId)) {
+        return false;
+      }
+      seen.add(request.requestId);
+      return true;
+    });
+  });
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
 
   const selected = useMemo(

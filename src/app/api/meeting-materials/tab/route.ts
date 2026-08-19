@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
-import { canViewMeetingMaterials } from "@/lib/auth/permissions";
+import { canViewMeetingMaterials, isAdmin } from "@/lib/auth/permissions";
 import {
   getCurrentWeekOption,
   getReportMonthByThursday,
@@ -110,13 +110,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error?.message ?? "회의자료 응답 형식이 올바르지 않습니다.", fallback: true }, { status: 503 });
   }
 
-  const compatibilityRequests = await getCompatibilityRequests(tab, params, data.resolvedDepartmentId);
+  // 전체부서(admin·부서/화주 미선택 materials): 확인요청을 모든 부서 기준으로 조회한다. 비관리자는 RPC가 자기 부서로 스코프.
+  const isMaterialsAllDept = tab === "materials" && isAdmin(profile) && !params.department_id && !params.client_id;
+  const compatibilityRequests = await getCompatibilityRequests(
+    tab,
+    params,
+    isMaterialsAllDept ? null : data.resolvedDepartmentId
+  );
   const tabData = buildMeetingTabData({
     tab,
     payload: data,
     params,
     selectedWeek,
-    openRequests: compatibilityRequests ?? data.openRequests
+    openRequests: compatibilityRequests ?? data.openRequests,
+    allDepartments: isMaterialsAllDept
   });
   return NextResponse.json(tabData, {
     headers: { "Cache-Control": "private, no-store", "Server-Timing": "meeting-tab;desc=meeting materials tab payload" }

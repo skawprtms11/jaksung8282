@@ -6,6 +6,7 @@ import { MeetingFacilityConstructionBoard } from "@/components/reports/MeetingFa
 import { MeetingHolidayWorkBoard } from "@/components/reports/MeetingHolidayWorkBoard";
 import { MeetingMaterialsTable } from "@/components/reports/MeetingMaterialsTable";
 import { DepartmentOpenRequestBoard } from "@/components/reports/DepartmentOpenRequestBoard";
+import { MemoStatusButton } from "@/components/reports/MemoStatusButton";
 import { MeetingPriorityPanel } from "@/components/reports/MeetingPriorityPanel";
 import { VolumeComparisonChart } from "@/components/charts/VolumeComparisonChart";
 import { TableShell } from "@/components/common/TableShell";
@@ -97,8 +98,11 @@ export function MeetingMaterialsTabContent({ data, currentUserId, canManageAllRe
 }) {
   if (data.tab === "collection") return <CollectionContent data={data} />;
   if (data.tab === "materials") return <div className="space-y-2">
-    <div className="rounded-md border border-[#e7ddcd] bg-white/90 px-2 py-0.5 shadow-[0_10px_26px_rgba(16,34,61,0.05)]">
-      <DepartmentCommonSearchToolbar key={Object.values(data.filters).join("|")} categories={data.workCategories} filters={data.filters} resultCount={data.reports.length} detailsId="meeting-materials-detailed-search" unifiedDataSearch showQuickReset inlineQuickSearch />
+    <div className="flex items-stretch gap-2">
+      {canManageAllRequests ? <MemoStatusButton weekStartDate={data.weekStartDate} canView={canManageAllRequests} /> : null}
+      <div className="min-w-0 flex-1 rounded-md border border-[#e7ddcd] bg-white/90 px-2 py-0.5 shadow-[0_10px_26px_rgba(16,34,61,0.05)]">
+        <DepartmentCommonSearchToolbar key={Object.values(data.filters).join("|")} categories={data.workCategories} filters={data.filters} resultCount={data.reports.length} detailsId="meeting-materials-detailed-search" unifiedDataSearch showQuickReset inlineQuickSearch />
+      </div>
     </div>
     <DepartmentOpenRequestBoard
       requests={data.confirmationRequestItems}
@@ -109,7 +113,13 @@ export function MeetingMaterialsTabContent({ data, currentUserId, canManageAllRe
       onDataChanged={onDataChanged}
       compact
     />
-    <MeetingMaterialsTable reports={data.reports} currentUserId={currentUserId} canManageAllRequests={canManageAllRequests} emptyTitle={data.hasSearchFilters ? "검색 조건에 맞는 회의자료가 없습니다." : "선택한 주차의 회의자료가 없습니다."} onDataChanged={onDataChanged} />
+    {data.allDepartments ? (
+      <section className="sketch-panel flex min-h-44 items-center justify-center p-6 text-center">
+        <p className="text-sm font-black text-slate-500">부서를 선택하면 회의자료가 표시됩니다.</p>
+      </section>
+    ) : (
+      <MeetingMaterialsTable reports={data.reports} currentUserId={currentUserId} canManageAllRequests={canManageAllRequests} emptyTitle={data.hasSearchFilters ? "검색 조건에 맞는 회의자료가 없습니다." : "선택한 주차의 회의자료가 없습니다."} onDataChanged={onDataChanged} />
+    )}
   </div>;
   if (data.tab === "volumes") return <VolumesContent data={data} />;
   if (data.tab === "holiday") return <MeetingHolidayWorkBoard departments={data.departments} submissions={data.submissions} selectedWeek={data.selectedWeek} />;

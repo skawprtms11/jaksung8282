@@ -12,8 +12,9 @@ import type { MeetingOpenRequestItem, MeetingPriorityItem } from "@/components/r
 import { MeetingMaterialsWeekFilter } from "@/components/reports/MeetingMaterialsWeekFilter";
 import { DepartmentCommonSearchToolbar } from "@/components/reports/DepartmentCommonSearchToolbar";
 import { DepartmentMemoButton } from "@/components/reports/DepartmentMemoButton";
+import { MemoStatusButton } from "@/components/reports/MemoStatusButton";
 import type { DepartmentOpenRequestItem } from "@/components/reports/DepartmentOpenRequestBoard";
-import { pickDefaultDepartmentId } from "@/lib/auth/default-scope";
+import { loadWeekMemosAction, type WeekMemoItem } from "@/actions/reports";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { canViewMeetingMaterials, isAdmin, type ProfileSummary } from "@/lib/auth/permissions";
 import {
@@ -731,6 +732,9 @@ async function MeetingMaterialsContent({
 }) {
   const searchFilters = parseClientReportSearchFilters(params);
   const hasSearchFilters = hasClientReportSearchFilters(searchFilters);
+  // 전체부서(admin·부서/화주 미선택 materials): 회의자료 목록은 스킵하고 확인요청만 전체 부서 기준으로 노출한다.
+  const isMaterialsAllDept =
+    activeTab === "materials" && isAdmin(profile) && !params.department_id && !params.client_id;
   const supabase = await createSupabaseServerClient();
   let departments: DepartmentRow[] = [];
   let clients: ClientSummaryRow[] = [];
@@ -786,9 +790,11 @@ async function MeetingMaterialsContent({
       workCategories = rpcData.workCategories;
       volumeTrendReports = rpcData.volumeTrendReports;
       previousVolumeTrendReports = rpcData.previousVolumeTrendReports;
+      // 전체부서 materials면 RPC가 강제한 기본 부서 스코프를 무시하고 확인요청을 전체 부서 기준으로 조회한다.
+      const requestDepartmentFilter = isMaterialsAllDept ? null : rpcData.resolvedDepartmentId;
       let openRequestRows = rpcData.openRequests;
       if ((activeTab === "collection" || activeTab === "materials") && compatibilityRequestData) {
-        const departmentFilter = rpcData.resolvedDepartmentId;
+        const departmentFilter = requestDepartmentFilter;
         openRequestRows = compatibilityRequestData.filter((request) => {
           if (request.target_type === "client_item") {
             const report = request.weekly_client_report_items?.weekly_client_reports;
@@ -810,16 +816,21 @@ async function MeetingMaterialsContent({
         confirmationRequestItems = makeConfirmationRequestItems(
           openRequestRows as unknown as import("@/lib/reports/meeting-materials-tab-data").OpenRequestQueryRow[],
           workCategories,
-          rpcData.resolvedDepartmentId ?? undefined,
+          requestDepartmentFilter ?? undefined,
           params.client_id
         );
         if (activeTab === "collection") {
           openRequestItems = makePriorityOpenRequestItems(confirmationRequestItems);
         }
       }
-      commonReports = activeTab === "materials" ? makeCommonMeetingRows(submissions, departments, workCategories) : [];
-      if (activeTab === "materials") {
-        commonReports = attachCommonMaterialRequests(commonReports, rpcData.commonMaterialRequests);
+      if (isMaterialsAllDept) {
+        reports = [];
+        commonReports = [];
+      } else {
+        commonReports = activeTab === "materials" ? makeCommonMeetingRows(submissions, departments, workCategories) : [];
+        if (activeTab === "materials") {
+          commonReports = attachCommonMaterialRequests(commonReports, rpcData.commonMaterialRequests);
+        }
       }
     } else {
       console.warn("[meeting-materials] Falling back to legacy queries", rpcError?.message ?? "invalid RPC payload");
@@ -829,30 +840,21 @@ async function MeetingMaterialsContent({
       } catch {
         dataClient = supabase;
       }
-    let materialsDepartmentLimit: string | undefined;
-    let prefetchedDepartments: DepartmentRow[] | null = null;
-    if (isAdmin(profile) && activeTab === "materials" && !params.department_id && !params.client_id) {
-      if (!prefetchedDepartments) {
-        const { data: defaultDepartments } = await dataClient
-          .from("departments")
-          .select("id,department_name")
-          .eq("is_active", true)
-          .order("sort_order", { ascending: true })
-          .order("department_name", { ascending: true });
-        prefetchedDepartments = (defaultDepartments ?? []) as DepartmentRow[];
-      }
-      materialsDepartmentLimit = pickDefaultDepartmentId(prefetchedDepartments, profile.app_role) || undefined;
-    }
-    const departmentFilter = isAdmin(profile) ? params.department_id ?? materialsDepartmentLimit : profile.department_id;
+    // 전체부서 materials는 기본 부서를 강제하지 않고 부서 미선택(null)을 유지한다.
+    const departmentFilter = isAdmin(profile) ? params.department_id ?? undefined : profile.department_id;
+    const skipMaterialsList = isMaterialsAllDept;
     const needsDepartments =
       activeTab === "collection" ||
       activeTab === "volumes" ||
       activeTab === "holiday" ||
-      activeTab === "facility" ||
-      Boolean(prefetchedDepartments);
+      activeTab === "facility";
     const needsClients = activeTab === "collection";
-    const needsReports = activeTab === "collection" || activeTab === "materials";
-    const needsSubmissions = activeTab === "collection" || activeTab === "materials" || activeTab === "holiday" || activeTab === "facility";
+    const needsReports = activeTab === "collection" || (activeTab === "materials" && !skipMaterialsList);
+    const needsSubmissions =
+      activeTab === "collection" ||
+      (activeTab === "materials" && !skipMaterialsList) ||
+      activeTab === "holiday" ||
+      activeTab === "facility";
     const contentSectionFilter = getDepartmentContentSection(activeTab);
     const previousReportMonth = getPreviousReportMonth(selectedWeek.year, selectedWeek.month);
 
@@ -868,13 +870,7 @@ async function MeetingMaterialsContent({
       previousVolumeTrendResult
     ] = await Promise.all([
       needsDepartments
-        ? prefetchedDepartments
-          ? Promise.resolve({
-              data: departmentFilter
-                ? prefetchedDepartments.filter((department) => department.id === departmentFilter)
-                : prefetchedDepartments
-            })
-          : (() => {
+        ? (() => {
             let query = dataClient
               .from("departments")
               .select("id,department_name")
@@ -981,7 +977,7 @@ async function MeetingMaterialsContent({
       activeTab === "materials" || activeTab === "collection"
         ? dataClient.from("work_categories").select("id,category_name").eq("is_active", true).order("sort_order", { ascending: true })
         : Promise.resolve({ data: [] }),
-      activeTab === "materials"
+      activeTab === "materials" && !skipMaterialsList
         ? (() => {
             let query = dataClient
               .from("weekly_report_item_requests")
@@ -1107,6 +1103,14 @@ async function MeetingMaterialsContent({
     ? departments.find((department) => department.id === memoDepartmentId)?.department_name ?? null
     : null;
 
+  let weekMemoItems: WeekMemoItem[] = [];
+  if (activeTab === "materials" && isAdmin(profile)) {
+    const weekMemos = await loadWeekMemosAction({ week_start_date: selectedWeek.weekStartDate });
+    if (weekMemos.ok) {
+      weekMemoItems = weekMemos.items;
+    }
+  }
+
   return (
     <>
       {activeTab === "collection" ? (
@@ -1122,6 +1126,14 @@ async function MeetingMaterialsContent({
       {activeTab === "materials" ? (
         <div className="space-y-2">
           <div className="flex items-stretch gap-2">
+            {isAdmin(profile) ? (
+              <MemoStatusButton
+                weekStartDate={selectedWeek.weekStartDate}
+                canView={isAdmin(profile)}
+                initialItems={weekMemoItems}
+                initialCount={weekMemoItems.length}
+              />
+            ) : null}
             {isAdmin(profile) ? (
               <DepartmentMemoButton
                 departmentId={memoDepartmentId}
@@ -1152,13 +1164,19 @@ async function MeetingMaterialsContent({
             emptyMessage="진행 중인 확인요청이 없습니다."
             compact
           />
-          <MeetingMaterialsTable
-            key={`materials-${selectedWeek.weekStartDate}-${params.department_id ?? "all"}-${params.client_id ?? "all"}-${Object.values(searchFilters).join("-")}`}
-            reports={filteredMaterialRows}
-            currentUserId={profile?.id ?? ""}
-            canManageAllRequests={isAdmin(profile)}
-            emptyTitle={hasSearchFilters ? "검색 조건에 맞는 회의자료가 없습니다." : "선택한 주차의 회의자료가 없습니다."}
-          />
+          {isMaterialsAllDept ? (
+            <section className="sketch-panel flex min-h-44 items-center justify-center p-6 text-center">
+              <p className="text-sm font-black text-slate-500">부서를 선택하면 회의자료가 표시됩니다.</p>
+            </section>
+          ) : (
+            <MeetingMaterialsTable
+              key={`materials-${selectedWeek.weekStartDate}-${params.department_id ?? "all"}-${params.client_id ?? "all"}-${Object.values(searchFilters).join("-")}`}
+              reports={filteredMaterialRows}
+              currentUserId={profile?.id ?? ""}
+              canManageAllRequests={isAdmin(profile)}
+              emptyTitle={hasSearchFilters ? "검색 조건에 맞는 회의자료가 없습니다." : "선택한 주차의 회의자료가 없습니다."}
+            />
+          )}
         </div>
       ) : null}
       {activeTab === "volumes" ? <VolumesView chartRows={chartRows} departmentRows={departmentVolumeRows} /> : null}

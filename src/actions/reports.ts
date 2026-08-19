@@ -828,6 +828,66 @@ export async function loadDepartmentMemoAction({
   return { ok: true, content: data?.content ?? "" };
 }
 
+export type WeekMemoItem = {
+  departmentId: string;
+  departmentName: string;
+  content: string;
+};
+
+export async function loadWeekMemosAction({
+  week_start_date
+}: {
+  week_start_date: string;
+}): Promise<{ ok: boolean; message?: string; items: WeekMemoItem[]; count: number }> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(week_start_date)) {
+    return { ok: false, message: "조회 조건을 확인하세요.", items: [], count: 0 };
+  }
+
+  const { profile } = await getCurrentUserProfile();
+  if (!profile?.is_active) {
+    return { ok: false, message: "사용자 정보가 없거나 비활성화 상태입니다.", items: [], count: 0 };
+  }
+  if (!isAdmin(profile)) {
+    return { ok: false, message: "부서 메모현황은 관리자만 조회할 수 있습니다.", items: [], count: 0 };
+  }
+
+  let adminClient: ReturnType<typeof createSupabaseAdminClient>;
+  try {
+    adminClient = createSupabaseAdminClient();
+  } catch {
+    return { ok: false, message: "Supabase 관리자 환경변수를 확인하세요.", items: [], count: 0 };
+  }
+
+  const { data, error } = await adminClient
+    .from("department_meeting_memos")
+    .select("content,department_id,departments(department_name,sort_order,is_active)")
+    .eq("week_start_date", week_start_date);
+  if (error) {
+    return { ok: false, message: safeErrorMessage(error.message), items: [], count: 0 };
+  }
+
+  type MemoRow = {
+    content: string | null;
+    department_id: string;
+    departments: { department_name: string; sort_order: number | null; is_active: boolean } | null;
+  };
+
+  const items = ((data ?? []) as unknown as MemoRow[])
+    .filter((row) => Boolean(row.departments?.is_active) && (row.content ?? "").trim().length > 0)
+    .map((row) => ({
+      departmentId: row.department_id,
+      departmentName: row.departments?.department_name ?? "-",
+      content: row.content ?? "",
+      sortOrder: row.departments?.sort_order ?? 0
+    }))
+    .sort((left, right) =>
+      left.sortOrder - right.sortOrder || left.departmentName.localeCompare(right.departmentName, "ko")
+    )
+    .map(({ departmentId, departmentName, content }) => ({ departmentId, departmentName, content }));
+
+  return { ok: true, items, count: items.length };
+}
+
 export async function saveDepartmentMemoAction({
   department_id,
   week_start_date,

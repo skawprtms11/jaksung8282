@@ -167,7 +167,10 @@ function HeaderScopeFilter({
   const activeMeetingTab = searchParams.get("tab") ?? "collection";
   const isMeetingMaterialsTab = pathname === "/meeting-materials" && activeMeetingTab === "materials";
   const restrictMeetingMaterialsAll =
-    pathname === "/meeting-materials" && activeMeetingTab === "materials" && !selectedClientId;
+    pathname === "/meeting-materials" &&
+    activeMeetingTab === "materials" &&
+    !selectedClientId &&
+    profile.app_role !== "admin";
   const restrictClientReportsAll = isClientWritePage && !selectedDepartmentId;
   const restrictDepartmentReportsAll = isDepartmentReportPage && !selectedDepartmentId;
   const preferredDepartmentId = pickDefaultDepartmentId(activeOptions.departments, profile.app_role);

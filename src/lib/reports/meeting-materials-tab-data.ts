@@ -156,6 +156,8 @@ export type MaterialsTabData = {
   workCategories: WorkCategoryRow[];
   filters: ClientReportSearchFilters;
   hasSearchFilters: boolean;
+  allDepartments: boolean;
+  weekStartDate: string;
 };
 
 export type VolumesTabData = {
@@ -282,14 +284,22 @@ export function makeConfirmationRequestItems(
   clientFilter?: string
 ): DepartmentOpenRequestItem[] {
   const categoryNames = new Map(categories.map((row) => [row.id, row.category_name]));
-  const requestsByTarget = rows.reduce((map, request) => {
+  const seenRequestIds = new Set<string>();
+  const uniqueRows = rows.filter((request) => {
+    if (seenRequestIds.has(request.id)) {
+      return false;
+    }
+    seenRequestIds.add(request.id);
+    return true;
+  });
+  const requestsByTarget = uniqueRows.reduce((map, request) => {
     const targetRequests = map.get(request.target_key) ?? [];
     targetRequests.push(request);
     map.set(request.target_key, targetRequests);
     return map;
   }, new Map<string, MeetingReportItemRequest[]>());
 
-  return rows
+  return uniqueRows
     .filter((request) => !request.closed_at && !request.deleted_at)
     .map((request): DepartmentOpenRequestItem | null => {
       const targetRequests = requestsByTarget.get(request.target_key) ?? [request];
@@ -462,8 +472,8 @@ function filterMaterialRows(reports: MeetingReportRow[], weekStartDate: string, 
   }).filter((report): report is MeetingReportRow => Boolean(report));
 }
 
-export function buildMeetingTabData({ tab, payload, params, selectedWeek, openRequests = payload.openRequests }: {
-  tab: MeetingTab; payload: MeetingMaterialsPayload; params: MeetingSearchParams; selectedWeek: WeekOption; openRequests?: OpenRequestQueryRow[];
+export function buildMeetingTabData({ tab, payload, params, selectedWeek, openRequests = payload.openRequests, allDepartments = false }: {
+  tab: MeetingTab; payload: MeetingMaterialsPayload; params: MeetingSearchParams; selectedWeek: WeekOption; openRequests?: OpenRequestQueryRow[]; allDepartments?: boolean;
 }): MeetingTabData {
   const departments = payload.departments;
   const submissions = payload.submissions.map((row) => ({ ...row, department_weekly_contents: row.department_weekly_contents ?? [] }));
@@ -480,11 +490,14 @@ export function buildMeetingTabData({ tab, payload, params, selectedWeek, openRe
   }
   if (tab === "materials") {
     const filters = parseClientReportSearchFilters(params);
-    const common = attachCommonRequests(makeCommonRows(submissions, departments, payload.workCategories), payload.commonMaterialRequests);
-    const materialRows = [...common, ...reports];
-    return { tab, reports: hasClientReportSearchFilters(filters) ? filterMaterialRows(materialRows, selectedWeek.weekStartDate, filters, payload.workCategories) : materialRows,
-      confirmationRequestItems: makeConfirmationRequestItems(openRequests, payload.workCategories, payload.resolvedDepartmentId ?? undefined, params.client_id),
-      workCategories: payload.workCategories, filters, hasSearchFilters: hasClientReportSearchFilters(filters) };
+    // 전체부서(admin·부서 미선택)에서는 무거운 회의자료 목록 조회를 건너뛰고 확인요청만 전체 부서 기준으로 노출한다.
+    const materialRows = allDepartments
+      ? []
+      : [...attachCommonRequests(makeCommonRows(submissions, departments, payload.workCategories), payload.commonMaterialRequests), ...reports];
+    const requestDepartmentFilter = allDepartments ? undefined : payload.resolvedDepartmentId ?? undefined;
+    return { tab, reports: hasClientReportSearchFilters(filters) && !allDepartments ? filterMaterialRows(materialRows, selectedWeek.weekStartDate, filters, payload.workCategories) : materialRows,
+      confirmationRequestItems: makeConfirmationRequestItems(openRequests, payload.workCategories, requestDepartmentFilter, params.client_id),
+      workCategories: payload.workCategories, filters, hasSearchFilters: hasClientReportSearchFilters(filters), allDepartments, weekStartDate: selectedWeek.weekStartDate };
   }
   if (tab === "volumes") return { tab, chartRows: makeChartRows(payload.volumeTrendReports, selectedWeek.weekOfMonth),
     departmentRows: makeDepartmentRows(departments, payload.volumeTrendReports, payload.previousVolumeTrendReports) };
