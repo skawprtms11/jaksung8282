@@ -73,11 +73,11 @@ const noticeTypeOptions: { value: NoticeType; label: string }[] = [
   { value: "system", label: "기타내용" }
 ];
 
-const noticeTypeBadgeStyles: Record<NoticeType, string> = {
-  general: "border-blue-100 bg-blue-50 text-blue-700",
-  important: "border-orange-100 bg-orange-50 text-orange-600",
-  urgent: "border-emerald-100 bg-emerald-50 text-emerald-700",
-  system: "border-slate-200 bg-slate-50 text-slate-600"
+const noticeTypeDotStyles: Record<NoticeType, string> = {
+  general: "u-dot-blue",
+  important: "u-dot-amber",
+  urgent: "u-dot-green",
+  system: "bg-slate-300"
 };
 
 const noticeTypeIcons = {
@@ -144,10 +144,9 @@ function ModalPortal({ children }: { children: ReactNode }) {
 }
 
 function NoticeTypeBadge({ type }: { type: NoticeType }) {
-  const Icon = noticeTypeIcons[type];
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-black ${noticeTypeBadgeStyles[type]}`}>
-      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+    <span className="inline-flex items-center gap-2 text-xs font-bold text-[#012241]">
+      <span className={`u-dot ${noticeTypeDotStyles[type]}`} aria-hidden="true" />
       {noticeTypeLabels[type]}
     </span>
   );
@@ -314,7 +313,7 @@ export function NoticeBoard({
     <section className="sketch-panel p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#e6f1ec] text-[#007050]">
+          <span className="icon-badge icon-badge-green">
             <Table2 className="h-5 w-5" aria-hidden="true" />
           </span>
           <div>
@@ -369,7 +368,7 @@ export function NoticeBoard({
                 key={notice.id}
                 type="button"
                 onClick={() => openNoticeDetail(notice)}
-                className="min-w-0 rounded-2xl border border-[#e7ddcd] bg-white px-3 py-2 text-left shadow-[0_10px_22px_rgba(16,34,61,0.04)] transition hover:border-[#c9e3d3] hover:text-[#007050]"
+                className="min-w-0 rounded-[1.25rem] border border-[#e7ddcd] bg-white px-3 py-2.5 text-left shadow-[0_10px_22px_rgba(1,34,65,0.05)] transition hover:border-[#c9e3d3] hover:text-[#007050]"
               >
                 <span className="block text-[11px] font-black text-slate-400">{formatShortDate(notice.created_at)}</span>
                 <span className="mt-1 block truncate text-sm font-black text-[#012241]">{notice.title}</span>
@@ -379,7 +378,7 @@ export function NoticeBoard({
         </div>
       ) : null}
 
-      <div className="overflow-x-hidden rounded-2xl border border-[#e7ddcd] bg-white/88">
+      <div className="overflow-x-hidden rounded-[1.25rem] border border-[#e7ddcd] bg-white/88">
         <table className="table-sticky w-full table-fixed text-left text-sm">
           <colgroup>
             <col className="w-[7%]" />
@@ -393,14 +392,14 @@ export function NoticeBoard({
           </colgroup>
           <thead>
             <tr>
-              <th className="px-3 py-3">연번</th>
-              <th className="px-3 py-3">등록일자</th>
-              <th className="px-3 py-3">게시구분</th>
-              <th className="px-3 py-3">제목</th>
-              <th className="px-3 py-3">비고</th>
-              <th className="px-3 py-3">조회수</th>
-              <th className="px-3 py-3">댓글</th>
-              <th className="px-3 py-3 text-center">관리</th>
+              <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">연번</th>
+              <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">등록일자</th>
+              <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">게시구분</th>
+              <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">제목</th>
+              <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">비고</th>
+              <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">조회수</th>
+              <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">댓글</th>
+              <th className="px-3 py-3 text-center text-xs font-black tracking-[0.02em] text-slate-500!">관리</th>
             </tr>
           </thead>
           <tbody>
@@ -414,7 +413,7 @@ export function NoticeBoard({
               visibleNotices.map((notice, index) => {
                 const parsedContent = parseNoticeContent(notice.content);
                 return (
-                  <tr key={notice.id} className="border-t border-slate-100 align-top">
+                  <tr key={notice.id} className="border-t border-[#eef2f6] align-top">
                     <td className="px-3 py-3 font-black text-slate-500">{index + 1}</td>
                     <td className="px-3 py-3 font-bold text-slate-600">{formatShortDate(notice.created_at)}</td>
                     <td className="px-3 py-3">
@@ -559,26 +558,31 @@ function NoticeWriteDialog({
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-[220] flex items-start justify-center overflow-y-auto bg-slate-950/72 px-4 py-6 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="notice-write-title">
+    <div className="fixed inset-0 z-[220] flex items-start justify-center overflow-y-auto bg-[#012241]/60 px-4 py-6 backdrop-blur" role="dialog" aria-modal="true" aria-labelledby="notice-write-title">
       <form
         action={action}
         onSubmit={handleSubmit}
-        className="my-auto max-h-[calc(100vh-3rem)] w-full max-w-4xl overflow-hidden rounded-[1.5rem] border border-white/80 bg-white/95 shadow-[0_28px_80px_rgba(16,34,61,0.24)]"
+        className="my-auto max-h-[calc(100vh-3rem)] w-full max-w-4xl overflow-hidden rounded-[1.75rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(1,34,65,0.24)]"
       >
         <input type="hidden" name="id" value={notice?.id ?? ""} />
         <input type="hidden" name="content" ref={contentRef} />
         <input type="hidden" name="is_active" value="true" />
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-          <div>
-            <h2 id="notice-write-title" className="text-xl font-black text-[#012241]">{isEdit ? "게시글 수정" : "게시글 작성"}</h2>
-            <p className="mt-1 text-sm font-bold text-slate-500">{isEdit ? "게시글 내용을 수정합니다." : "요청 항목만 입력하여 게시글을 등록합니다."}</p>
+        <div className="flex items-start justify-between gap-4 border-b border-[#eee6d8] px-6 py-5">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="icon-badge icon-badge-green">
+              <FilePlus2 className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <h2 id="notice-write-title" className="text-xl font-black text-[#012241]">{isEdit ? "게시글 수정" : "게시글 작성"}</h2>
+              <p className="mt-1 text-sm font-semibold text-slate-500">{isEdit ? "게시글 내용을 수정합니다." : "요청 항목만 입력하여 게시글을 등록합니다."}</p>
+            </div>
           </div>
           <button type="button" onClick={onClose} className="icon-tool-button" aria-label="게시글 작성 팝업 닫기">
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
-        <div className="max-h-[65vh] overflow-y-auto bg-[#faf6ef] px-5 py-4">
-          <div className="glass-row grid gap-3 p-3 md:grid-cols-[1fr_220px]">
+        <div className="max-h-[65vh] overflow-y-auto bg-white px-6 py-5">
+          <div className="grid gap-3 rounded-[1.25rem] border border-[#e7ddcd] bg-[#faf6ef] p-4 md:grid-cols-[1fr_220px]">
             <label className="text-xs font-black text-slate-600">
               게시구분
               <select
@@ -633,7 +637,7 @@ function NoticeWriteDialog({
             </div>
           </div>
         </div>
-        <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+        <div className="flex justify-end gap-2 border-t border-[#eee6d8] px-6 py-4">
           <button type="button" onClick={onClose} disabled={isSaving} className="tool-button disabled:opacity-50">취소</button>
           <button type="submit" disabled={isSaving} className="tool-button tool-button-primary disabled:opacity-50">
             <ClipboardList className="h-4 w-4" aria-hidden="true" />
@@ -672,6 +676,7 @@ function NoticeDetailDialog({
   const parsedContent = parseNoticeContent(notice.content);
   const collectionRows = mergeCollectionStatuses(departments, parsedContent.collectionStatuses);
   const completedCount = collectionRows.filter((row) => row.is_completed).length;
+  const NoticeTypeIcon = noticeTypeIcons[notice.notice_type];
 
   function handleCommentSaved(comment: NoticeCommentRow) {
     onCommentSaved(comment);
@@ -683,20 +688,25 @@ function NoticeDetailDialog({
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-[210] flex items-start justify-center overflow-y-auto bg-slate-950/72 px-4 py-6 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="notice-detail-title">
-      <div className="max-h-[88vh] w-full max-w-4xl overflow-hidden rounded-[1.5rem] border border-white/80 bg-white/95 shadow-[0_28px_80px_rgba(16,34,61,0.24)]">
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-          <div>
-            <NoticeTypeBadge type={notice.notice_type} />
-            <h2 id="notice-detail-title" className="mt-3 text-xl font-black text-[#012241]">{notice.title}</h2>
-            <p className="mt-1 text-sm font-bold text-slate-500">등록일자 {formatShortDate(notice.created_at)}</p>
+    <div className="fixed inset-0 z-[210] flex items-start justify-center overflow-y-auto bg-[#012241]/60 px-4 py-6 backdrop-blur" role="dialog" aria-modal="true" aria-labelledby="notice-detail-title">
+      <div className="max-h-[88vh] w-full max-w-4xl overflow-hidden rounded-[1.75rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(1,34,65,0.24)]">
+        <div className="flex items-start justify-between gap-4 border-b border-[#eee6d8] px-6 py-5">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="icon-badge icon-badge-green">
+              <NoticeTypeIcon className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <NoticeTypeBadge type={notice.notice_type} />
+              <h2 id="notice-detail-title" className="mt-1.5 text-xl font-black text-[#012241]">{notice.title}</h2>
+              <p className="mt-1 text-sm font-semibold text-slate-500">등록일자 {formatShortDate(notice.created_at)}</p>
+            </div>
           </div>
           <button type="button" onClick={onClose} className="icon-tool-button" aria-label="상세 팝업 닫기">
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
-        <div className="max-h-[64vh] overflow-y-auto bg-[#faf6ef] px-5 py-4">
-          <section className="rounded-2xl border border-[#e7ddcd] bg-white px-4 py-3">
+        <div className="max-h-[64vh] overflow-y-auto bg-white px-6 py-5">
+          <section className="rounded-[1.25rem] border border-[#e7ddcd] bg-[#faf6ef] px-4 py-3">
             <p className="text-xs font-black text-slate-500">내용</p>
             <p className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-7 text-[#012241]">{parsedContent.detail || "-"}</p>
           </section>
@@ -709,7 +719,7 @@ function NoticeDetailDialog({
             </div>
           ) : null}
           {parsedContent.note ? (
-            <section className="mt-3 rounded-2xl border border-[#e7ddcd] bg-white px-4 py-3">
+            <section className="mt-3 rounded-[1.25rem] border border-[#e7ddcd] bg-[#faf6ef] px-4 py-3">
               <p className="text-xs font-black text-slate-500">비고</p>
               <p className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-7 text-slate-700">{parsedContent.note}</p>
             </section>
@@ -725,7 +735,7 @@ function NoticeDetailDialog({
             onCommentDeleted={handleCommentDeleted}
           />
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[#eee6d8] px-6 py-4">
           <button type="button" onClick={onClose} className="tool-button tool-button-primary">닫기</button>
         </div>
       </div>
@@ -756,7 +766,7 @@ function NoticeCommentsSection({
   const commentTree = buildNoticeCommentTree(comments);
 
   return (
-    <section className="mt-3 rounded-2xl border border-[#e7ddcd] bg-white px-4 py-3">
+    <section className="mt-3 rounded-[1.25rem] border border-[#e7ddcd] bg-[#faf6ef] px-4 py-3">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <MessageCircle className="h-4 w-4 text-[#007050]" aria-hidden="true" />
@@ -862,7 +872,7 @@ function NoticeCommentForm({
   }
 
   return (
-    <div className="rounded-2xl border border-[#e7ddcd] bg-[#faf6ef] p-3">
+    <div className="rounded-2xl border border-[#e7ddcd] bg-white p-3">
       <label className="sr-only" htmlFor={`comment-${commentId ?? parentId ?? noticeId}`}>
         댓글 내용
       </label>
@@ -1117,19 +1127,24 @@ function NoticeCollectionDialog({
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-[230] flex items-start justify-center overflow-y-auto bg-slate-950/72 px-4 py-6 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="notice-collection-title">
-      <div className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-[1.5rem] border border-white/80 bg-white/95 shadow-[0_28px_80px_rgba(16,34,61,0.24)]">
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-          <div>
-            <h2 id="notice-collection-title" className="text-xl font-black text-[#012241]">취합완료여부 확인</h2>
-            <p className="mt-1 text-sm font-bold text-slate-500">{notice.title}</p>
+    <div className="fixed inset-0 z-[230] flex items-start justify-center overflow-y-auto bg-[#012241]/60 px-4 py-6 backdrop-blur" role="dialog" aria-modal="true" aria-labelledby="notice-collection-title">
+      <div className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-[1.75rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(1,34,65,0.24)]">
+        <div className="flex items-start justify-between gap-4 border-b border-[#eee6d8] px-6 py-5">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="icon-badge icon-badge-green">
+              <ClipboardList className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <h2 id="notice-collection-title" className="text-xl font-black text-[#012241]">취합완료여부 확인</h2>
+              <p className="mt-1 text-sm font-semibold text-slate-500">{notice.title}</p>
+            </div>
           </div>
           <button type="button" onClick={onClose} className="icon-tool-button" aria-label="취합완료 팝업 닫기">
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
-        <div className="max-h-[58vh] overflow-y-auto bg-[#faf6ef] px-5 py-4">
-          <div className="overflow-hidden rounded-2xl border border-[#e7ddcd] bg-white">
+        <div className="max-h-[58vh] overflow-y-auto bg-white px-6 py-5">
+          <div className="overflow-hidden rounded-[1.25rem] border border-[#e7ddcd] bg-[#faf6ef]">
             <table className="table-sticky w-full table-fixed text-left text-sm">
               <colgroup>
                 <col className="w-[32%]" />
@@ -1139,10 +1154,10 @@ function NoticeCollectionDialog({
               </colgroup>
               <thead>
                 <tr>
-                  <th className="px-3 py-3">부서명</th>
-                  <th className="px-3 py-3">완료여부</th>
-                  <th className="px-3 py-3">확인자</th>
-                  <th className="px-3 py-3">확인시간</th>
+                  <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">부서명</th>
+                  <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">완료여부</th>
+                  <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">확인자</th>
+                  <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">확인시간</th>
                 </tr>
               </thead>
               <tbody>
@@ -1150,7 +1165,7 @@ function NoticeCollectionDialog({
                   const isMine = row.department_id === currentUser?.department_id;
                   const isRowPending = pendingDepartmentId === row.department_id;
                   return (
-                    <tr key={row.department_id} className="border-t border-slate-100">
+                    <tr key={row.department_id} className="border-t border-[#eef2f6]">
                       <td className="px-3 py-3 font-black text-[#012241]">{row.department_name}</td>
                       <td className="px-3 py-3">
                         {isMine ? (
@@ -1186,7 +1201,7 @@ function NoticeCollectionDialog({
             <ActionMessage state={state} />
           </div>
         </div>
-        <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+        <div className="flex justify-end gap-2 border-t border-[#eee6d8] px-6 py-4">
           <button type="button" onClick={onClose} className="tool-button tool-button-primary">닫기</button>
         </div>
       </div>

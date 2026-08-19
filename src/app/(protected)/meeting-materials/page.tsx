@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import dynamic from "next/dynamic";
+import { CheckCircle2, ClipboardList, Percent } from "lucide-react";
 import type { VolumeChartRow } from "@/components/charts/VolumeComparisonChart";
 import { TableShell } from "@/components/common/TableShell";
 import { MeetingMaterialsWorkspace } from "@/components/reports/MeetingMaterialsWorkspace";
@@ -646,18 +647,18 @@ function filterMeetingMaterialSearch(
 
 function compactDepartmentStatus(status: DepartmentSubmissionStatus | null) {
   if (!status) {
-    return { label: "미작성", className: "border-slate-200 bg-slate-50 text-slate-600" };
+    return { label: "미작성", dotClassName: "bg-slate-300", textClassName: "text-slate-500" };
   }
   if (status === "draft") {
-    return { label: "작성 중", className: "border-slate-200 bg-slate-50 text-slate-700" };
+    return { label: "작성 중", dotClassName: "u-dot-amber", textClassName: "text-[#012241]" };
   }
   if (status === "submitted_to_division") {
-    return { label: "검토", className: "border-blue-200 bg-blue-50 text-blue-700" };
+    return { label: "검토", dotClassName: "u-dot-blue", textClassName: "text-[#012241]" };
   }
   if (status === "division_approved") {
-    return { label: "승인", className: "border-emerald-200 bg-emerald-50 text-emerald-700" };
+    return { label: "승인", dotClassName: "u-dot-green", textClassName: "text-[#007050]" };
   }
-  return { label: "반려", className: "border-rose-200 bg-rose-50 text-rose-700" };
+  return { label: "반려", dotClassName: "u-dot-pink", textClassName: "text-[#c2566d]" };
 }
 
 export default async function MeetingMaterialsPage({
@@ -1146,97 +1147,145 @@ function CollectionView({
   const completedClientCount = departments.reduce((sum, department) => sum + (writtenClientMap.get(department.id)?.size ?? 0), 0);
   const completionRate = totalClientCount > 0 ? Math.round((completedClientCount / totalClientCount) * 100) : 0;
   return (
-    <div className="grid w-full gap-3 xl:grid-cols-2">
-      <MeetingPriorityPanel items={priorityItems} openRequests={openRequestItems} />
-      <section className="sketch-panel p-3">
-        <div className="mb-3 flex min-h-[54px] items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-black text-[#012241]">부서별 작성 모니터링</p>
-            <p className="text-xs font-bold text-slate-500">작성완료 여부를 빠르게 확인합니다.</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-[#e7ddcd] bg-[#fbf8f2] px-2.5 py-1.5 shadow-[0_10px_22px_rgba(16,34,61,0.04)]">
-            <div className="w-24 shrink-0">
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <span className="text-[10px] font-black text-slate-500">작성진행률</span>
-                <span className="text-[11px] font-black text-[#007050]">{completionRate}%</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-[#e6f1ec]">
-                <span className="block h-full rounded-full bg-gradient-to-r from-[#2fae66] to-[#007050]" style={{ width: `${completionRate}%` }} />
-              </div>
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <article className="kpi-card p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[11px] font-black text-slate-500">총건수</p>
+              <p className="mt-1.5 text-sm leading-none tabular-nums text-[#012241]" style={{ fontWeight: 850 }}>{totalClientCount}</p>
             </div>
-            <div className="grid grid-cols-3 gap-1 text-center">
-              <div className="min-w-[52px] rounded-xl bg-white px-1.5 py-1">
-                <span className="block text-[10px] font-black text-slate-400">총건수</span>
-                <span className="block text-xs font-black text-[#012241]">{totalClientCount}</span>
-              </div>
-              <div className="min-w-[58px] rounded-xl bg-white px-1.5 py-1">
-                <span className="block text-[10px] font-black text-slate-400">완료건수</span>
-                <span className="block text-xs font-black text-[#007050]">{completedClientCount}</span>
-              </div>
-              <div className="min-w-[52px] rounded-xl bg-white px-1.5 py-1">
-                <span className="block text-[10px] font-black text-slate-400">완료율</span>
-                <span className="block text-xs font-black text-emerald-600">{completionRate}%</span>
-              </div>
+            <span className="icon-badge icon-badge-blue" aria-hidden="true">
+              <ClipboardList className="h-5 w-5" />
+            </span>
+          </div>
+        </article>
+        <article className="kpi-card p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[11px] font-black text-slate-500">완료건수</p>
+              <p className="mt-1.5 text-sm leading-none tabular-nums text-[#007050]" style={{ fontWeight: 850 }}>
+                {completedClientCount}
+                <span className="ml-1 text-[11px] font-bold text-slate-400">/ {totalClientCount}</span>
+              </p>
+            </div>
+            <span className="icon-badge icon-badge-green" aria-hidden="true">
+              <CheckCircle2 className="h-5 w-5" />
+            </span>
+          </div>
+          <div className="mini-bar mt-2.5">
+            <i style={{ width: `${completionRate}%` }} />
+          </div>
+        </article>
+        <article className="kpi-card p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[11px] font-black text-slate-500">완료율</p>
+              <p className="mt-1.5 text-sm leading-none tabular-nums text-[#012241]" style={{ fontWeight: 850 }}>
+                {completionRate}
+                <span className="ml-0.5 text-[11px] font-bold text-slate-400">%</span>
+              </p>
+            </div>
+            <span className="icon-badge icon-badge-amber" aria-hidden="true">
+              <Percent className="h-5 w-5" />
+            </span>
+          </div>
+          <div className="mini-bar mt-2.5">
+            <i style={{ width: `${completionRate}%` }} />
+          </div>
+        </article>
+      </div>
+      <div className="grid w-full gap-3 xl:grid-cols-2">
+        <MeetingPriorityPanel items={priorityItems} openRequests={openRequestItems} />
+        <section className="kpi-card p-3">
+          <div className="mb-3 flex min-h-[38px] flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-black text-[#012241]">부서별 작성 모니터링</p>
+              <p className="text-xs font-bold text-slate-500">작성완료 여부를 빠르게 확인합니다.</p>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-black text-slate-500">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="u-dot u-dot-green" aria-hidden="true" />
+                승인
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="u-dot u-dot-blue" aria-hidden="true" />
+                검토
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="u-dot u-dot-amber" aria-hidden="true" />
+                작성 중
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="u-dot u-dot-pink" aria-hidden="true" />
+                반려
+              </span>
             </div>
           </div>
-        </div>
-        <TableShell>
-          <table className="table-sticky w-full table-fixed text-left text-[13px]">
-            <colgroup>
-              <col className="w-[34%]" />
-              <col className="w-[15%]" />
-              <col className="w-[15%]" />
-              <col className="w-[18%]" />
-              <col className="w-[18%]" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th className="px-2 py-2.5">부서</th>
-                <th className="px-2 py-2.5">화주</th>
-                <th className="px-2 py-2.5">완료율</th>
-                <th className="px-2 py-2.5">상태</th>
-                <th className="px-2 py-2.5">확정일</th>
-              </tr>
-            </thead>
-            <tbody>
-              {departments.map((department) => {
-                const totalClients = clientCountMap.get(department.id) ?? 0;
-                const writtenClients = writtenClientMap.get(department.id)?.size ?? 0;
-                const departmentCompletionRate = totalClients > 0 ? Math.round((writtenClients / totalClients) * 100) : 0;
-                const submission = submissions.find((row) => row.department_id === department.id);
-                const status = compactDepartmentStatus(submission?.status ?? null);
-                return (
-                  <tr key={department.id} className="border-t border-slate-100">
-                    <td className="truncate px-2 py-1.5 text-[12px] font-black text-[#012241]" title={department.department_name}>
-                      {department.department_name}
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <span className="font-black text-[#007050]">{writtenClients}</span>
-                      <span className="text-slate-400"> / {totalClients}</span>
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <span
-                        className={cn(
-                          "font-black",
-                          departmentCompletionRate === 100 ? "text-emerald-600" : "text-slate-600"
-                        )}
-                      >
-                        {departmentCompletionRate}%
-                      </span>
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <span className={cn("inline-flex rounded-full border px-2 py-0.5 font-black", status.className)}>
-                        {status.label}
-                      </span>
-                    </td>
-                    <td className="truncate px-2 py-1.5">{formatCompactDate(submission?.finalized_at)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </TableShell>
-      </section>
+          <TableShell>
+            <table className="table-sticky w-full table-fixed text-left text-[13px]">
+              <colgroup>
+                <col className="w-[28%]" />
+                <col className="w-[14%]" />
+                <col className="w-[24%]" />
+                <col className="w-[17%]" />
+                <col className="w-[17%]" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="px-2 py-2.5">부서</th>
+                  <th className="px-2 py-2.5">화주</th>
+                  <th className="px-2 py-2.5">완료율</th>
+                  <th className="px-2 py-2.5">상태</th>
+                  <th className="px-2 py-2.5">확정일</th>
+                </tr>
+              </thead>
+              <tbody>
+                {departments.map((department) => {
+                  const totalClients = clientCountMap.get(department.id) ?? 0;
+                  const writtenClients = writtenClientMap.get(department.id)?.size ?? 0;
+                  const departmentCompletionRate = totalClients > 0 ? Math.round((writtenClients / totalClients) * 100) : 0;
+                  const submission = submissions.find((row) => row.department_id === department.id);
+                  const status = compactDepartmentStatus(submission?.status ?? null);
+                  return (
+                    <tr key={department.id} className="border-t border-slate-100">
+                      <td className="truncate px-2 py-1.5 text-[12px] font-black text-[#012241]" title={department.department_name}>
+                        {department.department_name}
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <span className="font-black text-[#007050]">{writtenClients}</span>
+                        <span className="text-slate-400"> / {totalClients}</span>
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <span className="flex items-center gap-2">
+                          <span className="mini-bar block min-w-8 flex-1" aria-hidden="true">
+                            <i style={{ width: `${departmentCompletionRate}%` }} />
+                          </span>
+                          <span
+                            className={cn(
+                              "shrink-0 font-black tabular-nums",
+                              departmentCompletionRate === 100 ? "text-emerald-600" : "text-slate-600"
+                            )}
+                          >
+                            {departmentCompletionRate}%
+                          </span>
+                        </span>
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <span className={cn("inline-flex items-center gap-1.5 font-black", status.textClassName)}>
+                          <span className={cn("u-dot", status.dotClassName)} aria-hidden="true" />
+                          {status.label}
+                        </span>
+                      </td>
+                      <td className="truncate px-2 py-1.5">{formatCompactDate(submission?.finalized_at)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </TableShell>
+        </section>
+      </div>
     </div>
   );
 }

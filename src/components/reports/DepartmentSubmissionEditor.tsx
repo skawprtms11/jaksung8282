@@ -1568,23 +1568,28 @@ function VacancyRecordDialog({
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/72 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="vacancy-dialog-title">
-        <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-[1.5rem] border border-white/80 bg-white/95 shadow-[0_28px_80px_rgba(16,34,61,0.24)] backdrop-blur-2xl">
-          <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-            <div>
-              <h2 id="vacancy-dialog-title" className="text-lg font-black text-slate-900">
-                {initialItem ? "공실현황 수정" : "공실현황 등록"}
-              </h2>
-              <p className="mt-1 text-sm font-semibold text-slate-500">
-                {selectedWeek.year}년 {selectedWeek.month}월 {selectedWeek.weekOfMonth}주차 기준으로 센터별 면적을 입력합니다.
-              </p>
+      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#012241]/60 p-4 backdrop-blur" role="dialog" aria-modal="true" aria-labelledby="vacancy-dialog-title">
+        <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-[1.75rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(1,34,65,0.24)]">
+          <div className="flex items-start justify-between gap-4 border-b border-[#e7ddcd] px-5 py-4">
+            <div className="flex items-start gap-3">
+              <span className="icon-badge icon-badge-green" aria-hidden="true">
+                <Building2 className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 id="vacancy-dialog-title" className="text-lg font-black text-[#012241]">
+                  {initialItem ? "공실현황 수정" : "공실현황 등록"}
+                </h2>
+                <p className="mt-1 text-sm font-semibold text-slate-500">
+                  {selectedWeek.year}년 {selectedWeek.month}월 {selectedWeek.weekOfMonth}주차 기준으로 센터별 면적을 입력합니다.
+                </p>
+              </div>
             </div>
             <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
-          <div className="max-h-[64vh] overflow-y-auto bg-[#faf6ef] px-5 py-4">
-            <div className="glass-row grid gap-3 p-3 md:grid-cols-2">
+          <div className="max-h-[64vh] overflow-y-auto bg-white px-5 py-4">
+            <div className="grid gap-3 rounded-[1.25rem] border border-[#e4dac9] bg-[#faf6ef] p-3 md:grid-cols-2">
               <label className="text-xs font-black text-slate-600 md:col-span-2">
                 센터
                 <select
@@ -1631,7 +1636,7 @@ function VacancyRecordDialog({
               ) : null}
             </div>
           </div>
-          <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+          <div className="flex justify-end gap-2 border-t border-[#e7ddcd] bg-white px-5 py-4">
             <button type="button" onClick={onClose} className="tool-button" disabled={isPending}>
               취소
             </button>
@@ -2011,21 +2016,26 @@ function FacilityConstructionDialog({
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/72 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="facility-dialog-title">
-        <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-[1.5rem] border border-white/80 bg-white/95 shadow-[0_28px_80px_rgba(16,34,61,0.24)] backdrop-blur-2xl">
-          <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-            <div>
-              <h2 id="facility-dialog-title" className="text-lg font-black text-slate-900">
-                {initialItem ? "시설공사 수정" : "시설공사 등록"}
-              </h2>
-              <p className="mt-1 text-sm font-semibold text-slate-500">공사 일정, 내용, 업체, 금액과 진행상태를 입력합니다.</p>
+      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#012241]/60 p-4 backdrop-blur" role="dialog" aria-modal="true" aria-labelledby="facility-dialog-title">
+        <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-[1.75rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(1,34,65,0.24)]">
+          <div className="flex items-start justify-between gap-4 border-b border-[#e7ddcd] px-5 py-4">
+            <div className="flex items-start gap-3">
+              <span className="icon-badge icon-badge-green" aria-hidden="true">
+                <Hammer className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 id="facility-dialog-title" className="text-lg font-black text-[#012241]">
+                  {initialItem ? "시설공사 수정" : "시설공사 등록"}
+                </h2>
+                <p className="mt-1 text-sm font-semibold text-slate-500">공사 일정, 내용, 업체, 금액과 진행상태를 입력합니다.</p>
+              </div>
             </div>
             <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
-          <div className="max-h-[64vh] overflow-y-auto bg-[#faf6ef] px-5 py-4">
-            <div className="glass-row grid gap-3 p-3 md:grid-cols-2">
+          <div className="max-h-[64vh] overflow-y-auto bg-white px-5 py-4">
+            <div className="grid gap-3 rounded-[1.25rem] border border-[#e4dac9] bg-[#faf6ef] p-3 md:grid-cols-2">
               <label className="text-xs font-black text-slate-600">
                 시작일
                 <input
@@ -2111,7 +2121,7 @@ function FacilityConstructionDialog({
               ) : null}
             </div>
           </div>
-          <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+          <div className="flex justify-end gap-2 border-t border-[#e7ddcd] bg-white px-5 py-4">
             <button type="button" onClick={onClose} className="tool-button">
               취소
             </button>
@@ -2432,21 +2442,26 @@ function HolidayWorkDialog({
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/72 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="holiday-work-dialog-title">
-        <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-[1.5rem] border border-white/80 bg-white/95 shadow-[0_28px_80px_rgba(16,34,61,0.24)] backdrop-blur-2xl">
-          <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-            <div>
-              <h2 id="holiday-work-dialog-title" className="text-lg font-black text-slate-900">
-                {initialItem ? "공휴일근무 수정" : "공휴일근무 등록"}
-              </h2>
-              <p className="mt-1 text-sm font-semibold text-slate-500">공휴일 근무자와 근무사유, 청구 여부를 입력합니다.</p>
+      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#012241]/60 p-4 backdrop-blur" role="dialog" aria-modal="true" aria-labelledby="holiday-work-dialog-title">
+        <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-[1.75rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(1,34,65,0.24)]">
+          <div className="flex items-start justify-between gap-4 border-b border-[#e7ddcd] px-5 py-4">
+            <div className="flex items-start gap-3">
+              <span className="icon-badge icon-badge-green" aria-hidden="true">
+                <CalendarDays className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 id="holiday-work-dialog-title" className="text-lg font-black text-[#012241]">
+                  {initialItem ? "공휴일근무 수정" : "공휴일근무 등록"}
+                </h2>
+                <p className="mt-1 text-sm font-semibold text-slate-500">공휴일 근무자와 근무사유, 청구 여부를 입력합니다.</p>
+              </div>
             </div>
             <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
-          <div className="max-h-[64vh] overflow-y-auto bg-[#faf6ef] px-5 py-4">
-            <div className="glass-row grid gap-3 p-3 md:grid-cols-2">
+          <div className="max-h-[64vh] overflow-y-auto bg-white px-5 py-4">
+            <div className="grid gap-3 rounded-[1.25rem] border border-[#e4dac9] bg-[#faf6ef] p-3 md:grid-cols-2">
               <label className="text-xs font-black text-slate-600">
                 일자
                 <input
@@ -2551,7 +2566,7 @@ function HolidayWorkDialog({
               ) : null}
             </div>
           </div>
-          <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+          <div className="flex justify-end gap-2 border-t border-[#e7ddcd] bg-white px-5 py-4">
             <button type="button" onClick={onClose} className="tool-button">
               취소
             </button>

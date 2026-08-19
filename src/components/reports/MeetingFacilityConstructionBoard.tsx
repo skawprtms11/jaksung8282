@@ -46,10 +46,10 @@ const facilityStatusOptions: { value: FacilityConstructionStatus; label: string 
   { value: "completed", label: "완료" }
 ];
 
-const facilityStatusClassNames: Record<FacilityConstructionStatus, string> = {
-  planned: "border-slate-200 bg-slate-50 text-slate-600",
-  in_progress: "border-blue-200 bg-blue-50 text-blue-700",
-  completed: "border-emerald-200 bg-emerald-50 text-emerald-700"
+const facilityStatusDotClassNames: Record<FacilityConstructionStatus, string> = {
+  planned: "u-dot-amber",
+  in_progress: "u-dot-blue",
+  completed: "u-dot-green"
 };
 
 function normalizeFacilityStatus(value: unknown): FacilityConstructionStatus {
@@ -198,15 +198,15 @@ export function MeetingFacilityConstructionBoard({
             </colgroup>
             <thead>
               <tr>
-                <th className="px-2 py-2.5">부서</th>
-                <th className="px-2 py-2.5">시작일</th>
-                <th className="px-2 py-2.5">완료일</th>
-                <th className="px-2 py-2.5">공사명(전자결제 제목)</th>
-                <th className="px-2 py-2.5">공사내용</th>
-                <th className="px-2 py-2.5">진행업체</th>
-                <th className="px-2 py-2.5">공사금액</th>
-                <th className="px-2 py-2.5">상태</th>
-                <th className="px-2 py-2.5">비고</th>
+                <th className="px-2 py-2.5 font-black !text-slate-500">부서</th>
+                <th className="px-2 py-2.5 font-black !text-slate-500">시작일</th>
+                <th className="px-2 py-2.5 font-black !text-slate-500">완료일</th>
+                <th className="px-2 py-2.5 font-black !text-slate-500">공사명(전자결제 제목)</th>
+                <th className="px-2 py-2.5 font-black !text-slate-500">공사내용</th>
+                <th className="px-2 py-2.5 font-black !text-slate-500">진행업체</th>
+                <th className="px-2 py-2.5 font-black !text-slate-500">공사금액</th>
+                <th className="px-2 py-2.5 font-black !text-slate-500">상태</th>
+                <th className="px-2 py-2.5 font-black !text-slate-500">비고</th>
               </tr>
             </thead>
             <tbody>
@@ -233,7 +233,8 @@ export function MeetingFacilityConstructionBoard({
                     <td className="break-words px-2 py-2.5">{row.contractor || "-"}</td>
                     <td className="break-words px-2 py-2.5">{row.construction_amount || "-"}</td>
                     <td className="px-1.5 py-2.5">
-                      <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-black ${facilityStatusClassNames[row.status]}`}>
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-[#012241]">
+                        <span className={`u-dot ${facilityStatusDotClassNames[row.status]}`} aria-hidden="true" />
                         {facilityStatusOptions.find((option) => option.value === row.status)?.label ?? "예정"}
                       </span>
                     </td>

@@ -75,30 +75,30 @@ function reportStatusLabel(status: ClientReportStatus) {
   return "승인";
 }
 
-function reportStatusClassName(status: ClientReportStatus) {
+function reportStatusDotClassName(status: ClientReportStatus) {
   if (status === "draft") {
-    return "border-slate-200 bg-slate-50 text-slate-700";
+    return "u-dot-amber";
   }
   if (status === "rejected") {
-    return "border-rose-200 bg-rose-50 text-rose-700";
+    return "u-dot-pink";
   }
   if (status === "submitted") {
-    return "border-blue-200 bg-blue-50 text-blue-700";
+    return "u-dot-blue";
   }
-  return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  return "u-dot-green";
 }
 
-function importanceIconClassName(importance: Importance) {
+function importanceDotClassName(importance: Importance) {
   if (importance === "very_high") {
-    return "border-red-100 bg-red-50 text-red-600";
+    return "u-dot-pink";
   }
   if (importance === "high") {
-    return "border-orange-100 bg-orange-50 text-orange-500";
+    return "u-dot-amber";
   }
   if (importance === "medium") {
-    return "border-emerald-100 bg-emerald-50 text-emerald-600";
+    return "u-dot-green";
   }
-  return "border-slate-200 bg-slate-50 text-slate-500";
+  return "u-dot-blue";
 }
 
 function ModalPortal({ children }: { children: React.ReactNode }) {
@@ -379,12 +379,12 @@ export function ClientReportsTable({
                   className="h-4 w-4 rounded border-slate-300"
                 />
               </th>
-              <th className="px-3 py-3">화주</th>
-              <th className="px-3 py-3">작성자</th>
-              <th className="px-3 py-3">금주실시사항</th>
-              <th className="px-3 py-3">차주예정사항</th>
-              <th className="px-3 py-3 text-center">물동량</th>
-              <th className="px-3 py-3">상태</th>
+              <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">화주</th>
+              <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">작성자</th>
+              <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">금주실시사항</th>
+              <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">차주예정사항</th>
+              <th className="px-3 py-3 text-center text-xs font-black tracking-[0.02em] text-slate-500!">물동량</th>
+              <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">상태</th>
             </tr>
           </thead>
           <tbody>
@@ -395,7 +395,7 @@ export function ClientReportsTable({
                 <tr
                   key={report.id}
                   className={cn(
-                    "border-t border-slate-100 align-top",
+                    "border-t border-[#eef2f6] align-top",
                     isEditing ? "bg-[#f4ede2]" : "bg-white/80"
                   )}
                 >
@@ -431,7 +431,8 @@ export function ClientReportsTable({
                     )}
                   </td>
                   <td className="px-3 py-3">
-                    <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-black", reportStatusClassName(report.status))}>
+                    <span className="inline-flex items-center gap-2 text-xs font-bold text-[#012241]">
+                      <span className={cn("u-dot", reportStatusDotClassName(report.status))} aria-hidden="true" />
                       {reportStatusLabel(report.status)}
                     </span>
                   </td>
@@ -494,15 +495,10 @@ function ReportItemList({ items }: { items: ClientReportItem[] }) {
     <ol className="space-y-2">
       {items.map((item, index) => {
         return (
-          <li key={`${item.title}-${index}`} className="flex gap-2">
-            <span
-              className={cn(
-                "mt-0.5 inline-flex h-7 min-w-11 shrink-0 items-center justify-center rounded-xl border px-2 text-xs font-black",
-                importanceIconClassName(item.importance)
-              )}
-              title={item.categoryName}
-            >
-              {item.categoryName}
+          <li key={`${item.title}-${index}`} className="flex gap-2.5">
+            <span className="mt-1.5 inline-flex shrink-0 items-center gap-1.5" title={item.categoryName}>
+              <span className={cn("u-dot", importanceDotClassName(item.importance))} aria-hidden="true" />
+              <span className="text-[11px] font-bold text-slate-500">{item.categoryName}</span>
             </span>
             <span className="min-w-0">
               <span className="block break-words text-sm font-black leading-5 text-[#012241]">{item.title}</span>
@@ -530,15 +526,15 @@ function VolumeConfirmDialog({
 }) {
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/72 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="volume-confirm-title">
-        <div className="max-h-[90vh] w-full max-w-7xl overflow-hidden rounded-[1.5rem] border border-white/80 bg-white/95 shadow-[0_28px_80px_rgba(16,34,61,0.24)] backdrop-blur-2xl">
-          <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+      <div className="fixed inset-0 z-[130] flex items-center justify-center bg-[#012241]/60 p-4 backdrop-blur" role="dialog" aria-modal="true" aria-labelledby="volume-confirm-title">
+        <div className="max-h-[90vh] w-full max-w-7xl overflow-hidden rounded-[1.75rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(1,34,65,0.24)]">
+          <div className="flex items-start justify-between gap-4 border-b border-[#eee6d8] px-6 py-5">
             <div className="flex items-center gap-3">
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#e6f1ec] text-[#007050]">
+              <span className="icon-badge icon-badge-green">
                 <PackageCheck className="h-5 w-5" aria-hidden="true" />
               </span>
               <div>
-                <h2 id="volume-confirm-title" className="text-lg font-black text-slate-900">
+                <h2 id="volume-confirm-title" className="text-lg font-black text-[#012241]">
                   물동량 작성내용
                 </h2>
                 <p className="mt-1 text-sm font-semibold text-slate-500">{report.clientName} · {report.weekLabel}</p>
@@ -549,11 +545,11 @@ function VolumeConfirmDialog({
             </button>
           </div>
 
-          <div className="max-h-[68vh] overflow-y-auto bg-[#faf6ef] p-5">
+          <div className="max-h-[68vh] overflow-y-auto bg-white p-5">
             {message ? (
-              <div className="sketch-panel p-4 text-sm font-bold text-rose-600">{message}</div>
+              <div className="rounded-[1.25rem] border border-[#e7ddcd] bg-[#faf6ef] p-4 text-sm font-bold text-rose-600">{message}</div>
             ) : loading ? (
-              <div className="sketch-panel p-4 text-sm font-bold text-slate-500">물동량 이력을 불러오는 중입니다.</div>
+              <div className="rounded-[1.25rem] border border-[#e7ddcd] bg-[#faf6ef] p-4 text-sm font-bold text-slate-500">물동량 이력을 불러오는 중입니다.</div>
             ) : (
               <VolumeAnalysisPanel
                 clientId={report.clientId}
@@ -563,12 +559,12 @@ function VolumeConfirmDialog({
                   quantity: volume.quantity,
                   unit: volume.unit
                 }))}
-                className="sketch-panel p-4"
+                className="rounded-[1.25rem] border border-[#e7ddcd] bg-[#faf6ef] p-4"
               />
             )}
           </div>
 
-          <div className="flex justify-end border-t border-slate-200 px-5 py-4">
+          <div className="flex justify-end border-t border-[#eee6d8] px-6 py-4">
             <button type="button" onClick={onClose} className="tool-button tool-button-primary">
               확인
             </button>

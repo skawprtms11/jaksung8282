@@ -836,88 +836,94 @@ export default async function DepartmentReportsPage({
           </>
         }
       >
-        <div className="grid auto-rows-fr gap-2 xl:grid-cols-[0.9fr_1.3fr_1fr]">
-          <section className="flex h-full min-h-[112px] flex-col overflow-hidden rounded-2xl border border-[#e7ddcd] bg-white/90">
-            <header className="flex h-[38px] shrink-0 items-center justify-between border-b border-[#ece3d4] px-3">
-              <div className="flex items-center gap-2">
-                <ClipboardCheck className="h-4 w-4 text-[#007050]" aria-hidden="true" />
-                <h2 className="text-[13px] font-black text-[#012241]">작성현황</h2>
+        <div className="grid auto-rows-fr gap-3 xl:grid-cols-[0.9fr_1.3fr_1fr]">
+          <section className="kpi-card flex h-full min-h-[112px] flex-col p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h2 className="text-[11px] font-black text-slate-500">작성현황</h2>
+                <p className="mt-1.5 text-[15px] leading-none tabular-nums text-[#012241]" style={{ fontWeight: 850 }}>
+                  {summaryReports.length}<span className="ml-1 text-[11px] font-bold text-slate-400">/ {clientCount}</span>
+                </p>
               </div>
-              <p className="text-[13px] font-black tabular-nums text-[#012241]">
-                {summaryReports.length}<span className="font-bold text-slate-400"> / {clientCount}</span>
-              </p>
-            </header>
-            <div className="grid min-h-0 flex-1 grid-cols-3 divide-x divide-[#ece3d4]">
+              <span className="icon-badge icon-badge-green" aria-hidden="true">
+                <ClipboardCheck className="h-5 w-5" />
+              </span>
+            </div>
+            <div className="mt-auto grid grid-cols-3 gap-1 pt-2.5">
               {[
                 { label: "전체", value: clientCount, labelClassName: "text-slate-500", valueClassName: "text-[#012241]" },
                 { label: "작성", value: summaryReports.length, labelClassName: "text-[#007050]", valueClassName: "text-[#007050]" },
                 { label: "미작성", value: missingCount, labelClassName: "text-rose-600", valueClassName: "text-rose-600" }
               ].map((item) => (
-                <div key={item.label} className="flex min-w-0 flex-col items-center justify-center px-2 text-center">
+                <div key={item.label} className="min-w-0 rounded-xl bg-[#faf6ef] px-2 py-1.5 text-center">
                   <p className={cn("text-[11px] font-black leading-none", item.labelClassName)}>{item.label}</p>
-                  <p className={cn("mt-2 text-lg font-black leading-none tabular-nums", item.valueClassName)}>{item.value}</p>
+                  <p className={cn("mt-1.5 text-base font-black leading-none tabular-nums", item.valueClassName)}>{item.value}</p>
                 </div>
               ))}
             </div>
           </section>
 
-          <section className="flex h-full min-h-[112px] flex-col overflow-hidden rounded-2xl border border-[#e7ddcd] bg-white/90">
-            <header className="flex h-[38px] shrink-0 items-center justify-between border-b border-[#ece3d4] px-3">
-              <div className="flex items-center gap-2">
-                <ListChecks className="h-4 w-4 text-orange-500" aria-hidden="true" />
-                <h2 className="text-[13px] font-black text-[#012241]">내용건수</h2>
+          <section className="kpi-card flex h-full min-h-[112px] flex-col p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h2 className="text-[11px] font-black text-slate-500">내용건수</h2>
+                <p className="mt-1.5 text-[15px] leading-none tabular-nums text-[#012241]" style={{ fontWeight: 850 }}>
+                  {importanceStats.total}<span className="ml-0.5 text-[11px] font-bold text-slate-400">건</span>
+                </p>
               </div>
-              <p className="text-[13px] font-black tabular-nums text-[#012241]">
-                {importanceStats.total}<span className="ml-0.5 text-[11px] font-bold text-slate-400">건</span>
-              </p>
-            </header>
-            <div className="flex min-h-0 flex-1 flex-col px-3 pb-2 pt-2.5">
-              <div className="flex h-1.5 shrink-0 overflow-hidden rounded-full bg-slate-100">
-                {importanceStats.rows.map((row) => (
-                  <span
-                    key={row.importance}
-                    className={row.barClassName}
-                    style={{ width: `${row.ratio}%` }}
-                    aria-hidden="true"
-                  />
-                ))}
-              </div>
-              <div className="mt-2 grid min-h-0 flex-1 grid-cols-4 divide-x divide-[#ece3d4]">
-                {importanceStats.rows.map((row) => (
-                  <div key={row.importance} className="flex min-w-0 items-center justify-center gap-1.5 px-1.5">
-                    <span className={cn("inline-flex shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-black leading-4", row.badgeClassName)}>
-                      {row.label}
-                    </span>
-                    <span className="whitespace-nowrap text-xs font-black tabular-nums text-[#012241]">
-                      {row.count}<span className="ml-1 text-[10px] font-bold text-slate-400">{row.ratio}%</span>
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <span className="icon-badge icon-badge-amber" aria-hidden="true">
+                <ListChecks className="h-5 w-5" />
+              </span>
+            </div>
+            <div className="mt-2.5 flex h-1.5 shrink-0 overflow-hidden rounded-full bg-slate-100">
+              {importanceStats.rows.map((row) => (
+                <span
+                  key={row.importance}
+                  className={row.barClassName}
+                  style={{ width: `${row.ratio}%` }}
+                  aria-hidden="true"
+                />
+              ))}
+            </div>
+            <div className="mt-auto grid grid-cols-4 gap-1 pt-2">
+              {importanceStats.rows.map((row) => (
+                <div key={row.importance} className="flex min-w-0 items-center justify-center gap-1.5 rounded-xl bg-[#faf6ef] px-1.5 py-1.5">
+                  <span className={cn("inline-flex shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-black leading-4", row.badgeClassName)}>
+                    {row.label}
+                  </span>
+                  <span className="whitespace-nowrap text-xs font-black tabular-nums text-[#012241]">
+                    {row.count}<span className="ml-1 text-[10px] font-bold text-slate-400">{row.ratio}%</span>
+                  </span>
+                </div>
+              ))}
             </div>
           </section>
 
-          <section className="flex h-full min-h-[112px] flex-col overflow-hidden rounded-2xl border border-[#e7ddcd] bg-white/90">
-            <header className="flex h-[38px] shrink-0 items-center border-b border-[#ece3d4] px-3">
-              <div className="flex items-center gap-2">
-                <Boxes className="h-4 w-4 text-emerald-600" aria-hidden="true" />
-                <h2 className="text-[13px] font-black text-[#012241]">물동량</h2>
-              </div>
-            </header>
-            <div className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-[#ece3d4]">
-              <div className="flex min-w-0 flex-col justify-center px-4">
+          <section className="kpi-card flex h-full min-h-[112px] flex-col p-3">
+            <div className="flex items-start justify-between gap-2">
+              <h2 className="text-[11px] font-black text-slate-500">물동량</h2>
+              <span className="icon-badge icon-badge-navy" aria-hidden="true">
+                <Boxes className="h-5 w-5" />
+              </span>
+            </div>
+            <div className="mt-auto grid grid-cols-2 gap-1 pt-2.5">
+              <div className="min-w-0 rounded-xl bg-[#faf6ef] px-2.5 py-1.5">
                 <p className="flex items-center gap-1.5 text-[11px] font-black leading-none text-emerald-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                  <span className="u-dot u-dot-green" aria-hidden="true" />
                   입고
                 </p>
-                <p className="mt-2 break-words text-[15px] font-black leading-none tabular-nums text-[#012241]">{inboundVolumeSummary}</p>
+                <p className="mt-1.5 break-words text-[15px] leading-none tabular-nums text-[#012241]" style={{ fontWeight: 850 }}>
+                  {inboundVolumeSummary}
+                </p>
               </div>
-              <div className="flex min-w-0 flex-col justify-center px-4">
+              <div className="min-w-0 rounded-xl bg-[#faf6ef] px-2.5 py-1.5">
                 <p className="flex items-center gap-1.5 text-[11px] font-black leading-none text-[#007050]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#007050]" aria-hidden="true" />
+                  <span className="u-dot" style={{ background: "#007050" }} aria-hidden="true" />
                   출고
                 </p>
-                <p className="mt-2 break-words text-[15px] font-black leading-none tabular-nums text-[#012241]">{outboundVolumeSummary}</p>
+                <p className="mt-1.5 break-words text-[15px] leading-none tabular-nums text-[#012241]" style={{ fontWeight: 850 }}>
+                  {outboundVolumeSummary}
+                </p>
               </div>
             </div>
           </section>

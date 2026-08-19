@@ -177,10 +177,10 @@ export function MeetingHolidayWorkBoard({
   return (
     <>
       <section className="grid gap-3 md:grid-cols-4">
-        <SummaryCard label="근무건수" value={`${summary.itemCount}건`} />
-        <SummaryCard label="정직원" value={`${summary.employeeCount}명`} />
-        <SummaryCard label="협력사" value={`${summary.contractCount}명`} />
-        <SummaryCard label="청구건수" value={`${summary.billedCount}건`} />
+        <SummaryCard label="근무건수" value={`${summary.itemCount}건`} badgeClassName="icon-badge-blue" />
+        <SummaryCard label="정직원" value={`${summary.employeeCount}명`} badgeClassName="icon-badge-green" />
+        <SummaryCard label="협력사" value={`${summary.contractCount}명`} badgeClassName="icon-badge-amber" />
+        <SummaryCard label="청구건수" value={`${summary.billedCount}건`} badgeClassName="icon-badge-pink" />
       </section>
 
       <section className="sketch-panel p-4">
@@ -205,9 +205,9 @@ export function MeetingHolidayWorkBoard({
             </colgroup>
             <thead>
               <tr>
-                <th rowSpan={2} className="px-3 py-3 text-left">부서</th>
+                <th rowSpan={2} className="px-3 py-3 text-left font-black !text-slate-500">부서</th>
                 {columns.map((column) => (
-                  <th key={column.key} colSpan={2} className="border-l border-[#e7ddcd] px-2 py-2">
+                  <th key={column.key} colSpan={2} className="border-l border-[#e7ddcd] px-2 py-2 font-black !text-slate-500">
                     {column.label} {column.weekday}
                   </th>
                 ))}
@@ -215,8 +215,8 @@ export function MeetingHolidayWorkBoard({
               <tr>
                 {columns.map((column) => (
                   <Fragment key={column.key}>
-                    <th key={`${column.key}-employee`} className="border-l border-[#e7ddcd] px-2 py-2">정직원</th>
-                    <th key={`${column.key}-contract`} className="px-2 py-2">협력사</th>
+                    <th key={`${column.key}-employee`} className="border-l border-[#e7ddcd] px-2 py-2 font-black !text-slate-500">정직원</th>
+                    <th key={`${column.key}-contract`} className="px-2 py-2 font-black !text-slate-500">협력사</th>
                   </Fragment>
                 ))}
               </tr>
@@ -312,15 +312,15 @@ export function MeetingHolidayWorkBoard({
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: string }) {
+function SummaryCard({ label, value, badgeClassName }: { label: string; value: string; badgeClassName: string }) {
   return (
-    <div className="rounded-2xl border border-[#e7ddcd] bg-white/88 px-4 py-3 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
-      <div className="flex items-center justify-between gap-3">
+    <div className="kpi-card px-4 py-3">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-black text-slate-500">{label}</p>
           <p className="mt-1 text-xl font-black text-[#012241]">{value}</p>
         </div>
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#e6f1ec] text-[#007050]">
+        <span className={`icon-badge ${badgeClassName}`}>
           <Users className="h-5 w-5" aria-hidden="true" />
         </span>
       </div>
@@ -338,12 +338,12 @@ function HolidayDetailDialog({ detail, onClose }: { detail: HolidayWorkDetail; o
   });
 
   return (
-    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="holiday-detail-title">
-      <div className="max-h-[88vh] w-full max-w-4xl overflow-hidden rounded-[1.5rem] border border-white/80 bg-white shadow-[0_28px_80px_rgba(16,34,61,0.26)]">
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-[#012241]/60 p-4 backdrop-blur" role="dialog" aria-modal="true" aria-labelledby="holiday-detail-title">
+      <div className="max-h-[88vh] w-full max-w-4xl overflow-hidden rounded-[1.75rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(1,34,65,0.26)]">
+        <div className="flex items-start justify-between gap-4 border-b border-[#e7ddcd] px-5 py-4">
           <div className="flex items-center gap-3">
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#e6f1ec] text-[#007050]">
-              <CalendarDays className="h-5 w-5" aria-hidden="true" />
+            <span className="icon-badge icon-badge-green" aria-hidden="true">
+              <CalendarDays className="h-5 w-5" />
             </span>
             <div>
               <h2 id="holiday-detail-title" className="text-lg font-black text-[#012241]">
@@ -358,10 +358,10 @@ function HolidayDetailDialog({ detail, onClose }: { detail: HolidayWorkDetail; o
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
-        <div className="max-h-[65vh] overflow-y-auto bg-[#faf6ef] px-5 py-4">
+        <div className="max-h-[65vh] overflow-y-auto bg-white px-5 py-4">
           <div className="space-y-3">
             {sortedItems.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-[#e7ddcd] bg-white px-4 py-3">
+              <div key={item.id} className="rounded-[1.25rem] border border-[#e4dac9] bg-[#faf6ef] px-4 py-3">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   <span className="section-chip">{item.work_date.replaceAll("-", ".")}</span>
                   <span className="section-chip">{item.client_name || "-"}</span>

@@ -34,21 +34,25 @@ const displayModes: {
   value: VolumeDisplayMode;
   label: string;
   className: string;
+  dotClassName: string;
 }[] = [
   {
     value: "inbound",
     label: "입고",
-    className: "text-emerald-700"
+    className: "text-emerald-700",
+    dotClassName: "u-dot-green"
   },
   {
     value: "outbound",
     label: "출고",
-    className: "text-blue-700"
+    className: "text-blue-700",
+    dotClassName: "u-dot-blue"
   },
   {
     value: "total",
     label: "합계",
-    className: "text-[#007050]"
+    className: "text-[#007050]",
+    dotClassName: "u-dot-green"
   }
 ];
 
@@ -135,10 +139,10 @@ export function DepartmentVolumeBoard({ clients, reports }: { clients: Departmen
   return (
     <div className="space-y-3">
       <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_190px]">
-        <section className="rounded-2xl border border-[#e7ddcd] bg-white/90 px-3 py-2 shadow-[0_8px_20px_rgba(16,34,61,0.05)]">
+        <section className="kpi-card px-3 py-2">
           <div className="flex min-h-12 flex-wrap items-center gap-3 sm:flex-nowrap">
             <div className="flex w-full shrink-0 items-center gap-2 pr-4 sm:w-44 sm:pr-8">
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#f4ede2] text-[#007050]">
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#007050] text-white">
                 <BarChart3 className="h-3.5 w-3.5" aria-hidden="true" />
               </span>
               <h2 className="text-sm font-black text-[#012241]">물동량 합계</h2>
@@ -146,7 +150,10 @@ export function DepartmentVolumeBoard({ clients, reports }: { clients: Departmen
             <div className="grid min-w-0 flex-1 grid-cols-3 divide-x divide-[#ece3d4]">
             {displayModes.map((mode) => (
               <div key={mode.value} className="min-w-0 px-3 first:pl-1 last:pr-1">
-                <p className={cn("text-[10px] font-black", mode.className)}>{mode.label}</p>
+                <p className={cn("inline-flex items-center gap-1.5 text-[10px] font-black", mode.className)}>
+                  <span className={cn("u-dot", mode.dotClassName)} aria-hidden="true" />
+                  {mode.label}
+                </p>
                 <p className="mt-0.5 truncate text-sm font-black text-[#012241]" title={summarizeByUnit(allItems, mode.value)}>
                   {summarizeByUnit(allItems, mode.value)}
                 </p>
@@ -155,7 +162,7 @@ export function DepartmentVolumeBoard({ clients, reports }: { clients: Departmen
             </div>
           </div>
         </section>
-        <section className="flex min-h-16 items-center rounded-2xl border border-[#e7ddcd] bg-[#fbf8f2] px-3 py-2 shadow-[0_8px_20px_rgba(16,34,61,0.05)]">
+        <section className="kpi-card flex min-h-16 flex-col justify-center px-3 py-2">
           <div className="flex w-full items-center justify-between gap-2">
             <div>
               <p className="text-[10px] font-black text-slate-500">등록 현황</p>
@@ -168,17 +175,20 @@ export function DepartmentVolumeBoard({ clients, reports }: { clients: Departmen
               {completionRate}%
             </span>
           </div>
+          <span className="mini-bar mt-2 block">
+            <i style={{ width: `${completionRate}%` }} />
+          </span>
         </section>
       </div>
 
-      <section className="rounded-2xl border border-[#e7ddcd] bg-white/88 p-3 shadow-[0_12px_28px_rgba(16,34,61,0.05)]">
+      <section className="sketch-panel p-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="section-doodle-title">주차별 물동량 현황</h2>
           <fieldset className="flex flex-wrap gap-2" aria-label="물동량 표시 기준">
             {displayModes.map((mode) => (
               <label
                 key={mode.value}
-                className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[#e4dac9] bg-white/90 px-3 py-1.5 text-xs font-black text-[#012241] shadow-[0_8px_18px_rgba(16,34,61,0.05)]"
+                className="filter-pill cursor-pointer px-3 py-1.5 text-xs"
               >
                 <input
                   type="checkbox"
@@ -205,12 +215,12 @@ export function DepartmentVolumeBoard({ clients, reports }: { clients: Departmen
             </colgroup>
             <thead>
               <tr>
-                <th className="px-2 py-2.5">화주</th>
+                <th className="px-2 py-2.5 text-[11px] font-black tracking-[0.02em] text-slate-500!">화주</th>
                 {weekColumns.map((week) => (
-                  <th key={week} className="px-2 py-2.5 text-center">{week}주차</th>
+                  <th key={week} className="px-2 py-2.5 text-center text-[11px] font-black tracking-[0.02em] text-slate-500!">{week}주차</th>
                 ))}
-                <th className="px-2 py-2.5 text-center">합계</th>
-                <th className="px-2 py-2.5">비고</th>
+                <th className="px-2 py-2.5 text-center text-[11px] font-black tracking-[0.02em] text-slate-500!">합계</th>
+                <th className="px-2 py-2.5 text-[11px] font-black tracking-[0.02em] text-slate-500!">비고</th>
               </tr>
             </thead>
             <tbody>
@@ -225,7 +235,7 @@ export function DepartmentVolumeBoard({ clients, reports }: { clients: Departmen
                   const clientReports = reportsByClient.get(client.id) ?? [];
                   const notes = collectNotes(clientReports, selectedMode);
                   return (
-                    <tr key={client.id} className="border-t border-slate-100 align-top">
+                    <tr key={client.id} className="border-t border-[#eef2f6] align-top">
                       <td className="truncate px-2 py-2.5 font-black text-[#012241]" title={client.client_name}>
                         {client.client_name}
                       </td>

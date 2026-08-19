@@ -51,7 +51,7 @@ export function ProtectedShell({
           isSidebarHidden={isSidebarHidden}
           onToggleSidebar={toggleSidebar}
         />
-        <main className="p-4 pt-2 lg:p-6 lg:pt-2">{children}</main>
+        <main className="px-4 pb-8 pt-1 lg:px-10 lg:pb-12 lg:pt-2">{children}</main>
       </div>
     </div>
   );
