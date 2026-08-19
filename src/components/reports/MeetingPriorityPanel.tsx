@@ -211,35 +211,33 @@ function OpenRequestBlock({
   onSelect: (item: MeetingOpenRequestItem) => void;
 }) {
   return (
-    <div className="rounded-2xl border border-[#e7ddcd] p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-xs font-black">확인 요청 현황</p>
-        <span className="inline-flex h-6 min-w-8 items-center justify-center rounded-full bg-[#e6f1ec] px-2 text-[11px] font-black text-[#007050]">
-          {items.length}
-        </span>
+    <div className="panel-blush p-4">
+      <p className="text-sm font-black text-[#012241]">확인요청현황</p>
+      <p className="mt-0.5 text-xs font-bold text-[#4a5a6a]">주차와 무관한 미종결 사업부 요청</p>
+      <div className="mt-3 rounded-[1.1rem] bg-white/75 px-4 py-3 shadow-[0_8px_20px_rgba(1,34,65,0.06)] ring-1 ring-white/80">
+        <p className="text-2xl font-black leading-none tabular-nums text-[#012241]">{items.length}</p>
+        <p className="mt-1 text-xs font-black text-[#4a5a6a]">미종결 요청</p>
       </div>
       {items.length === 0 ? (
-        <p className="u-muted rounded-xl border border-dashed border-[#d3c6b0] px-3 py-5 text-center text-xs font-bold text-slate-400">
-          진행 중인 업무 요청이 없습니다.
-        </p>
+        <p className="mt-3 py-3 text-center text-xs font-bold text-[#4a5a6a]">진행 중인 업무 요청이 없습니다.</p>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-[#e7ddcd]">
+        <div className="mt-2">
           {items.map((item, index) => (
             <button
               key={item.id}
               type="button"
               onClick={() => onSelect(item)}
               className={cn(
-                "group flex w-full items-start gap-2.5 border-t border-[#f0e9dd] px-2 py-2 text-left transition hover:bg-[#faf6ef]/60",
+                "group flex w-full items-start gap-3 border-t border-[#012241]/10 py-3 text-left",
                 index === 0 && "border-t-0"
               )}
             >
-              <span className="u-dot u-dot-blue mt-1.5" aria-hidden="true" />
+              <span className="u-dot u-dot-amber mt-1.5" aria-hidden="true" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-black leading-5 group-hover:text-[#007050]" title={item.title || "제목 없음"}>
+                <span className="block truncate text-sm font-black leading-5 text-[#012241] group-hover:text-[#007050]" title={item.title || "제목 없음"}>
                   {item.title || "제목 없음"}
                 </span>
-                <span className="u-muted mt-0.5 block truncate text-[11px] font-bold text-slate-500">
+                <span className="mt-0.5 block truncate text-[11px] font-bold text-[#4a5a6a]">
                   {item.departmentName} · {item.clientName} · {item.categoryName} ·{" "}
                   {compactMonthLabel(item.monthLabel)} {compactWeekLabel(item.weekLabel)}
                 </span>
@@ -274,35 +272,29 @@ function PriorityPeriodBlock({
   onSelect: (item: MeetingPriorityItem) => void;
 }) {
   return (
-    <div className="rounded-2xl border border-[#e7ddcd] p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-xs font-black">{title}</p>
-        <span className="inline-flex h-6 min-w-8 items-center justify-center rounded-full bg-[#e6f1ec] px-2 text-[11px] font-black text-[#007050]">
-          {items.length}
-        </span>
-      </div>
+    <div className="panel-dark p-4">
+      <p className="text-sm font-black text-white">{title}</p>
+      <p className="mt-0.5 text-xs font-bold text-white/55">중요도 높은 항목 순</p>
       {items.length === 0 ? (
-        <p className="u-muted rounded-xl border border-dashed border-[#d3c6b0] px-3 py-5 text-center text-xs font-bold text-slate-400">
-          표시할 제목이 없습니다.
-        </p>
+        <p className="mt-3 py-3 text-center text-xs font-bold text-white/45">표시할 제목이 없습니다.</p>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-[#e7ddcd]">
+        <div className="mt-2">
           {items.map((item, index) => (
             <button
               key={item.id}
               type="button"
               onClick={() => onSelect(item)}
               className={cn(
-                "group flex w-full items-start gap-2.5 border-t border-[#f0e9dd] px-2 py-2 text-left transition hover:bg-[#faf6ef]/60",
+                "group flex w-full items-start gap-3 border-t border-white/10 py-3 text-left",
                 index === 0 && "border-t-0"
               )}
             >
               <span className={cn("u-dot mt-1.5", importanceDotClassName(item.importance))} aria-hidden="true" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-black leading-5 group-hover:text-[#007050]" title={item.title || "제목 없음"}>
+                <span className="block truncate text-sm font-black leading-5 text-white group-hover:text-[#7fdcae]" title={item.title || "제목 없음"}>
                   {item.title || "제목 없음"}
                 </span>
-                <span className="u-muted mt-0.5 block truncate text-[11px] font-bold text-slate-500">
+                <span className="mt-0.5 block truncate text-[11px] font-bold text-white/55">
                   {item.departmentName} · {item.clientName} · {item.categoryName}
                 </span>
               </span>
