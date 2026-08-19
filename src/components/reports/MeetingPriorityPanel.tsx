@@ -81,7 +81,7 @@ export function MeetingPriorityPanel({ items, openRequests = [] }: { items: Meet
   return (
     <>
       <section className="sketch-panel h-full p-3">
-        <div className="mb-3 flex min-h-[54px] flex-wrap items-center justify-between gap-3">
+        <div className="mb-3 flex min-h-[38px] flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-black">핵심 이슈</p>
           </div>
