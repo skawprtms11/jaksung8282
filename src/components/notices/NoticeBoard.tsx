@@ -314,7 +314,7 @@ export function NoticeBoard({
     <section className="sketch-panel p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#e8f1ff] text-[#075be8]">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#e6f1ec] text-[#007050]">
             <Table2 className="h-5 w-5" aria-hidden="true" />
           </span>
           <div>
@@ -328,7 +328,7 @@ export function NoticeBoard({
               name="type"
               defaultValue={defaultType ?? ""}
               aria-label="게시구분 검색"
-              className="h-9 w-[132px] rounded-full border border-[#d7e4f6] bg-[#f5f9ff] px-3 text-xs font-black text-[#10223d] outline-none"
+              className="h-9 w-[132px] rounded-full border border-[#e4dac9] bg-[#faf6ef] px-3 text-xs font-black text-[#012241] outline-none"
             >
               <option value="">전체구분</option>
               {noticeTypeOptions.map((option) => (
@@ -340,7 +340,7 @@ export function NoticeBoard({
               defaultValue={defaultQuery ?? ""}
               aria-label="제목 검색"
               placeholder="제목 검색"
-              className="h-9 w-[180px] rounded-full border border-[#d7e4f6] bg-[#f5f9ff] px-3 text-xs font-black text-[#10223d] outline-none"
+              className="h-9 w-[180px] rounded-full border border-[#e4dac9] bg-[#faf6ef] px-3 text-xs font-black text-[#012241] outline-none"
             />
             <button className="tool-button tool-button-primary min-h-9 py-1.5">
               <Search className="h-4 w-4" aria-hidden="true" />
@@ -358,9 +358,9 @@ export function NoticeBoard({
       <ActionMessage state={deleteState} />
 
       {visibleImportantNotices.length > 0 ? (
-        <div className="mb-3 rounded-2xl border border-blue-100 bg-[#f5f9ff] p-3">
-          <div className="mb-2 flex items-center gap-2 text-sm font-black text-[#10223d]">
-            <Pin className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
+        <div className="mb-3 rounded-2xl border border-blue-100 bg-[#faf6ef] p-3">
+          <div className="mb-2 flex items-center gap-2 text-sm font-black text-[#012241]">
+            <Pin className="h-4 w-4 text-[#007050]" aria-hidden="true" />
             중요 게시글
           </div>
           <div className="grid gap-2 lg:grid-cols-5">
@@ -369,17 +369,17 @@ export function NoticeBoard({
                 key={notice.id}
                 type="button"
                 onClick={() => openNoticeDetail(notice)}
-                className="min-w-0 rounded-2xl border border-[#d9e7f7] bg-white px-3 py-2 text-left shadow-[0_10px_22px_rgba(16,34,61,0.04)] transition hover:border-blue-200 hover:text-[#075be8]"
+                className="min-w-0 rounded-2xl border border-[#e7ddcd] bg-white px-3 py-2 text-left shadow-[0_10px_22px_rgba(16,34,61,0.04)] transition hover:border-blue-200 hover:text-[#007050]"
               >
                 <span className="block text-[11px] font-black text-slate-400">{formatShortDate(notice.created_at)}</span>
-                <span className="mt-1 block truncate text-sm font-black text-[#10223d]">{notice.title}</span>
+                <span className="mt-1 block truncate text-sm font-black text-[#012241]">{notice.title}</span>
               </button>
             ))}
           </div>
         </div>
       ) : null}
 
-      <div className="overflow-x-hidden rounded-2xl border border-[#d9e7f7] bg-white/88">
+      <div className="overflow-x-hidden rounded-2xl border border-[#e7ddcd] bg-white/88">
         <table className="table-sticky w-full table-fixed text-left text-sm">
           <colgroup>
             <col className="w-[7%]" />
@@ -424,7 +424,7 @@ export function NoticeBoard({
                       <button
                         type="button"
                         onClick={() => openNoticeDetail(notice)}
-                        className="text-left font-black text-[#075be8] underline-offset-4 hover:underline"
+                        className="text-left font-black text-[#007050] underline-offset-4 hover:underline"
                       >
                         {notice.title}
                       </button>
@@ -432,7 +432,7 @@ export function NoticeBoard({
                     <td className="whitespace-pre-wrap break-words px-3 py-3 text-slate-600">{parsedContent.note || "-"}</td>
                     <td className="px-3 py-3 font-black text-slate-600">{notice.view_count.toLocaleString("ko-KR")}</td>
                     <td className="px-3 py-3">
-                      <span className="inline-flex items-center gap-1 rounded-full border border-[#d9e7f7] bg-[#f5f9ff] px-2 py-1 text-xs font-black text-[#075be8]">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-[#e7ddcd] bg-[#faf6ef] px-2 py-1 text-xs font-black text-[#007050]">
                         <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
                         {notice.comment_count}
                       </span>
@@ -570,14 +570,14 @@ function NoticeWriteDialog({
         <input type="hidden" name="is_active" value="true" />
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div>
-            <h2 id="notice-write-title" className="text-xl font-black text-[#10223d]">{isEdit ? "게시글 수정" : "게시글 작성"}</h2>
+            <h2 id="notice-write-title" className="text-xl font-black text-[#012241]">{isEdit ? "게시글 수정" : "게시글 작성"}</h2>
             <p className="mt-1 text-sm font-bold text-slate-500">{isEdit ? "게시글 내용을 수정합니다." : "요청 항목만 입력하여 게시글을 등록합니다."}</p>
           </div>
           <button type="button" onClick={onClose} className="icon-tool-button" aria-label="게시글 작성 팝업 닫기">
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
-        <div className="max-h-[65vh] overflow-y-auto bg-[#f5f9ff] px-5 py-4">
+        <div className="max-h-[65vh] overflow-y-auto bg-[#faf6ef] px-5 py-4">
           <div className="glass-row grid gap-3 p-3 md:grid-cols-[1fr_220px]">
             <label className="text-xs font-black text-slate-600">
               게시구분
@@ -592,8 +592,8 @@ function NoticeWriteDialog({
                 ))}
               </select>
             </label>
-            <label className="mt-5 inline-flex h-10 items-center gap-2 rounded-2xl border border-[#d9e7f7] bg-white px-4 text-sm font-black text-[#10223d]">
-              <input type="checkbox" name="is_pinned" value="true" defaultChecked={notice?.is_pinned ?? false} className="h-4 w-4 accent-[#075be8]" />
+            <label className="mt-5 inline-flex h-10 items-center gap-2 rounded-2xl border border-[#e7ddcd] bg-white px-4 text-sm font-black text-[#012241]">
+              <input type="checkbox" name="is_pinned" value="true" defaultChecked={notice?.is_pinned ?? false} className="h-4 w-4 accent-[#007050]" />
               중요여부
             </label>
             <label className="text-xs font-black text-slate-600 md:col-span-2">
@@ -688,17 +688,17 @@ function NoticeDetailDialog({
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div>
             <NoticeTypeBadge type={notice.notice_type} />
-            <h2 id="notice-detail-title" className="mt-3 text-xl font-black text-[#10223d]">{notice.title}</h2>
+            <h2 id="notice-detail-title" className="mt-3 text-xl font-black text-[#012241]">{notice.title}</h2>
             <p className="mt-1 text-sm font-bold text-slate-500">등록일자 {formatShortDate(notice.created_at)}</p>
           </div>
           <button type="button" onClick={onClose} className="icon-tool-button" aria-label="상세 팝업 닫기">
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
-        <div className="max-h-[64vh] overflow-y-auto bg-[#f5f9ff] px-5 py-4">
-          <section className="rounded-2xl border border-[#d9e7f7] bg-white px-4 py-3">
+        <div className="max-h-[64vh] overflow-y-auto bg-[#faf6ef] px-5 py-4">
+          <section className="rounded-2xl border border-[#e7ddcd] bg-white px-4 py-3">
             <p className="text-xs font-black text-slate-500">내용</p>
-            <p className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-7 text-[#10223d]">{parsedContent.detail || "-"}</p>
+            <p className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-7 text-[#012241]">{parsedContent.detail || "-"}</p>
           </section>
           {notice.notice_type === "urgent" ? (
             <div className="mt-3 flex justify-end">
@@ -709,7 +709,7 @@ function NoticeDetailDialog({
             </div>
           ) : null}
           {parsedContent.note ? (
-            <section className="mt-3 rounded-2xl border border-[#d9e7f7] bg-white px-4 py-3">
+            <section className="mt-3 rounded-2xl border border-[#e7ddcd] bg-white px-4 py-3">
               <p className="text-xs font-black text-slate-500">비고</p>
               <p className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-7 text-slate-700">{parsedContent.note}</p>
             </section>
@@ -756,15 +756,15 @@ function NoticeCommentsSection({
   const commentTree = buildNoticeCommentTree(comments);
 
   return (
-    <section className="mt-3 rounded-2xl border border-[#d9e7f7] bg-white px-4 py-3">
+    <section className="mt-3 rounded-2xl border border-[#e7ddcd] bg-white px-4 py-3">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <MessageCircle className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
-          <p className="text-sm font-black text-[#10223d]">댓글 {isLoading ? commentCount : comments.length}</p>
+          <MessageCircle className="h-4 w-4 text-[#007050]" aria-hidden="true" />
+          <p className="text-sm font-black text-[#012241]">댓글 {isLoading ? commentCount : comments.length}</p>
         </div>
       </div>
       {isLoading ? (
-        <div className="rounded-2xl border border-dashed border-[#b9cce6] px-4 py-6 text-center text-sm font-bold text-slate-400">
+        <div className="rounded-2xl border border-dashed border-[#d3c6b0] px-4 py-6 text-center text-sm font-bold text-slate-400">
           댓글을 불러오는 중입니다.
         </div>
       ) : error ? (
@@ -781,7 +781,7 @@ function NoticeCommentsSection({
           />
           <div className="mt-4 space-y-2">
             {commentTree.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-[#b9cce6] px-4 py-6 text-center text-sm font-bold text-slate-400">
+              <div className="rounded-2xl border border-dashed border-[#d3c6b0] px-4 py-6 text-center text-sm font-bold text-slate-400">
                 아직 등록된 댓글이 없습니다.
               </div>
             ) : (
@@ -862,7 +862,7 @@ function NoticeCommentForm({
   }
 
   return (
-    <div className="rounded-2xl border border-[#d9e7f7] bg-[#f5f9ff] p-3">
+    <div className="rounded-2xl border border-[#e7ddcd] bg-[#faf6ef] p-3">
       <label className="sr-only" htmlFor={`comment-${commentId ?? parentId ?? noticeId}`}>
         댓글 내용
       </label>
@@ -872,7 +872,7 @@ function NoticeCommentForm({
         onChange={(event) => setContent(event.target.value)}
         disabled={disabled}
         rows={commentId || parentId ? 3 : 4}
-        className="min-h-20 w-full rounded-2xl border border-[#d7e4f6] bg-white px-3 py-2 text-sm font-semibold leading-6 text-[#10223d] outline-none disabled:opacity-60"
+        className="min-h-20 w-full rounded-2xl border border-[#e4dac9] bg-white px-3 py-2 text-sm font-semibold leading-6 text-[#012241] outline-none disabled:opacity-60"
         placeholder={currentUser ? "댓글을 입력하세요." : "로그인 후 댓글을 등록할 수 있습니다."}
       />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
@@ -940,16 +940,16 @@ function NoticeCommentItem({
 
   return (
     <article
-      className="rounded-2xl border border-[#d9e7f7] bg-white p-3"
+      className="rounded-2xl border border-[#e7ddcd] bg-white p-3"
       style={{ marginLeft: depth > 0 ? `${Math.min(depth, 6) * 18}px` : undefined }}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             {depth > 0 ? <Reply className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" /> : null}
-            <p className="font-black text-[#10223d]">{comment.author_name}</p>
+            <p className="font-black text-[#012241]">{comment.author_name}</p>
             {comment.author_department_name ? (
-              <span className="rounded-full bg-[#f5f9ff] px-2 py-0.5 text-[11px] font-black text-slate-500">
+              <span className="rounded-full bg-[#faf6ef] px-2 py-0.5 text-[11px] font-black text-slate-500">
                 {comment.author_department_name}
               </span>
             ) : null}
@@ -1121,15 +1121,15 @@ function NoticeCollectionDialog({
       <div className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-[1.5rem] border border-white/80 bg-white/95 shadow-[0_28px_80px_rgba(16,34,61,0.24)]">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div>
-            <h2 id="notice-collection-title" className="text-xl font-black text-[#10223d]">취합완료여부 확인</h2>
+            <h2 id="notice-collection-title" className="text-xl font-black text-[#012241]">취합완료여부 확인</h2>
             <p className="mt-1 text-sm font-bold text-slate-500">{notice.title}</p>
           </div>
           <button type="button" onClick={onClose} className="icon-tool-button" aria-label="취합완료 팝업 닫기">
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
-        <div className="max-h-[58vh] overflow-y-auto bg-[#f5f9ff] px-5 py-4">
-          <div className="overflow-hidden rounded-2xl border border-[#d9e7f7] bg-white">
+        <div className="max-h-[58vh] overflow-y-auto bg-[#faf6ef] px-5 py-4">
+          <div className="overflow-hidden rounded-2xl border border-[#e7ddcd] bg-white">
             <table className="table-sticky w-full table-fixed text-left text-sm">
               <colgroup>
                 <col className="w-[32%]" />
@@ -1151,7 +1151,7 @@ function NoticeCollectionDialog({
                   const isRowPending = pendingDepartmentId === row.department_id;
                   return (
                     <tr key={row.department_id} className="border-t border-slate-100">
-                      <td className="px-3 py-3 font-black text-[#10223d]">{row.department_name}</td>
+                      <td className="px-3 py-3 font-black text-[#012241]">{row.department_name}</td>
                       <td className="px-3 py-3">
                         {isMine ? (
                           <label className="inline-flex items-center gap-2 font-bold text-slate-700">
@@ -1160,7 +1160,7 @@ function NoticeCollectionDialog({
                               checked={row.is_completed}
                               onChange={(event) => updateMyDepartmentStatus(event.target.checked)}
                               disabled={isRowPending}
-                              className="h-4 w-4 accent-[#075be8] disabled:opacity-50"
+                              className="h-4 w-4 accent-[#007050] disabled:opacity-50"
                             />
                             {isRowPending ? "저장 중" : "완료"}
                           </label>

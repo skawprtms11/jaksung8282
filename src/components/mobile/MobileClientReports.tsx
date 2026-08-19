@@ -61,7 +61,7 @@ export function MobileClientReports({
   }
 
   const scopeFilters = (
-    <section className="border-b border-[#d9e7f7] bg-white px-3 py-3">
+    <section className="border-b border-[#e7ddcd] bg-white px-3 py-3">
       <div className="flex items-end gap-2">
         <WeekSelect
           key={selectedWeekStartDate}
@@ -71,7 +71,7 @@ export function MobileClientReports({
           className="grid min-w-0 flex-1 grid-cols-3 gap-1.5"
           labelClassName="min-w-0 text-sm font-black text-slate-500"
           weekLabelClassName="min-w-0 text-sm font-black text-slate-500"
-          controlClassName="mt-1 h-10 w-full min-w-0 rounded-md border border-[#cddbee] bg-[#f8fbff] px-1 !text-sm !font-black text-[#10223d] outline-none"
+          controlClassName="mt-1 h-10 w-full min-w-0 rounded-md border border-[#ddd2bf] bg-[#fbf8f2] px-1 !text-sm !font-black text-[#012241] outline-none"
         />
         {displayedReport?.status === "draft" || displayedReport?.status === "rejected" ? (
           <form action={submitAction} className="shrink-0">
@@ -81,7 +81,7 @@ export function MobileClientReports({
         ) : displayedReport?.status === "submitted" ? (
           <form action={cancelAction} className="shrink-0">
             <input type="hidden" name="report_ids" value={displayedReport.id} />
-            <button type="submit" disabled={isCancelling} className="tool-button h-10 px-2 text-[11px] text-[#075be8] disabled:opacity-50"><RotateCcw className="h-3.5 w-3.5" />{isCancelling ? "취소 중" : "확정취소"}</button>
+            <button type="submit" disabled={isCancelling} className="tool-button h-10 px-2 text-[11px] text-[#007050] disabled:opacity-50"><RotateCcw className="h-3.5 w-3.5" />{isCancelling ? "취소 중" : "확정취소"}</button>
           </form>
         ) : displayedReport?.status === "approved" ? (
           <span className="inline-flex h-10 shrink-0 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 text-[11px] font-black text-emerald-700"><BadgeCheck className="h-4 w-4" />승인완료</span>
@@ -93,7 +93,7 @@ export function MobileClientReports({
   );
 
   if (!selectedClientId) {
-    return <div className="space-y-3">{scopeFilters}<section className="border-y border-[#d9e7f7] bg-white px-4 py-10 text-center text-sm font-bold text-slate-500">선택한 부서에 관리 가능한 화주가 없습니다.</section></div>;
+    return <div className="space-y-3">{scopeFilters}<section className="border-y border-[#e7ddcd] bg-white px-4 py-10 text-center text-sm font-bold text-slate-500">선택한 부서에 관리 가능한 화주가 없습니다.</section></div>;
   }
 
   return (

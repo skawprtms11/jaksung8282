@@ -106,7 +106,7 @@ export function CenterMasterControls({
 
   return (
     <section className="space-y-3">
-      <div className="flex items-center justify-end gap-2 rounded-[1.25rem] border border-[#d9e7f7] bg-white/82 px-3 py-2 shadow-[0_10px_26px_rgba(16,34,61,0.05)]">
+      <div className="flex items-center justify-end gap-2 rounded-[1.25rem] border border-[#e7ddcd] bg-white/82 px-3 py-2 shadow-[0_10px_26px_rgba(16,34,61,0.05)]">
         {canImport ? (
           <form action={action}>
             <SubmitButton variant="primary">
@@ -135,8 +135,8 @@ export function CenterMasterControls({
               {centers.map((center) => (
                 <tr key={center.id} className="border-t border-slate-100">
                   <td className="px-3 py-3">
-                    <span className="inline-flex items-center gap-2 font-black text-[#10223d]">
-                      <Building2 className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
+                    <span className="inline-flex items-center gap-2 font-black text-[#012241]">
+                      <Building2 className="h-4 w-4 text-[#007050]" aria-hidden="true" />
                       {center.center_name}
                     </span>
                   </td>
@@ -195,7 +195,7 @@ export function DepartmentMasterTable({
   return (
     <section className="space-y-3">
       {canManage ? (
-        <div className="flex items-center justify-end gap-2 rounded-[1.25rem] border border-[#d9e7f7] bg-white/82 px-3 py-2 shadow-[0_10px_26px_rgba(16,34,61,0.05)]">
+        <div className="flex items-center justify-end gap-2 rounded-[1.25rem] border border-[#e7ddcd] bg-white/82 px-3 py-2 shadow-[0_10px_26px_rgba(16,34,61,0.05)]">
           <button
             type="button"
             onClick={openEditDialog}
@@ -269,7 +269,7 @@ export function DepartmentMasterTable({
                   ) : null}
                   <td className="px-3 py-3">
                     <span className="inline-flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-[#075be8]" />
+                      <Building2 className="h-4 w-4 text-[#007050]" />
                       {department.department_name}
                     </span>
                   </td>
@@ -318,14 +318,14 @@ function DepartmentEditDialog({
   return (
     <ModalPortal>
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="department-edit-title">
-        <form action={action} className="w-full max-w-3xl overflow-hidden rounded-[1.5rem] border border-[#d9e4f2] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
+        <form action={action} className="w-full max-w-3xl overflow-hidden rounded-[1.5rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
           <input type="hidden" name="id" value={department.id} />
           <input type="hidden" name="department_code" value={department.department_code} />
           <input type="hidden" name="sort_order" value={department.sort_order} />
           <input type="hidden" name="is_active" value="true" />
-          <div className="flex items-start justify-between gap-4 border-b border-[#d9e4f2] px-5 py-4">
+          <div className="flex items-start justify-between gap-4 border-b border-[#e4dac9] px-5 py-4">
             <div>
-              <h2 id="department-edit-title" className="text-lg font-black text-[#10223d]">부서 수정</h2>
+              <h2 id="department-edit-title" className="text-lg font-black text-[#012241]">부서 수정</h2>
               <p className="mt-1 text-sm text-slate-500">부서명, 부서장, 비고를 수정합니다.</p>
             </div>
             <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
@@ -333,13 +333,13 @@ function DepartmentEditDialog({
             </button>
           </div>
           <div className="grid gap-3 p-5 md:grid-cols-2">
-            <label className="text-sm font-black text-[#10223d]">
+            <label className="text-sm font-black text-[#012241]">
               부서명
-              <input name="department_name" required defaultValue={department.department_name} className="mt-1 h-11 w-full rounded-2xl border border-[#d7e4f6] px-3 text-sm font-bold outline-none focus:border-[#075be8]" />
+              <input name="department_name" required defaultValue={department.department_name} className="mt-1 h-11 w-full rounded-2xl border border-[#e4dac9] px-3 text-sm font-bold outline-none focus:border-[#007050]" />
             </label>
-            <label className="text-sm font-black text-[#10223d]">
+            <label className="text-sm font-black text-[#012241]">
               부서장
-              <select name="department_head_id" defaultValue={currentHead?.id ?? ""} className="mt-1 h-11 w-full rounded-2xl border border-[#d7e4f6] px-3 text-sm font-bold outline-none focus:border-[#075be8]">
+              <select name="department_head_id" defaultValue={currentHead?.id ?? ""} className="mt-1 h-11 w-full rounded-2xl border border-[#e4dac9] px-3 text-sm font-bold outline-none focus:border-[#007050]">
                 <option value="">선택</option>
                 {headCandidates.map((user) => (
                   <option key={user.id} value={user.id}>
@@ -348,15 +348,15 @@ function DepartmentEditDialog({
                 ))}
               </select>
             </label>
-            <label className="text-sm font-black text-[#10223d] md:col-span-2">
+            <label className="text-sm font-black text-[#012241] md:col-span-2">
               비고
-              <input name="notes" defaultValue={department.notes ?? ""} className="mt-1 h-11 w-full rounded-2xl border border-[#d7e4f6] px-3 text-sm font-bold outline-none focus:border-[#075be8]" />
+              <input name="notes" defaultValue={department.notes ?? ""} className="mt-1 h-11 w-full rounded-2xl border border-[#e4dac9] px-3 text-sm font-bold outline-none focus:border-[#007050]" />
             </label>
             <div className="md:col-span-2">
               <ActionMessage state={state} />
             </div>
           </div>
-          <div className="flex justify-end gap-2 border-t border-[#d9e4f2] px-5 py-4">
+          <div className="flex justify-end gap-2 border-t border-[#e4dac9] px-5 py-4">
             <button type="button" onClick={onClose} className="tool-button">취소</button>
             <SubmitButton>
               <Save className="h-4 w-4" aria-hidden="true" />
@@ -430,10 +430,10 @@ export function DepartmentCreateButton({ users = [] }: { users?: AssignmentUser[
       {isOpen ? (
         <ModalPortal>
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="department-create-title">
-          <div className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-[1.5rem] border border-[#d9e4f2] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
-            <div className="flex items-start justify-between gap-4 border-b border-[#d9e4f2] px-5 py-4">
+          <div className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-[1.5rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
+            <div className="flex items-start justify-between gap-4 border-b border-[#e4dac9] px-5 py-4">
               <div>
-                <h2 id="department-create-title" className="text-lg font-black text-[#10223d]">부서 등록</h2>
+                <h2 id="department-create-title" className="text-lg font-black text-[#012241]">부서 등록</h2>
                 <p className="mt-1 text-sm text-slate-500">부서명, 부서장, 비고를 입력합니다.</p>
               </div>
               <button type="button" onClick={() => setIsOpen(false)} className="icon-tool-button" aria-label="팝업 닫기">
@@ -566,10 +566,10 @@ export function DepartmentClientManager({
       {isOpen ? (
         <ModalPortal>
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby={`client-manager-${department.id}`}>
-          <div className="max-h-[90vh] w-full max-w-6xl overflow-hidden rounded-[1.5rem] border border-[#d9e4f2] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
-            <div className="flex items-start justify-between gap-4 border-b border-[#d9e4f2] px-5 py-4">
+          <div className="max-h-[90vh] w-full max-w-6xl overflow-hidden rounded-[1.5rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
+            <div className="flex items-start justify-between gap-4 border-b border-[#e4dac9] px-5 py-4">
               <div>
-                <h2 id={`client-manager-${department.id}`} className="text-lg font-black text-[#10223d]">{department.department_name} 화주등록</h2>
+                <h2 id={`client-manager-${department.id}`} className="text-lg font-black text-[#012241]">{department.department_name} 화주등록</h2>
                 <p className="mt-1 text-sm text-slate-500">왼쪽 화주목록에서 선택 후 등록하고, 상단 저장을 눌러 최종 반영합니다.</p>
               </div>
               <div className="flex items-center gap-2">
@@ -598,16 +598,16 @@ export function DepartmentClientManager({
             </div>
 
             <div className="grid max-h-[76vh] gap-4 overflow-y-auto p-5 lg:grid-cols-2">
-              <section className="rounded-[1.25rem] border border-[#d9e4f2] bg-[#f8fbff] p-4">
+              <section className="rounded-[1.25rem] border border-[#e4dac9] bg-[#fbf8f2] p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <h3 className="font-black text-[#10223d]">화주목록</h3>
+                  <h3 className="font-black text-[#012241]">화주목록</h3>
                   <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-500">
                     {normalizedClientSearchQuery ? `${filteredAvailableClients.length}/${availableClients.length}건` : `${availableClients.length}건`}
                   </span>
                 </div>
                 <div className="relative mb-3">
                   <label htmlFor={`client-search-${department.id}`} className="sr-only">화주명 또는 화주코드 검색</label>
-                  <div className="flex h-10 items-center gap-2 rounded-md border border-[#b9cce4] bg-white px-3 focus-within:border-[#075be8] focus-within:ring-2 focus-within:ring-[#075be8]/15">
+                  <div className="flex h-10 items-center gap-2 rounded-md border border-[#d3c6b0] bg-white px-3 focus-within:border-[#007050] focus-within:ring-2 focus-within:ring-[#007050]/15">
                     <Search className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
                     <input
                       id={`client-search-${department.id}`}
@@ -628,7 +628,7 @@ export function DepartmentClientManager({
                       onKeyDown={handleClientSearchKeyDown}
                       placeholder="화주명 또는 화주코드 검색"
                       autoComplete="off"
-                      className="min-w-0 flex-1 border-0 bg-transparent text-sm font-semibold text-[#10223d] outline-none placeholder:text-slate-400"
+                      className="min-w-0 flex-1 border-0 bg-transparent text-sm font-semibold text-[#012241] outline-none placeholder:text-slate-400"
                     />
                     {clientSearchQuery ? (
                       <button
@@ -639,7 +639,7 @@ export function DepartmentClientManager({
                           setIsAutocompleteOpen(false);
                           setActiveAutocompleteIndex(-1);
                         }}
-                        className="rounded p-1 text-slate-400 transition hover:bg-slate-100 hover:text-[#075be8]"
+                        className="rounded p-1 text-slate-400 transition hover:bg-slate-100 hover:text-[#007050]"
                         aria-label="화주 검색 초기화"
                       >
                         <X className="h-3.5 w-3.5" aria-hidden="true" />
@@ -650,7 +650,7 @@ export function DepartmentClientManager({
                     <div
                       id={`client-search-options-${department.id}`}
                       role="listbox"
-                      className="absolute inset-x-0 top-[calc(100%+0.35rem)] z-20 max-h-64 overflow-y-auto rounded-md border border-[#b9cce4] bg-white p-1.5 shadow-[0_18px_40px_rgba(16,34,61,0.18)]"
+                      className="absolute inset-x-0 top-[calc(100%+0.35rem)] z-20 max-h-64 overflow-y-auto rounded-md border border-[#d3c6b0] bg-white p-1.5 shadow-[0_18px_40px_rgba(16,34,61,0.18)]"
                     >
                       {autocompleteClients.map((client, index) => (
                         <button
@@ -661,7 +661,7 @@ export function DepartmentClientManager({
                           aria-selected={index === activeAutocompleteIndex}
                           onMouseDown={(event) => event.preventDefault()}
                           onClick={() => selectAutocompleteClient(client)}
-                          className={`flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left text-sm transition ${index === activeAutocompleteIndex ? "bg-[#eaf3ff] text-[#075be8]" : "text-[#10223d] hover:bg-[#f4f8fd]"}`}
+                          className={`flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left text-sm transition ${index === activeAutocompleteIndex ? "bg-[#f4ede2] text-[#007050]" : "text-[#012241] hover:bg-[#faf6ef]"}`}
                         >
                           <span className="min-w-0 truncate font-bold">{client.client_name}</span>
                           <span className="shrink-0 text-xs font-semibold text-slate-400">{client.client_code}</span>
@@ -671,13 +671,13 @@ export function DepartmentClientManager({
                   ) : null}
                 </div>
                 {availableClients.length === 0 ? (
-                  <p className="rounded-2xl border border-dashed border-[#b9cce4] bg-white/80 px-4 py-10 text-center text-sm font-semibold text-slate-500">등록 가능한 미소속 화주가 없습니다.</p>
+                  <p className="rounded-2xl border border-dashed border-[#d3c6b0] bg-white/80 px-4 py-10 text-center text-sm font-semibold text-slate-500">등록 가능한 미소속 화주가 없습니다.</p>
                 ) : filteredAvailableClients.length === 0 ? (
-                  <p className="rounded-2xl border border-dashed border-[#b9cce4] bg-white/80 px-4 py-10 text-center text-sm font-semibold text-slate-500">검색 조건에 맞는 화주가 없습니다.</p>
+                  <p className="rounded-2xl border border-dashed border-[#d3c6b0] bg-white/80 px-4 py-10 text-center text-sm font-semibold text-slate-500">검색 조건에 맞는 화주가 없습니다.</p>
                 ) : (
                   <div className="max-h-[52vh] space-y-2 overflow-y-auto pr-1">
                     {filteredAvailableClients.map((client) => (
-                      <label key={client.id} className="flex cursor-pointer items-center gap-3 rounded-2xl border border-[#d9e4f2] bg-white/86 px-3 py-3 text-sm transition hover:border-[#075be8]/30 hover:bg-white">
+                      <label key={client.id} className="flex cursor-pointer items-center gap-3 rounded-2xl border border-[#e4dac9] bg-white/86 px-3 py-3 text-sm transition hover:border-[#007050]/30 hover:bg-white">
                         <input
                           type="checkbox"
                           checked={selectedClientIds.includes(client.id)}
@@ -686,7 +686,7 @@ export function DepartmentClientManager({
                           className="h-4 w-4 shrink-0 rounded border-slate-300"
                         />
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate font-black text-[#10223d]">{client.client_name}</span>
+                          <span className="block truncate font-black text-[#012241]">{client.client_name}</span>
                           <span className="mt-0.5 block truncate text-xs font-semibold text-slate-500">{client.client_code}</span>
                         </span>
                       </label>
@@ -695,9 +695,9 @@ export function DepartmentClientManager({
                 )}
               </section>
 
-              <section className="rounded-[1.25rem] border border-[#d9e4f2] bg-[#f8fbff] p-4">
+              <section className="rounded-[1.25rem] border border-[#e4dac9] bg-[#fbf8f2] p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <h3 className="font-black text-[#10223d]">등록된 화주목록</h3>
+                  <h3 className="font-black text-[#012241]">등록된 화주목록</h3>
                   <div className="flex items-center gap-2">
                     <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-500">{registeredClients.length}건</span>
                     <button
@@ -713,7 +713,7 @@ export function DepartmentClientManager({
                   </div>
                 </div>
                 {registeredClients.length === 0 ? (
-                  <p className="rounded-2xl border border-dashed border-[#b9cce4] bg-white/80 px-4 py-10 text-center text-sm font-semibold text-slate-500">아직 등록된 화주가 없습니다.</p>
+                  <p className="rounded-2xl border border-dashed border-[#d3c6b0] bg-white/80 px-4 py-10 text-center text-sm font-semibold text-slate-500">아직 등록된 화주가 없습니다.</p>
                 ) : (
                   <div className="max-h-[58vh] space-y-2 overflow-y-auto pr-1">
                     {registeredClients.map((client) => {
@@ -724,7 +724,7 @@ export function DepartmentClientManager({
                       return (
                         <div
                           key={client.id}
-                          className="flex w-full items-center gap-3 rounded-2xl border border-[#d9e4f2] bg-white/86 px-3 py-3 text-left text-sm transition hover:border-[#075be8]/30 hover:bg-white"
+                          className="flex w-full items-center gap-3 rounded-2xl border border-[#e4dac9] bg-white/86 px-3 py-3 text-left text-sm transition hover:border-[#007050]/30 hover:bg-white"
                         >
                           <input
                             type="checkbox"
@@ -736,7 +736,7 @@ export function DepartmentClientManager({
                           <span className="min-w-0 flex-1">
                             <span className="flex items-start justify-between gap-3">
                               <span className="min-w-0">
-                                <span className="block truncate font-black text-[#10223d]">{client.client_name}</span>
+                                <span className="block truncate font-black text-[#012241]">{client.client_name}</span>
                                 <span className="mt-0.5 block truncate text-xs font-semibold text-slate-500">{client.client_code}</span>
                               </span>
                             </span>
@@ -761,7 +761,7 @@ export function DepartmentClientManager({
                 )}
               </section>
             </div>
-            <div className="space-y-2 border-t border-[#d9e4f2] px-5 py-3">
+            <div className="space-y-2 border-t border-[#e4dac9] px-5 py-3">
               <ActionMessage state={saveState} />
               {hasUnsavedChanges ? (
                 <p className="text-xs font-semibold text-amber-700">저장하지 않은 화주 등록 변경사항이 있습니다.</p>
@@ -813,14 +813,14 @@ function DepartmentClientAssignmentDialog({
   return (
     <ModalPortal>
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/72 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby={`assignment-${client.id}`}>
-      <form action={action} className="w-full max-w-2xl overflow-hidden rounded-[1.5rem] border border-[#d9e4f2] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.24)]">
+      <form action={action} className="w-full max-w-2xl overflow-hidden rounded-[1.5rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.24)]">
         <input type="hidden" name="department_id" value={department.id} />
         <input type="hidden" name="client_id" value={client.id} />
         <input type="hidden" name="user_ids" value={selectedUserIds.join(",")} />
         <input type="hidden" name="primary_user_id" value={primaryUserId} />
-        <div className="flex items-start justify-between gap-4 border-b border-[#d9e4f2] px-5 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-[#e4dac9] px-5 py-4">
           <div>
-            <h2 id={`assignment-${client.id}`} className="text-lg font-black text-[#10223d]">담당자 선정</h2>
+            <h2 id={`assignment-${client.id}`} className="text-lg font-black text-[#012241]">담당자 선정</h2>
             <p className="mt-1 text-sm text-slate-500">{department.department_name} · {client.client_name}</p>
           </div>
           <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
@@ -829,7 +829,7 @@ function DepartmentClientAssignmentDialog({
         </div>
         <div className="max-h-[62vh] overflow-y-auto p-5">
           {users.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-[#b9cce4] bg-[#f8fbff] px-4 py-10 text-center text-sm font-semibold text-slate-500">
+            <p className="rounded-2xl border border-dashed border-[#d3c6b0] bg-[#fbf8f2] px-4 py-10 text-center text-sm font-semibold text-slate-500">
               해당 부서에 등록 가능한 화주담당자가 없습니다.
             </p>
           ) : (
@@ -837,8 +837,8 @@ function DepartmentClientAssignmentDialog({
               {users.map((user) => {
                 const checked = selectedUserIds.includes(user.id);
                 return (
-                  <label key={user.id} className="flex items-center justify-between gap-3 rounded-2xl border border-[#d9e4f2] bg-[#f8fbff] px-3 py-3 text-sm">
-                    <span className="min-w-0 flex-1 font-bold text-[#10223d]">
+                  <label key={user.id} className="flex items-center justify-between gap-3 rounded-2xl border border-[#e4dac9] bg-[#fbf8f2] px-3 py-3 text-sm">
+                    <span className="min-w-0 flex-1 font-bold text-[#012241]">
                       <input
                         type="checkbox"
                         checked={checked}
@@ -864,7 +864,7 @@ function DepartmentClientAssignmentDialog({
             <ActionMessage state={state} />
           </div>
         </div>
-        <div className="flex justify-end gap-2 border-t border-[#d9e4f2] px-5 py-4">
+        <div className="flex justify-end gap-2 border-t border-[#e4dac9] px-5 py-4">
           <button type="button" onClick={onClose} className="tool-button">닫기</button>
           <SubmitButton>
             <UserRoundCheck className="h-4 w-4" aria-hidden="true" />
@@ -919,7 +919,7 @@ export function DepartmentClientRegistration({
       {isOpen ? (
         <ModalPortal>
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="department-client-title">
-          <div className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-[1.5rem] border border-[#d9e4f2] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
+          <div className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-[1.5rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
               <div>
                 <h2 id="department-client-title" className="text-lg font-black text-slate-900">
@@ -980,7 +980,7 @@ export function DepartmentClientRegistration({
               <fieldset className="glass-fieldset p-3">
                 <legend className="px-1 text-sm font-black text-slate-800">화주담당자</legend>
                 {filteredUsers.length === 0 ? (
-                  <p className="rounded-2xl border border-dashed border-[#b9cce4] bg-white/82 px-3 py-6 text-center text-sm text-slate-500">
+                  <p className="rounded-2xl border border-dashed border-[#d3c6b0] bg-white/82 px-3 py-6 text-center text-sm text-slate-500">
                     선택 가능한 부서 사용자가 없습니다.
                   </p>
                 ) : (
@@ -1135,7 +1135,7 @@ export function ClientEditForm({
 
   return (
     <details className="glass-row p-3">
-      <summary className="cursor-pointer text-sm font-bold text-[#075be8]">수정·비활성화</summary>
+      <summary className="cursor-pointer text-sm font-bold text-[#007050]">수정·비활성화</summary>
       {form}
     </details>
   );
@@ -1214,7 +1214,7 @@ export function ClientMasterControls({
       {isRegisterOpen ? (
         <ModalPortal>
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="client-register-title">
-          <div className="max-h-[88vh] w-full max-w-2xl overflow-hidden rounded-[1.5rem] border border-[#d9e4f2] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
+          <div className="max-h-[88vh] w-full max-w-2xl overflow-hidden rounded-[1.5rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
               <div>
                 <h2 id="client-register-title" className="text-lg font-black text-slate-900">
@@ -1261,7 +1261,7 @@ export function ClientMasterControls({
           {selectedClient ? (
             <ClientEditForm client={selectedClient} departments={departments} variant="plain" showDepartment={false} />
           ) : (
-            <p className="rounded-2xl border border-dashed border-[#b9cce4] bg-white/82 px-3 py-6 text-center text-sm text-slate-500">
+            <p className="rounded-2xl border border-dashed border-[#d3c6b0] bg-white/82 px-3 py-6 text-center text-sm text-slate-500">
               수정할 화주가 없습니다.
             </p>
           )}
@@ -1417,7 +1417,7 @@ function ClientBulkRegisterDialog({ onClose }: { onClose: () => void }) {
   return (
     <ModalPortal>
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="client-bulk-register-title">
-        <form action={action} className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-[1.5rem] border border-[#d9e4f2] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
+        <form action={action} className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-[1.5rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
           <input type="hidden" name="rows" value={serializedRows} />
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
             <div>
@@ -1445,9 +1445,9 @@ function ClientBulkRegisterDialog({ onClose }: { onClose: () => void }) {
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-auto p-5">
-            <div className="overflow-hidden rounded-md border border-[#d9e4f2] bg-white">
+            <div className="overflow-hidden rounded-md border border-[#e4dac9] bg-white">
               <table className="min-w-[760px] w-full table-fixed text-left text-sm">
-                <thead className="bg-[#f5f9ff] text-xs font-black text-[#10223d]">
+                <thead className="bg-[#faf6ef] text-xs font-black text-[#012241]">
                   <tr>
                     <th className="w-14 px-3 py-3 text-center">No</th>
                     <th className="w-[24%] px-3 py-3">화주코드</th>
@@ -1600,12 +1600,12 @@ function UserEditDialog({
   return (
     <ModalPortal>
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby={`user-edit-${user.id}`}>
-        <form action={action} className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-[1.5rem] border border-[#d9e4f2] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
+        <form action={action} className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-[1.5rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
           <input type="hidden" name="id" value={user.id} />
           <input type="hidden" name="invite" value="false" />
-          <div className="flex items-start justify-between gap-4 border-b border-[#d9e4f2] px-5 py-4">
+          <div className="flex items-start justify-between gap-4 border-b border-[#e4dac9] px-5 py-4">
             <div>
-              <h2 id={`user-edit-${user.id}`} className="text-lg font-black text-[#10223d]">사용자 수정</h2>
+              <h2 id={`user-edit-${user.id}`} className="text-lg font-black text-[#012241]">사용자 수정</h2>
               <p className="mt-1 text-sm text-slate-500">{user.full_name} 사용자의 기본정보와 권한을 수정합니다.</p>
             </div>
             <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
@@ -1660,7 +1660,7 @@ function UserEditDialog({
               <ActionMessage state={state} />
             </div>
           </div>
-          <div className="flex justify-end gap-2 border-t border-[#d9e4f2] px-5 py-4">
+          <div className="flex justify-end gap-2 border-t border-[#e4dac9] px-5 py-4">
             <button type="button" onClick={onClose} className="tool-button">닫기</button>
             <SubmitButton>
               <Save className="h-4 w-4" aria-hidden="true" />
@@ -1681,11 +1681,11 @@ function UserPasswordResetDialog({ user, onClose }: { user: UserMasterValue; onC
   return (
     <ModalPortal>
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby={`user-password-reset-${user.id}`}>
-        <form action={action} className="w-full max-w-md overflow-hidden rounded-[1.5rem] border border-[#d9e4f2] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
+        <form action={action} className="w-full max-w-md overflow-hidden rounded-[1.5rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
           <input type="hidden" name="user_id" value={user.id} />
-          <div className="flex items-start justify-between gap-4 border-b border-[#d9e4f2] px-5 py-4">
+          <div className="flex items-start justify-between gap-4 border-b border-[#e4dac9] px-5 py-4">
             <div>
-              <h2 id={`user-password-reset-${user.id}`} className="text-lg font-black text-[#10223d]">비밀번호 초기화</h2>
+              <h2 id={`user-password-reset-${user.id}`} className="text-lg font-black text-[#012241]">비밀번호 초기화</h2>
               <p className="mt-1 text-sm font-bold text-slate-500">{user.full_name} · {user.employee_no}</p>
             </div>
             <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
@@ -1705,7 +1705,7 @@ function UserPasswordResetDialog({ user, onClose }: { user: UserMasterValue; onC
               <ActionMessage state={state} />
             </div>
           </div>
-          <div className="flex justify-end gap-2 border-t border-[#d9e4f2] px-5 py-4">
+          <div className="flex justify-end gap-2 border-t border-[#e4dac9] px-5 py-4">
             <button type="button" onClick={onClose} className="tool-button">취소</button>
             <SubmitButton variant="danger">
               <KeyRound className="h-4 w-4" aria-hidden="true" />
@@ -1759,13 +1759,13 @@ export function UserMasterControls({
         </div>
         <ActionMessage state={approveState ?? rejectState} />
         {registrationRequests.length === 0 ? (
-          <div className="mt-3 rounded-2xl border border-dashed border-[#b7cbe6] bg-white/82 px-4 py-6 text-center text-sm font-bold text-slate-500">
+          <div className="mt-3 rounded-2xl border border-dashed border-[#d3c6b0] bg-white/82 px-4 py-6 text-center text-sm font-bold text-slate-500">
             승인 대기 중인 사용자등록 요청이 없습니다.
           </div>
         ) : (
-          <div className="mt-3 overflow-x-auto rounded-2xl border border-[#d9e4f2] bg-white/90">
+          <div className="mt-3 overflow-x-auto rounded-2xl border border-[#e4dac9] bg-white/90">
             <table className="min-w-[900px] w-full text-left text-sm">
-              <thead className="bg-[#f5f9ff] text-xs font-black text-[#10223d]">
+              <thead className="bg-[#faf6ef] text-xs font-black text-[#012241]">
                 <tr>
                   <th className="px-3 py-3">사번</th>
                   <th className="px-3 py-3">성함</th>
@@ -1779,7 +1779,7 @@ export function UserMasterControls({
                 {registrationRequests.map((request) => (
                   <tr key={request.id} className="border-t border-slate-100">
                     <td className="px-3 py-3">{request.employee_no}</td>
-                    <td className="px-3 py-3 font-black text-[#10223d]">{request.full_name}</td>
+                    <td className="px-3 py-3 font-black text-[#012241]">{request.full_name}</td>
                     <td className="px-3 py-3 text-slate-700">{request.email}</td>
                     <td className="px-3 py-3">{request.departments?.department_name ?? "-"}</td>
                     <td className="px-3 py-3">{formatDateOnly(request.requested_at)}</td>
@@ -1892,7 +1892,7 @@ export function UserMasterControls({
                     />
                   </td>
                   <td className="px-3 py-3">{user.employee_no}</td>
-                  <td className="px-3 py-3 font-black text-[#10223d]">{user.full_name}</td>
+                  <td className="px-3 py-3 font-black text-[#012241]">{user.full_name}</td>
                   <td className="px-3 py-3 text-slate-700">{user.email}</td>
                   <td className="px-3 py-3">{user.departments?.department_name ?? "-"}</td>
                   <td className="px-3 py-3">{roleLabel(user.app_role)}</td>
@@ -1942,7 +1942,7 @@ export function ClientAssignmentForm({
   const [primary, setPrimary] = useState(assignments.find((assignment) => assignment.is_primary)?.user_id ?? selected[0] ?? "");
   return (
     <details className="glass-row p-3">
-      <summary className="cursor-pointer text-sm font-bold text-[#075be8]">담당자 등록</summary>
+      <summary className="cursor-pointer text-sm font-bold text-[#007050]">담당자 등록</summary>
       <form action={action} className="mt-3 space-y-3">
         <input type="hidden" name="client_id" value={clientId} />
         <input type="hidden" name="user_ids" value={selected.join(",")} />

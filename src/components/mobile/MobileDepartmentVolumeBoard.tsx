@@ -40,21 +40,21 @@ export function MobileDepartmentVolumeBoard({ clients, reports }: { clients: Cli
   const summaries = [
     { label: "입고", values: summarizeVolumes(allVolumes, "inbound"), icon: ArrowDownToLine, className: "text-emerald-700 bg-emerald-50" },
     { label: "출고", values: summarizeVolumes(allVolumes, "outbound"), icon: ArrowUpFromLine, className: "text-blue-700 bg-blue-50" },
-    { label: "합계", values: summarizeVolumes(allVolumes, "total"), icon: Sigma, className: "text-[#075be8] bg-[#eaf3ff]" }
+    { label: "합계", values: summarizeVolumes(allVolumes, "total"), icon: Sigma, className: "text-[#007050] bg-[#f4ede2]" }
   ];
 
   return (
     <div>
-      <div className="border-b border-[#d9e7f7] pb-3">
-        <h2 className="text-sm font-black text-[#10223d]">물동량 합계</h2>
-        <div className="mt-2 grid grid-cols-3 divide-x divide-[#d9e7f7] bg-[#f8fbff]">
+      <div className="border-b border-[#e7ddcd] pb-3">
+        <h2 className="text-sm font-black text-[#012241]">물동량 합계</h2>
+        <div className="mt-2 grid grid-cols-3 divide-x divide-[#e7ddcd] bg-[#fbf8f2]">
           {summaries.map((summary) => {
             const Icon = summary.icon;
             return (
               <div key={summary.label} className="min-w-0 px-2 py-2.5 text-center">
                 <span className={`mx-auto inline-flex h-7 w-7 items-center justify-center rounded-md ${summary.className}`}><Icon className="h-4 w-4" aria-hidden="true" /></span>
                 <p className="mt-1 text-[11px] font-black text-slate-500">{summary.label}</p>
-                <p className="mt-0.5 min-h-5 break-words text-xs font-black leading-5 text-[#10223d]"><VolumeValue values={summary.values} /></p>
+                <p className="mt-0.5 min-h-5 break-words text-xs font-black leading-5 text-[#012241]"><VolumeValue values={summary.values} /></p>
               </div>
             );
           })}
@@ -62,22 +62,22 @@ export function MobileDepartmentVolumeBoard({ clients, reports }: { clients: Cli
       </div>
 
       <div className="pt-3">
-        <h2 className="mb-2 text-sm font-black text-[#10223d]">화주별 물동량</h2>
-        <div className="overflow-x-auto border-y border-[#d9e7f7]">
+        <h2 className="mb-2 text-sm font-black text-[#012241]">화주별 물동량</h2>
+        <div className="overflow-x-auto border-y border-[#e7ddcd]">
           <table className="w-full table-fixed text-[11px]">
             <colgroup><col className="w-[28%]" /><col className="w-[24%]" /><col className="w-[24%]" /><col className="w-[24%]" /></colgroup>
-            <thead className="bg-[#f5f9ff] text-slate-600">
+            <thead className="bg-[#faf6ef] text-slate-600">
               <tr><th className="px-2 py-2.5 text-left">화주</th><th className="px-1 py-2.5 text-center">입고</th><th className="px-1 py-2.5 text-center">출고</th><th className="px-1 py-2.5 text-center">합계</th></tr>
             </thead>
-            <tbody className="divide-y divide-[#edf2f8]">
+            <tbody className="divide-y divide-[#f4ede2]">
               {clients.map((client) => {
                 const volumes = (reportsByClient.get(client.id) ?? []).flatMap((report) => report.volumes);
                 return (
                   <tr key={client.id}>
-                    <th scope="row" className="break-words px-2 py-3 text-left font-black text-[#10223d]">{client.client_name}</th>
+                    <th scope="row" className="break-words px-2 py-3 text-left font-black text-[#012241]">{client.client_name}</th>
                     <td className="break-words px-1 py-3 text-center font-black text-emerald-700"><VolumeValue values={summarizeVolumes(volumes, "inbound")} /></td>
                     <td className="break-words px-1 py-3 text-center font-black text-blue-700"><VolumeValue values={summarizeVolumes(volumes, "outbound")} /></td>
-                    <td className="break-words px-1 py-3 text-center font-black text-[#075be8]"><VolumeValue values={summarizeVolumes(volumes, "total")} /></td>
+                    <td className="break-words px-1 py-3 text-center font-black text-[#007050]"><VolumeValue values={summarizeVolumes(volumes, "total")} /></td>
                   </tr>
                 );
               })}

@@ -48,7 +48,7 @@ export function MeetingDepartmentVolumeBoard({ rows }: { rows: MeetingDepartment
           {displayModes.map((mode) => (
             <label
               key={mode.value}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[#d9e4f2] bg-white/90 px-3 py-1.5 text-xs font-black text-[#10223d] shadow-[0_8px_18px_rgba(16,34,61,0.05)]"
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[#e4dac9] bg-white/90 px-3 py-1.5 text-xs font-black text-[#012241] shadow-[0_8px_18px_rgba(16,34,61,0.05)]"
             >
               <input
                 type="checkbox"
@@ -92,16 +92,16 @@ export function MeetingDepartmentVolumeBoard({ rows }: { rows: MeetingDepartment
             ) : (
               rows.map((row) => (
                 <tr key={row.departmentId} className="border-t border-slate-100">
-                  <td className="truncate px-3 py-3 font-black text-[#10223d]" title={row.departmentName}>
+                  <td className="truncate px-3 py-3 font-black text-[#012241]" title={row.departmentName}>
                     {row.departmentName}
                   </td>
                   {[0, 1, 2, 3, 4].map((weekIndex) => (
-                    <td key={weekIndex} className="px-2 py-3 text-right font-black text-[#10223d]">
+                    <td key={weekIndex} className="px-2 py-3 text-right font-black text-[#012241]">
                       {formatQuantity(row.weeks[weekIndex]?.[selectedMode] ?? 0)}
                     </td>
                   ))}
                   <td className="px-3 py-2 text-right">
-                    <p className="text-sm font-black text-[#10223d]">{formatQuantity(row.totals[selectedMode])}</p>
+                    <p className="text-sm font-black text-[#012241]">{formatQuantity(row.totals[selectedMode])}</p>
                     <p className="mt-0.5 text-[10px] font-bold text-slate-500">
                       {formatChange(row.totals[selectedMode], row.previousTotals[selectedMode])}
                     </p>

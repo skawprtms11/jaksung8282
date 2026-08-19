@@ -79,7 +79,7 @@ export function MeetingPriorityPanel({ items, openRequests = [] }: { items: Meet
       <section className="sketch-panel h-full p-3">
         <div className="mb-3 flex min-h-[54px] flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-black text-[#10223d]">핵심 이슈</p>
+            <p className="text-sm font-black text-[#012241]">핵심 이슈</p>
             <p className="text-xs font-bold text-slate-500">중요도가 높은 금주·차주 제목을 모아 봅니다.</p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-1.5">
@@ -89,12 +89,12 @@ export function MeetingPriorityPanel({ items, openRequests = [] }: { items: Meet
                   type="checkbox"
                   checked={visibleImportances.includes(importance)}
                   onChange={() => toggleImportance(importance)}
-                  className="h-4 w-4 accent-[#075be8]"
+                  className="h-4 w-4 accent-[#007050]"
                 />
                 {importanceLabels[importance]}
               </label>
             ))}
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-[#e8f1ff] text-[#075be8]">
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-[#e6f1ec] text-[#007050]">
               <AlertTriangle className="h-5 w-5" aria-hidden="true" />
             </span>
           </div>
@@ -171,7 +171,7 @@ function IssueDetailDialog({
                 </span>
               ))}
             </div>
-            <h2 id={labelledBy} className="text-xl font-black text-[#10223d]">
+            <h2 id={labelledBy} className="text-xl font-black text-[#012241]">
               {title}
             </h2>
             <p className="mt-1 text-sm font-bold text-slate-500">{subtitle}</p>
@@ -180,7 +180,7 @@ function IssueDetailDialog({
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
-        <div className="space-y-3 overflow-y-auto bg-[#f5f9ff] px-5 py-5">
+        <div className="space-y-3 overflow-y-auto bg-[#faf6ef] px-5 py-5">
           {sections.map((section) => (
             <DetailBox key={section.title} title={section.title} value={section.value} />
           ))}
@@ -192,8 +192,8 @@ function IssueDetailDialog({
 
 function DetailBox({ title, value }: { title: string; value: string }) {
   return (
-    <section className="rounded-2xl border border-[#d9e7f7] bg-white px-4 py-4">
-      <p className="mb-2 text-sm font-black text-[#10223d]">{title}</p>
+    <section className="rounded-2xl border border-[#e7ddcd] bg-white px-4 py-4">
+      <p className="mb-2 text-sm font-black text-[#012241]">{title}</p>
       <div className="min-h-20 whitespace-pre-wrap text-sm leading-7 text-slate-700">{value || "-"}</div>
     </section>
   );
@@ -207,30 +207,30 @@ function OpenRequestBlock({
   onSelect: (item: MeetingOpenRequestItem) => void;
 }) {
   return (
-    <div className="rounded-2xl border border-[#d9e7f7] bg-white/86 p-3">
+    <div className="rounded-2xl border border-[#e7ddcd] bg-white/86 p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-xs font-black text-[#10223d]">확인 요청 현황</p>
-        <span className="inline-flex h-6 min-w-8 items-center justify-center rounded-full bg-[#e8f1ff] px-2 text-[11px] font-black text-[#075be8]">
+        <p className="text-xs font-black text-[#012241]">확인 요청 현황</p>
+        <span className="inline-flex h-6 min-w-8 items-center justify-center rounded-full bg-[#e6f1ec] px-2 text-[11px] font-black text-[#007050]">
           {items.length}
         </span>
       </div>
       {items.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-[#b9cce4] px-3 py-5 text-center text-xs font-bold text-slate-400">
+        <p className="rounded-xl border border-dashed border-[#d3c6b0] px-3 py-5 text-center text-xs font-bold text-slate-400">
           진행 중인 업무 요청이 없습니다.
         </p>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-[#e2ecf8] bg-white">
+        <div className="overflow-hidden rounded-xl border border-[#e7ddcd] bg-white">
           {items.map((item, index) => (
             <button
               key={item.id}
               type="button"
               onClick={() => onSelect(item)}
               className={cn(
-                "group grid w-full gap-1.5 border-t border-[#e8f0fb] px-2 py-1.5 text-left text-xs transition hover:bg-[#f3f8ff] sm:grid-cols-[54px_58px_64px_minmax(0,1fr)] sm:items-center sm:gap-2",
+                "group grid w-full gap-1.5 border-t border-[#f0e9dd] px-2 py-1.5 text-left text-xs transition hover:bg-[#faf6ef] sm:grid-cols-[54px_58px_64px_minmax(0,1fr)] sm:items-center sm:gap-2",
                 index === 0 && "border-t-0"
               )}
             >
-              <span className="truncate text-[10px] font-black text-[#075be8]" title={`${item.monthLabel} ${item.weekLabel}`}>
+              <span className="truncate text-[10px] font-black text-[#007050]" title={`${item.monthLabel} ${item.weekLabel}`}>
                 {compactMonthLabel(item.monthLabel)} {compactWeekLabel(item.weekLabel)}
               </span>
               <span className="truncate text-[11px] font-black text-slate-500" title={item.departmentName}>
@@ -247,7 +247,7 @@ function OpenRequestBlock({
                   >
                     {item.categoryName}
                   </span>
-                  <span className="truncate text-[11px] font-black text-[#10223d] group-hover:text-[#075be8]">
+                  <span className="truncate text-[11px] font-black text-[#012241] group-hover:text-[#007050]">
                     {item.title || "제목 없음"}
                   </span>
                 </span>
@@ -282,26 +282,26 @@ function PriorityPeriodBlock({
   onSelect: (item: MeetingPriorityItem) => void;
 }) {
   return (
-    <div className="rounded-2xl border border-[#d9e7f7] bg-white/86 p-3">
+    <div className="rounded-2xl border border-[#e7ddcd] bg-white/86 p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-xs font-black text-[#10223d]">{title}</p>
-        <span className="inline-flex h-6 min-w-8 items-center justify-center rounded-full bg-[#e8f1ff] px-2 text-[11px] font-black text-[#075be8]">
+        <p className="text-xs font-black text-[#012241]">{title}</p>
+        <span className="inline-flex h-6 min-w-8 items-center justify-center rounded-full bg-[#e6f1ec] px-2 text-[11px] font-black text-[#007050]">
           {items.length}
         </span>
       </div>
       {items.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-[#b9cce4] px-3 py-5 text-center text-xs font-bold text-slate-400">
+        <p className="rounded-xl border border-dashed border-[#d3c6b0] px-3 py-5 text-center text-xs font-bold text-slate-400">
           표시할 제목이 없습니다.
         </p>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-[#e2ecf8] bg-white">
+        <div className="overflow-hidden rounded-xl border border-[#e7ddcd] bg-white">
           {items.map((item, index) => (
             <button
               key={item.id}
               type="button"
               onClick={() => onSelect(item)}
               className={cn(
-                "group grid w-full gap-1.5 border-t border-[#e8f0fb] px-2 py-1.5 text-left text-xs transition hover:bg-[#f3f8ff] sm:grid-cols-[58px_64px_minmax(0,1fr)] sm:items-center sm:gap-2",
+                "group grid w-full gap-1.5 border-t border-[#f0e9dd] px-2 py-1.5 text-left text-xs transition hover:bg-[#faf6ef] sm:grid-cols-[58px_64px_minmax(0,1fr)] sm:items-center sm:gap-2",
                 index === 0 && "border-t-0"
               )}
             >
@@ -322,7 +322,7 @@ function PriorityPeriodBlock({
                   >
                     {item.categoryName}
                   </span>
-                  <span className="truncate text-[11px] font-black text-[#10223d] group-hover:text-[#075be8]">
+                  <span className="truncate text-[11px] font-black text-[#012241] group-hover:text-[#007050]">
                     {item.title || "제목 없음"}
                   </span>
                 </span>

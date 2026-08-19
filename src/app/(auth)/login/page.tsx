@@ -28,8 +28,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <LogisticsIllustration mobileMode={isMobileLogin} />
         <div className={isMobileLogin ? "flex flex-col justify-center bg-white px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-6" : "flex flex-col justify-center bg-white px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-6 md:rounded-[1.5rem] md:bg-white/90 md:p-7 md:backdrop-blur"}>
           <div className={isMobileLogin ? "hidden" : "hidden md:block"}>
-            <p className="text-xs font-black uppercase tracking-[0.32em] text-[#075be8]">TPL Logistics</p>
-            <h1 className="mt-3 text-3xl font-black tracking-normal text-[#10223d]">{appConfig.name}</h1>
+            <p className="text-xs font-black uppercase tracking-[0.32em] text-[#007050]">TPL Logistics</p>
+            <h1 className="mt-3 text-3xl font-black tracking-normal text-[#012241]">{appConfig.name}</h1>
             <p className="mt-3 text-sm leading-6 text-slate-500">주간 업무, 물동량, 승인 흐름을 한 곳에서 연결합니다.</p>
           </div>
           <div className={isMobileLogin ? "" : "md:mt-6"}>

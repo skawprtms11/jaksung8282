@@ -170,7 +170,7 @@ const DepartmentVolumeBoard = dynamic(
   () => import("@/components/reports/DepartmentVolumeBoard").then((mod) => mod.DepartmentVolumeBoard),
   {
     loading: () => (
-      <div className="rounded-2xl border border-dashed border-[#b9cce6] px-4 py-6 text-center text-sm font-bold text-slate-500">
+      <div className="rounded-2xl border border-dashed border-[#d3c6b0] px-4 py-6 text-center text-sm font-bold text-slate-500">
         물동량 현황을 불러오는 중입니다.
       </div>
     )
@@ -247,7 +247,7 @@ function WorkItemList({ rows, period }: { rows: ClientReviewRow["weekly_client_r
             {row.work_categories?.category_name ?? "기타"}
           </span>
           <span className="min-w-0">
-            <span className="block break-words text-sm font-black leading-5 text-[#10223d]">{row.title}</span>
+            <span className="block break-words text-sm font-black leading-5 text-[#012241]">{row.title}</span>
             <span className="mt-0.5 block whitespace-pre-wrap break-words text-[13px] leading-5 text-slate-600">{row.content}</span>
           </span>
         </li>
@@ -837,20 +837,20 @@ export default async function DepartmentReportsPage({
         }
       >
         <div className="grid auto-rows-fr gap-2 xl:grid-cols-[0.9fr_1.3fr_1fr]">
-          <section className="flex h-full min-h-[112px] flex-col overflow-hidden rounded-2xl border border-[#d9e7f7] bg-white/90">
-            <header className="flex h-[38px] shrink-0 items-center justify-between border-b border-[#e7eff9] px-3">
+          <section className="flex h-full min-h-[112px] flex-col overflow-hidden rounded-2xl border border-[#e7ddcd] bg-white/90">
+            <header className="flex h-[38px] shrink-0 items-center justify-between border-b border-[#ece3d4] px-3">
               <div className="flex items-center gap-2">
-                <ClipboardCheck className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
-                <h2 className="text-[13px] font-black text-[#10223d]">작성현황</h2>
+                <ClipboardCheck className="h-4 w-4 text-[#007050]" aria-hidden="true" />
+                <h2 className="text-[13px] font-black text-[#012241]">작성현황</h2>
               </div>
-              <p className="text-[13px] font-black tabular-nums text-[#10223d]">
+              <p className="text-[13px] font-black tabular-nums text-[#012241]">
                 {summaryReports.length}<span className="font-bold text-slate-400"> / {clientCount}</span>
               </p>
             </header>
-            <div className="grid min-h-0 flex-1 grid-cols-3 divide-x divide-[#e7eff9]">
+            <div className="grid min-h-0 flex-1 grid-cols-3 divide-x divide-[#ece3d4]">
               {[
-                { label: "전체", value: clientCount, labelClassName: "text-slate-500", valueClassName: "text-[#10223d]" },
-                { label: "작성", value: summaryReports.length, labelClassName: "text-[#075be8]", valueClassName: "text-[#075be8]" },
+                { label: "전체", value: clientCount, labelClassName: "text-slate-500", valueClassName: "text-[#012241]" },
+                { label: "작성", value: summaryReports.length, labelClassName: "text-[#007050]", valueClassName: "text-[#007050]" },
                 { label: "미작성", value: missingCount, labelClassName: "text-rose-600", valueClassName: "text-rose-600" }
               ].map((item) => (
                 <div key={item.label} className="flex min-w-0 flex-col items-center justify-center px-2 text-center">
@@ -861,13 +861,13 @@ export default async function DepartmentReportsPage({
             </div>
           </section>
 
-          <section className="flex h-full min-h-[112px] flex-col overflow-hidden rounded-2xl border border-[#d9e7f7] bg-white/90">
-            <header className="flex h-[38px] shrink-0 items-center justify-between border-b border-[#e7eff9] px-3">
+          <section className="flex h-full min-h-[112px] flex-col overflow-hidden rounded-2xl border border-[#e7ddcd] bg-white/90">
+            <header className="flex h-[38px] shrink-0 items-center justify-between border-b border-[#ece3d4] px-3">
               <div className="flex items-center gap-2">
                 <ListChecks className="h-4 w-4 text-orange-500" aria-hidden="true" />
-                <h2 className="text-[13px] font-black text-[#10223d]">내용건수</h2>
+                <h2 className="text-[13px] font-black text-[#012241]">내용건수</h2>
               </div>
-              <p className="text-[13px] font-black tabular-nums text-[#10223d]">
+              <p className="text-[13px] font-black tabular-nums text-[#012241]">
                 {importanceStats.total}<span className="ml-0.5 text-[11px] font-bold text-slate-400">건</span>
               </p>
             </header>
@@ -882,13 +882,13 @@ export default async function DepartmentReportsPage({
                   />
                 ))}
               </div>
-              <div className="mt-2 grid min-h-0 flex-1 grid-cols-4 divide-x divide-[#e7eff9]">
+              <div className="mt-2 grid min-h-0 flex-1 grid-cols-4 divide-x divide-[#ece3d4]">
                 {importanceStats.rows.map((row) => (
                   <div key={row.importance} className="flex min-w-0 items-center justify-center gap-1.5 px-1.5">
                     <span className={cn("inline-flex shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-black leading-4", row.badgeClassName)}>
                       {row.label}
                     </span>
-                    <span className="whitespace-nowrap text-xs font-black tabular-nums text-[#10223d]">
+                    <span className="whitespace-nowrap text-xs font-black tabular-nums text-[#012241]">
                       {row.count}<span className="ml-1 text-[10px] font-bold text-slate-400">{row.ratio}%</span>
                     </span>
                   </div>
@@ -897,27 +897,27 @@ export default async function DepartmentReportsPage({
             </div>
           </section>
 
-          <section className="flex h-full min-h-[112px] flex-col overflow-hidden rounded-2xl border border-[#d9e7f7] bg-white/90">
-            <header className="flex h-[38px] shrink-0 items-center border-b border-[#e7eff9] px-3">
+          <section className="flex h-full min-h-[112px] flex-col overflow-hidden rounded-2xl border border-[#e7ddcd] bg-white/90">
+            <header className="flex h-[38px] shrink-0 items-center border-b border-[#ece3d4] px-3">
               <div className="flex items-center gap-2">
                 <Boxes className="h-4 w-4 text-emerald-600" aria-hidden="true" />
-                <h2 className="text-[13px] font-black text-[#10223d]">물동량</h2>
+                <h2 className="text-[13px] font-black text-[#012241]">물동량</h2>
               </div>
             </header>
-            <div className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-[#e7eff9]">
+            <div className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-[#ece3d4]">
               <div className="flex min-w-0 flex-col justify-center px-4">
                 <p className="flex items-center gap-1.5 text-[11px] font-black leading-none text-emerald-700">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
                   입고
                 </p>
-                <p className="mt-2 break-words text-[15px] font-black leading-none tabular-nums text-[#10223d]">{inboundVolumeSummary}</p>
+                <p className="mt-2 break-words text-[15px] font-black leading-none tabular-nums text-[#012241]">{inboundVolumeSummary}</p>
               </div>
               <div className="flex min-w-0 flex-col justify-center px-4">
-                <p className="flex items-center gap-1.5 text-[11px] font-black leading-none text-[#075be8]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#2878f0]" aria-hidden="true" />
+                <p className="flex items-center gap-1.5 text-[11px] font-black leading-none text-[#007050]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#007050]" aria-hidden="true" />
                   출고
                 </p>
-                <p className="mt-2 break-words text-[15px] font-black leading-none tabular-nums text-[#10223d]">{outboundVolumeSummary}</p>
+                <p className="mt-2 break-words text-[15px] font-black leading-none tabular-nums text-[#012241]">{outboundVolumeSummary}</p>
               </div>
             </div>
           </section>

@@ -167,8 +167,8 @@ export function VolumeAnalysisPanel({
     [clientId, historicalVolumes, volumes]
   );
   const seriesOptions: { key: VolumeSeriesKey; label: string; color: string }[] = [
-    { key: "all", label: "전체", color: "#075be8" },
-    { key: "inbound", label: "입고", color: "#0f766e" },
+    { key: "all", label: "전체", color: "#007050" },
+    { key: "inbound", label: "입고", color: "#007050" },
     { key: "outbound", label: "출고", color: "#f59e0b" }
   ];
 
@@ -178,7 +178,7 @@ export function VolumeAnalysisPanel({
         <div className="glass-fieldset min-w-0 p-4">
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
+              <TrendingUp className="h-4 w-4 text-[#007050]" aria-hidden="true" />
               <div>
                 <h2 className="section-doodle-title">최근 1년 누적 물동량</h2>
                 <p className="mt-1 text-xs font-semibold text-slate-500">입고와 출고 수량을 기준으로 누적 추이를 표시합니다.</p>
@@ -186,7 +186,7 @@ export function VolumeAnalysisPanel({
             </div>
             <fieldset className="flex flex-wrap gap-2" aria-label="그래프 표시 항목">
               {seriesOptions.map((series) => (
-                <label key={series.key} className="inline-flex items-center gap-1.5 rounded-full border border-[#d9e4f2] bg-white/90 px-3 py-1.5 text-xs font-black text-[#10223d] shadow-[0_8px_18px_rgba(16,34,61,0.05)]">
+                <label key={series.key} className="inline-flex items-center gap-1.5 rounded-full border border-[#e4dac9] bg-white/90 px-3 py-1.5 text-xs font-black text-[#012241] shadow-[0_8px_18px_rgba(16,34,61,0.05)]">
                   <input
                     type="checkbox"
                     checked={visibleSeries[series.key]}
@@ -203,7 +203,7 @@ export function VolumeAnalysisPanel({
               ))}
             </fieldset>
           </div>
-          <div className="h-40 rounded-2xl border border-[#d9e4f2] bg-white/90 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] md:h-44">
+          <div className="h-40 rounded-2xl border border-[#e4dac9] bg-white/90 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] md:h-44">
             {volumeAnalysis.chartData.length === 0 ? (
               <div className="flex h-full items-center justify-center text-sm font-semibold text-slate-500">
                 최근 1년 물동량 데이터가 없습니다.
@@ -211,7 +211,7 @@ export function VolumeAnalysisPanel({
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <RechartsLineChart data={volumeAnalysis.chartData} margin={{ top: 10, right: 18, bottom: 6, left: 0 }}>
-                  <CartesianGrid strokeDasharray="4 4" stroke="#e2e8f0" />
+                  <CartesianGrid strokeDasharray="4 4" stroke="#ece3d4" />
                   <XAxis dataKey="label" tick={{ fontSize: 12 }} minTickGap={16} />
                   <YAxis tick={{ fontSize: 12 }} tickFormatter={(value: number) => formatNumber(value)} width={58} />
                   <Tooltip
@@ -241,9 +241,9 @@ export function VolumeAnalysisPanel({
 
         <div className="glass-fieldset p-4">
           <h2 className="section-doodle-title">물동량 비교표</h2>
-          <div className="mt-4 overflow-x-auto rounded-2xl border border-[#d9e4f2] bg-white/90">
+          <div className="mt-4 overflow-x-auto rounded-2xl border border-[#e4dac9] bg-white/90">
             <table className="min-w-[390px] w-full text-left text-sm">
-              <thead className="bg-[#f5f9ff] text-xs font-black text-[#10223d]">
+              <thead className="bg-[#faf6ef] text-xs font-black text-[#012241]">
                 <tr>
                   <th className="px-3 py-3">구분</th>
                   <th className="px-3 py-3 text-right">1년평균</th>
@@ -258,11 +258,11 @@ export function VolumeAnalysisPanel({
                     <td className="px-3 py-3 font-black text-slate-800">{row.label}</td>
                     <td className="px-3 py-3 text-right text-slate-700">{formatNumber(row.average)}</td>
                     <td className="px-3 py-3 text-right font-black text-slate-900">{formatNumber(row.current)}</td>
-                    <td className={`px-3 py-3 text-right font-black ${row.change >= 0 ? "text-[#0f766e]" : "text-rose-600"}`}>
+                    <td className={`px-3 py-3 text-right font-black ${row.change >= 0 ? "text-[#007050]" : "text-rose-600"}`}>
                       {row.change >= 0 ? "+" : ""}
                       {formatNumber(row.change)}
                     </td>
-                    <td className={`px-3 py-3 text-right font-black ${row.change >= 0 ? "text-[#0f766e]" : "text-rose-600"}`}>
+                    <td className={`px-3 py-3 text-right font-black ${row.change >= 0 ? "text-[#007050]" : "text-rose-600"}`}>
                       {row.changeRate}
                     </td>
                   </tr>

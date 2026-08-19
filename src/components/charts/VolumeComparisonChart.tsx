@@ -13,9 +13,9 @@ export type VolumeChartRow = {
 };
 
 const seriesOptions: { key: VolumeSeriesKey; label: string; stroke: string }[] = [
-  { key: "inbound", label: "입고", stroke: "#059669" },
-  { key: "outbound", label: "출고", stroke: "#2563eb" },
-  { key: "total", label: "합계", stroke: "#10223d" }
+  { key: "inbound", label: "입고", stroke: "#007050" },
+  { key: "outbound", label: "출고", stroke: "#007050" },
+  { key: "total", label: "합계", stroke: "#012241" }
 ];
 
 export function VolumeComparisonChart({ rows }: { rows: VolumeChartRow[] }) {
@@ -33,7 +33,7 @@ export function VolumeComparisonChart({ rows }: { rows: VolumeChartRow[] }) {
           {seriesOptions.map((series) => (
             <label
               key={series.key}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[#d9e4f2] bg-white/90 px-3 py-1.5 text-xs font-black text-[#10223d] shadow-[0_8px_18px_rgba(16,34,61,0.05)]"
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[#e4dac9] bg-white/90 px-3 py-1.5 text-xs font-black text-[#012241] shadow-[0_8px_18px_rgba(16,34,61,0.05)]"
             >
               <input
                 type="checkbox"
@@ -53,7 +53,7 @@ export function VolumeComparisonChart({ rows }: { rows: VolumeChartRow[] }) {
       </div>
 
       <div
-        className="min-h-0 flex-1 rounded-xl border border-[#d9e4f2] bg-white/76 px-2 pb-1 pt-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]"
+        className="min-h-0 flex-1 rounded-xl border border-[#e4dac9] bg-white/76 px-2 pb-1 pt-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]"
         role="img"
         aria-label="주차별 입고, 출고, 합계 물동량 추이 그래프"
       >
@@ -64,7 +64,7 @@ export function VolumeComparisonChart({ rows }: { rows: VolumeChartRow[] }) {
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={rows} margin={{ top: 6, right: 16, bottom: 2, left: 4 }}>
-              <CartesianGrid vertical={false} stroke="#dbe5f1" strokeDasharray="4 5" />
+              <CartesianGrid vertical={false} stroke="#e4dac9" strokeDasharray="4 5" />
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 11, fontWeight: 700 }} />
               <YAxis
                 axisLine={false}
@@ -80,10 +80,10 @@ export function VolumeComparisonChart({ rows }: { rows: VolumeChartRow[] }) {
                 ]}
                 labelFormatter={(label) => `${label}`}
                 contentStyle={{
-                  border: "1px solid #d9e4f2",
+                  border: "1px solid #e4dac9",
                   borderRadius: 8,
                   boxShadow: "0 12px 28px rgba(16,34,61,0.12)",
-                  color: "#10223d",
+                  color: "#012241",
                   fontSize: 12,
                   fontWeight: 700
                 }}

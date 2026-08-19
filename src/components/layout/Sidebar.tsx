@@ -117,8 +117,8 @@ export function Sidebar({
       <div className="flex h-full flex-col rounded-[1.75rem] border border-white/80 bg-white/82 p-4 shadow-[0_24px_70px_rgba(16,34,61,0.13)] backdrop-blur-2xl">
         <div className="flex items-start justify-between gap-2">
           <Link href="/notices" className="focus-ring block min-w-0 rounded-3xl px-2 py-2">
-            <div className="text-[1.95rem] font-black leading-none tracking-normal text-[#075be8]">TPL</div>
-            <div className="mt-1 text-[0.62rem] font-black uppercase tracking-[0.42em] text-[#0b2d5f]">
+            <div className="text-[1.95rem] font-black leading-none tracking-normal text-[#007050]">TPL</div>
+            <div className="mt-1 text-[0.62rem] font-black uppercase tracking-[0.42em] text-[#012241]">
               Logistics
             </div>
             <p className="mt-2 text-xs font-semibold text-slate-500">Weekly Operations Hub</p>
@@ -126,7 +126,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={onToggleHidden}
-            className="focus-ring mt-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#dbe8fb] bg-white/90 text-[#075be8] shadow-[0_12px_24px_rgba(16,34,61,0.08)] transition hover:-translate-y-0.5 hover:bg-[#eaf3ff]"
+            className="focus-ring mt-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#e7ddcd] bg-white/90 text-[#007050] shadow-[0_12px_24px_rgba(16,34,61,0.08)] transition hover:-translate-y-0.5 hover:bg-[#f4ede2]"
             aria-label="왼쪽 메뉴 숨기기"
             title="왼쪽 메뉴 숨기기"
           >
@@ -143,9 +143,9 @@ export function Sidebar({
               href={menu.href}
               prefetch={fullPrefetchMenuHrefs.has(menu.href) ? true : "auto"}
               onFocus={() => router.prefetch(menu.href)}
-              className="focus-ring group flex min-w-0 items-center gap-3 rounded-2xl border border-transparent px-3 py-2.5 text-sm font-bold text-[#203653] transition hover:-translate-y-0.5 hover:border-[#dbe8fb] hover:bg-[#eaf3ff] hover:text-[#075be8] hover:shadow-[0_16px_30px_rgba(7,91,232,0.12)]"
+              className="focus-ring group flex min-w-0 items-center gap-3 rounded-2xl border border-transparent px-3 py-2.5 text-sm font-bold text-[#16324d] transition hover:-translate-y-0.5 hover:border-[#e7ddcd] hover:bg-[#f4ede2] hover:text-[#007050] hover:shadow-[0_16px_30px_rgba(0, 112, 80,0.12)]"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#f2f7ff] text-[#0b2d5f] transition group-hover:bg-[#075be8] group-hover:text-white">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#faf6ef] text-[#012241] transition group-hover:bg-[#007050] group-hover:text-white">
                 <MenuIcon icon={Icon} />
               </span>
               <span className="min-w-0 flex-1 truncate">{menu.label}</span>
@@ -157,15 +157,15 @@ export function Sidebar({
       <div className="mt-3 shrink-0 space-y-3">
         <div className="flex items-center justify-between px-2 text-xs font-bold text-slate-500">
           <span className="inline-flex items-center gap-2">
-            <PackageSearch className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
+            <PackageSearch className="h-4 w-4 text-[#007050]" aria-hidden="true" />
             KOR
           </span>
           <span className="inline-flex items-center gap-2">
-            <Bell className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
+            <Bell className="h-4 w-4 text-[#007050]" aria-hidden="true" />
             Live
           </span>
           <span className="inline-flex items-center gap-2">
-            <LogOut className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
+            <LogOut className="h-4 w-4 text-[#007050]" aria-hidden="true" />
             Secure
           </span>
         </div>

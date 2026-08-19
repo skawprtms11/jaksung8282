@@ -314,7 +314,7 @@ function MeetingMaterialsAccessDenied() {
   return (
     <section className="sketch-panel p-6">
       <div className="mx-auto max-w-2xl text-center">
-        <p className="text-lg font-black text-[#10223d]">회의자료 접근 권한이 없습니다.</p>
+        <p className="text-lg font-black text-[#012241]">회의자료 접근 권한이 없습니다.</p>
         <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
           회의자료는 관리자, 부서장, 매니저 권한 사용자만 조회할 수 있습니다.
         </p>
@@ -1089,7 +1089,7 @@ async function MeetingMaterialsContent({
       ) : null}
       {activeTab === "materials" ? (
         <div className="space-y-2">
-          <div className="rounded-md border border-[#d9e7f7] bg-white/90 px-2 py-0.5 shadow-[0_10px_26px_rgba(16,34,61,0.05)]">
+          <div className="rounded-md border border-[#e7ddcd] bg-white/90 px-2 py-0.5 shadow-[0_10px_26px_rgba(16,34,61,0.05)]">
             <DepartmentCommonSearchToolbar
               key={Object.values(searchFilters).join("|")}
               categories={workCategories}
@@ -1151,27 +1151,27 @@ function CollectionView({
       <section className="sketch-panel p-3">
         <div className="mb-3 flex min-h-[54px] items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm font-black text-[#10223d]">부서별 작성 모니터링</p>
+            <p className="text-sm font-black text-[#012241]">부서별 작성 모니터링</p>
             <p className="text-xs font-bold text-slate-500">작성완료 여부를 빠르게 확인합니다.</p>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-[#d9e7f7] bg-[#f8fbff] px-2.5 py-1.5 shadow-[0_10px_22px_rgba(16,34,61,0.04)]">
+          <div className="flex shrink-0 items-center gap-1.5 rounded-2xl border border-[#e7ddcd] bg-[#fbf8f2] px-2.5 py-1.5 shadow-[0_10px_22px_rgba(16,34,61,0.04)]">
             <div className="w-24 shrink-0">
               <div className="mb-1 flex items-center justify-between gap-2">
                 <span className="text-[10px] font-black text-slate-500">작성진행률</span>
-                <span className="text-[11px] font-black text-[#075be8]">{completionRate}%</span>
+                <span className="text-[11px] font-black text-[#007050]">{completionRate}%</span>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-[#e8f1ff]">
-                <span className="block h-full rounded-full bg-gradient-to-r from-[#0ea5e9] to-[#075be8]" style={{ width: `${completionRate}%` }} />
+              <div className="h-2 overflow-hidden rounded-full bg-[#e6f1ec]">
+                <span className="block h-full rounded-full bg-gradient-to-r from-[#2fae66] to-[#007050]" style={{ width: `${completionRate}%` }} />
               </div>
             </div>
             <div className="grid grid-cols-3 gap-1 text-center">
               <div className="min-w-[52px] rounded-xl bg-white px-1.5 py-1">
                 <span className="block text-[10px] font-black text-slate-400">총건수</span>
-                <span className="block text-xs font-black text-[#10223d]">{totalClientCount}</span>
+                <span className="block text-xs font-black text-[#012241]">{totalClientCount}</span>
               </div>
               <div className="min-w-[58px] rounded-xl bg-white px-1.5 py-1">
                 <span className="block text-[10px] font-black text-slate-400">완료건수</span>
-                <span className="block text-xs font-black text-[#075be8]">{completedClientCount}</span>
+                <span className="block text-xs font-black text-[#007050]">{completedClientCount}</span>
               </div>
               <div className="min-w-[52px] rounded-xl bg-white px-1.5 py-1">
                 <span className="block text-[10px] font-black text-slate-400">완료율</span>
@@ -1207,11 +1207,11 @@ function CollectionView({
                 const status = compactDepartmentStatus(submission?.status ?? null);
                 return (
                   <tr key={department.id} className="border-t border-slate-100">
-                    <td className="truncate px-2 py-1.5 text-[12px] font-black text-[#10223d]" title={department.department_name}>
+                    <td className="truncate px-2 py-1.5 text-[12px] font-black text-[#012241]" title={department.department_name}>
                       {department.department_name}
                     </td>
                     <td className="px-2 py-1.5">
-                      <span className="font-black text-[#075be8]">{writtenClients}</span>
+                      <span className="font-black text-[#007050]">{writtenClients}</span>
                       <span className="text-slate-400"> / {totalClients}</span>
                     </td>
                     <td className="px-2 py-1.5">
@@ -1279,17 +1279,17 @@ function VolumesView({
               <tbody>
                 {weekRows.map((row) => (
                   <tr key={row.name} className="border-t border-slate-100">
-                    <td className="px-3 py-2 font-black text-[#10223d]">{row.name}</td>
+                    <td className="px-3 py-2 font-black text-[#012241]">{row.name}</td>
                     <td className="px-2 py-2 text-right font-bold">{row.inbound.toLocaleString("ko-KR")}</td>
                     <td className="px-2 py-2 text-right font-bold">{row.outbound.toLocaleString("ko-KR")}</td>
-                    <td className="px-3 py-2 text-right font-black text-[#10223d]">{row.total.toLocaleString("ko-KR")}</td>
+                    <td className="px-3 py-2 text-right font-black text-[#012241]">{row.total.toLocaleString("ko-KR")}</td>
                   </tr>
                 ))}
-                <tr className="border-t border-[#cfddec] bg-[#f5f9ff]">
-                  <td className="px-3 py-2.5 font-black text-[#10223d]">합계</td>
+                <tr className="border-t border-[#ddd2bf] bg-[#faf6ef]">
+                  <td className="px-3 py-2.5 font-black text-[#012241]">합계</td>
                   <td className="px-2 py-2.5 text-right font-black text-emerald-700">{monthlyTotal.inbound.toLocaleString("ko-KR")}</td>
                   <td className="px-2 py-2.5 text-right font-black text-blue-700">{monthlyTotal.outbound.toLocaleString("ko-KR")}</td>
-                  <td className="px-3 py-2.5 text-right font-black text-[#10223d]">{monthlyTotal.total.toLocaleString("ko-KR")}</td>
+                  <td className="px-3 py-2.5 text-right font-black text-[#012241]">{monthlyTotal.total.toLocaleString("ko-KR")}</td>
                 </tr>
               </tbody>
             </table>

@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #eef4fb;
-  --foreground: #10223d;
-  --primary: #075be8;
-  --primary-deep: #0b2d5f;
-  --primary-soft: #e8f1ff;
-  --accent: #24a8ff;
-  --accent-soft: #e8f7ff;
-  --mint: #5fd4a6;
-  --border: #d9e4f2;
-  --surface: rgba(255, 255, 255, 0.86);
+  --background: #f3ece1;
+  --foreground: #012241;
+  --primary: #007050;
+  --primary-deep: #012241;
+  --primary-soft: #e6f1ec;
+  --accent: #2fae66;
+  --accent-soft: #e6f4ee;
+  --mint: #2fae66;
+  --border: #e4dac9;
+  --surface: rgba(255, 255, 255, 0.94);
 }
 
 html {
@@ -20,9 +20,9 @@ html {
 body {
   min-height: 100%;
   background:
-    radial-gradient(circle at 82% 12%, rgba(36, 168, 255, 0.18), transparent 26rem),
-    linear-gradient(115deg, rgba(255, 255, 255, 0.92) 0 22%, rgba(246, 250, 255, 0.82) 22% 48%, rgba(227, 238, 251, 0.72) 48% 100%),
-    #eef4fb;
+    radial-gradient(circle at 84% 10%, rgba(246, 217, 217, 0.5), transparent 30rem),
+    radial-gradient(circle at 6% 90%, rgba(0, 112, 80, 0.06), transparent 30rem),
+    #f3ece1;
   color: var(--foreground);
   font-family:
     "Pretendard",
@@ -35,17 +35,6 @@ body {
   letter-spacing: 0;
 }
 
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -2;
-  background:
-    linear-gradient(90deg, rgba(7, 91, 232, 0.08) 1px, transparent 1px) 0 0 / 96px 96px,
-    linear-gradient(0deg, rgba(16, 34, 61, 0.05) 1px, transparent 1px) 0 0 / 96px 96px;
-  mask-image: linear-gradient(90deg, transparent, black 24%, black 100%);
-}
-
 body::after {
   content: "";
   position: fixed;
@@ -53,8 +42,8 @@ body::after {
   z-index: -1;
   pointer-events: none;
   background:
-    linear-gradient(100deg, rgba(255, 255, 255, 0.92) 0 16%, transparent 40%),
-    radial-gradient(circle at 75% 34%, rgba(11, 45, 95, 0.11), transparent 34rem);
+    linear-gradient(100deg, rgba(255, 255, 255, 0.6) 0 14%, transparent 40%),
+    radial-gradient(circle at 76% 36%, rgba(1, 34, 65, 0.05), transparent 34rem);
 }
 
 button,
@@ -73,15 +62,15 @@ textarea {
 input:not([type="checkbox"]):not([type="radio"]),
 select,
 textarea {
-  border-color: #d9e4f2;
+  border-color: #e4dac9;
   border-radius: 1rem;
-  background-color: #f8fbff;
-  color: #10223d;
+  background-color: #fbf8f2;
+  color: #012241;
 }
 
 input[type="checkbox"],
 input[type="radio"] {
-  accent-color: #075be8;
+  accent-color: #007050;
 }
 
 summary {
@@ -100,19 +89,19 @@ summary::before {
   align-items: center;
   justify-content: center;
   margin-right: 0.45rem;
-  border: 1px solid rgba(7, 91, 232, 0.22);
-  border-radius: 0.4rem;
+  border: 1px solid rgba(0, 112, 80, 0.22);
+  border-radius: 0.55rem;
   background:
-    linear-gradient(135deg, rgba(7, 91, 232, 0.12), rgba(36, 168, 255, 0.18)),
+    linear-gradient(135deg, rgba(0, 112, 80, 0.12), rgba(47, 174, 102, 0.16)),
     #ffffff;
-  box-shadow: 0 10px 18px rgba(7, 91, 232, 0.08);
+  box-shadow: 0 10px 18px rgba(0, 112, 80, 0.08);
 }
 
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: #075be8;
-  box-shadow: 0 0 0 4px rgba(7, 91, 232, 0.12);
+  border-color: #007050;
+  box-shadow: 0 0 0 4px rgba(0, 112, 80, 0.14);
   outline: none;
 }
 
@@ -120,8 +109,8 @@ textarea:focus {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: rgba(245, 249, 255, 0.96);
-  color: #10223d;
+  background: rgba(250, 246, 239, 0.97);
+  color: #012241;
 }
 
 .focus-ring {
@@ -130,51 +119,49 @@ textarea:focus {
 }
 
 .focus-ring:focus-visible {
-  outline-color: #075be8;
+  outline-color: #007050;
 }
 
 .sketch-panel {
-  border: 1px solid rgba(217, 228, 242, 0.9);
-  border-radius: 1.25rem !important;
+  border: 1px solid rgba(228, 218, 201, 0.95);
+  border-radius: 1.75rem !important;
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(245, 249, 255, 0.82)),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(250, 246, 239, 0.9)),
     #ffffff;
-  box-shadow: 0 18px 42px rgba(16, 34, 61, 0.07);
-  backdrop-filter: blur(18px);
+  box-shadow: 0 18px 42px rgba(1, 34, 65, 0.07);
 }
 
 .glass-fieldset {
-  border: 1px solid rgba(217, 228, 242, 0.9);
-  border-radius: 1rem;
-  background: rgba(245, 249, 255, 0.76);
+  border: 1px solid rgba(228, 218, 201, 0.95);
+  border-radius: 1.25rem;
+  background: rgba(250, 246, 239, 0.86);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .glass-row {
-  border: 1px solid rgba(217, 228, 242, 0.86);
-  border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.86);
-  box-shadow: 0 10px 24px rgba(16, 34, 61, 0.05);
+  border: 1px solid rgba(228, 218, 201, 0.9);
+  border-radius: 1.25rem;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 24px rgba(1, 34, 65, 0.05);
 }
 
 .metric-card {
-  border: 1px solid rgba(217, 228, 242, 0.9);
-  border-radius: 1.25rem;
+  border: 1px solid rgba(228, 218, 201, 0.95);
+  border-radius: 1.5rem;
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(232, 241, 255, 0.7)),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.97), rgba(250, 246, 239, 0.82)),
     #ffffff;
-  box-shadow: 0 16px 36px rgba(16, 34, 61, 0.07);
-  backdrop-filter: blur(18px);
+  box-shadow: 0 16px 36px rgba(1, 34, 65, 0.07);
 }
 
 .section-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  border: 1px solid rgba(7, 91, 232, 0.16);
+  border: 1px solid rgba(0, 112, 80, 0.18);
   border-radius: 999px;
-  background: rgba(232, 241, 255, 0.84);
-  color: #075be8;
+  background: rgba(230, 241, 236, 0.9);
+  color: #007050;
   padding: 0.3rem 0.65rem;
   font-size: 0.75rem;
   font-weight: 800;
@@ -186,15 +173,14 @@ textarea:focus {
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  border: 1px solid rgba(217, 228, 242, 0.95);
+  border: 1px solid rgba(228, 218, 201, 0.98);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.9);
-  color: #10223d;
+  background: rgba(255, 255, 255, 0.94);
+  color: #012241;
   padding: 0.55rem 1rem;
   font-size: 0.875rem;
   font-weight: 750;
-  box-shadow: 0 12px 24px rgba(16, 34, 61, 0.08);
-  backdrop-filter: blur(14px);
+  box-shadow: 0 12px 24px rgba(1, 34, 65, 0.08);
   transition:
     transform 140ms ease,
     box-shadow 140ms ease,
@@ -204,7 +190,7 @@ textarea:focus {
 
 .table-sticky td,
 .table-sticky th {
-  border-color: rgba(217, 228, 242, 0.74);
+  border-color: rgba(228, 218, 201, 0.78);
 }
 
 .table-sticky tbody tr {
@@ -214,30 +200,30 @@ textarea:focus {
 }
 
 .table-sticky tbody tr:hover {
-  background: rgba(232, 241, 255, 0.58);
+  background: rgba(230, 241, 236, 0.6);
 }
 
 .tool-button:hover {
   transform: translateY(-1px);
-  border-color: rgba(7, 91, 232, 0.24);
+  border-color: rgba(0, 112, 80, 0.28);
   background: #ffffff;
-  box-shadow: 0 16px 30px rgba(7, 91, 232, 0.13);
+  box-shadow: 0 16px 30px rgba(0, 112, 80, 0.13);
 }
 
 .tool-button:active {
   transform: translateY(0);
-  box-shadow: 0 8px 18px rgba(16, 34, 61, 0.08);
+  box-shadow: 0 8px 18px rgba(1, 34, 65, 0.08);
 }
 
 .tool-button-primary {
-  border-color: rgba(7, 91, 232, 0.74);
-  background: linear-gradient(135deg, #075be8, #0b7cff);
+  border-color: rgba(0, 112, 80, 0.8);
+  background: linear-gradient(135deg, #007050, #00875c);
   color: #ffffff;
-  box-shadow: 0 16px 30px rgba(7, 91, 232, 0.28);
+  box-shadow: 0 16px 30px rgba(0, 112, 80, 0.28);
 }
 
 .tool-button-primary:hover {
-  background: linear-gradient(135deg, #064fc9, #006bea);
+  background: linear-gradient(135deg, #00593f, #007050);
 }
 
 .tool-button-danger {
@@ -257,11 +243,11 @@ textarea:focus {
   width: 2.15rem;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(217, 228, 242, 0.95);
+  border: 1px solid rgba(228, 218, 201, 0.98);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.9);
-  color: #075be8;
-  box-shadow: 0 10px 20px rgba(16, 34, 61, 0.08);
+  background: rgba(255, 255, 255, 0.94);
+  color: #007050;
+  box-shadow: 0 10px 20px rgba(1, 34, 65, 0.08);
   transition:
     transform 140ms ease,
     box-shadow 140ms ease,
@@ -271,14 +257,14 @@ textarea:focus {
 .icon-tool-button:hover {
   transform: translateY(-1px);
   background: #ffffff;
-  box-shadow: 0 14px 26px rgba(7, 91, 232, 0.13);
+  box-shadow: 0 14px 26px rgba(0, 112, 80, 0.13);
 }
 
 .section-doodle-title {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  color: #10223d;
+  color: #012241;
   font-weight: 850;
 }
 
@@ -288,6 +274,6 @@ textarea:focus {
   width: 0.62rem;
   border: 0;
   border-radius: 999px;
-  background: #075be8;
-  box-shadow: 0 0 0 5px rgba(7, 91, 232, 0.12);
+  background: #007050;
+  box-shadow: 0 0 0 5px rgba(0, 112, 80, 0.12);
 }

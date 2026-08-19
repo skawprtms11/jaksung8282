@@ -28,7 +28,7 @@ const importanceOptions: { value: Importance; label: string }[] = [
 ];
 
 function inputClassName() {
-  return "mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-2.5 text-sm font-semibold text-[#10223d] outline-none transition focus:border-[#075be8] focus:ring-2 focus:ring-[#075be8]/15";
+  return "mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-2.5 text-sm font-semibold text-[#012241] outline-none transition focus:border-[#007050] focus:ring-2 focus:ring-[#007050]/15";
 }
 
 export function ClientReportsToolbar({
@@ -115,7 +115,7 @@ export function ClientReportsToolbar({
   }
 
   return (
-    <section className="mb-3 rounded-md border border-[#d9e7f7] bg-white/90 p-3 shadow-[0_10px_26px_rgba(16,34,61,0.05)]">
+    <section className="mb-3 rounded-md border border-[#e7ddcd] bg-white/90 p-3 shadow-[0_10px_26px_rgba(16,34,61,0.05)]">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         {detailOpen ? (
           <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:min-w-[380px]">
@@ -152,7 +152,7 @@ export function ClientReportsToolbar({
             className="grid gap-2 sm:grid-cols-3"
             labelClassName="text-xs font-bold text-slate-600"
             weekLabelClassName="text-xs font-bold text-slate-600"
-            controlClassName="mt-1 h-9 w-full min-w-[112px] rounded-md border border-slate-300 bg-white px-2 text-sm font-semibold text-[#10223d] outline-none transition focus:border-[#075be8] focus:ring-2 focus:ring-[#075be8]/15"
+            controlClassName="mt-1 h-9 w-full min-w-[112px] rounded-md border border-slate-300 bg-white px-2 text-sm font-semibold text-[#012241] outline-none transition focus:border-[#007050] focus:ring-2 focus:ring-[#007050]/15"
             onSelectionChange={(week) => {
               const nextParams = new URLSearchParams(searchParams.toString());
               nextParams.set("report_year", String(week.year));
@@ -170,7 +170,7 @@ export function ClientReportsToolbar({
 
         <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-end xl:justify-end">
           {hasSearch ? (
-            <span className="self-center whitespace-nowrap text-xs font-black text-[#075be8]">검색결과 {resultCount}건</span>
+            <span className="self-center whitespace-nowrap text-xs font-black text-[#007050]">검색결과 {resultCount}건</span>
           ) : null}
           <form onSubmit={submitQuickSearch} className="flex min-w-0 flex-1 items-end gap-2 sm:flex-none">
             <label className="min-w-0 flex-1 text-xs font-bold text-slate-600 sm:w-[280px]">
@@ -209,7 +209,7 @@ export function ClientReportsToolbar({
         <form
           id="client-report-detailed-search"
           onSubmit={submitDetailedSearch}
-          className="mt-3 border-t border-[#e2ebf5] pt-3"
+          className="mt-3 border-t border-[#e7ddcd] pt-3"
         >
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
             <label className="text-xs font-bold text-slate-600">

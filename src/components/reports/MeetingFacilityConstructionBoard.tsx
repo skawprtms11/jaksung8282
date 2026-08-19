@@ -137,7 +137,7 @@ export function MeetingFacilityConstructionBoard({
     <section className="sketch-panel p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#e8f1ff] text-[#075be8]">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#e6f1ec] text-[#007050]">
             <Hammer className="h-5 w-5" aria-hidden="true" />
           </span>
           <div>
@@ -148,15 +148,15 @@ export function MeetingFacilityConstructionBoard({
         <span className="section-chip">총 {filteredRows.length}건</span>
       </div>
 
-      <div className="rounded-2xl border border-[#d9e7f7] bg-white/88 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e5eef9] px-3 py-3">
+      <div className="rounded-2xl border border-[#e7ddcd] bg-white/88 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ece3d4] px-3 py-3">
           <div className="flex flex-wrap items-center gap-2">
             <label className="section-chip cursor-pointer">
               <input
                 type="checkbox"
                 checked={allStatusesSelected}
                 onChange={() => setSelectedStatuses(allStatusesSelected ? [] : facilityStatusOptions.map((option) => option.value))}
-                className="h-4 w-4 accent-[#075be8]"
+                className="h-4 w-4 accent-[#007050]"
               />
               전체
             </label>
@@ -166,7 +166,7 @@ export function MeetingFacilityConstructionBoard({
                   type="checkbox"
                   checked={selectedStatuses.includes(option.value)}
                   onChange={() => toggleStatus(option.value)}
-                  className="h-4 w-4 accent-[#075be8]"
+                  className="h-4 w-4 accent-[#007050]"
                 />
                 {option.label}
               </label>
@@ -177,7 +177,7 @@ export function MeetingFacilityConstructionBoard({
             <input
               value={searchKeyword}
               onChange={(event) => setSearchKeyword(event.target.value)}
-              className="mt-1 h-10 w-full rounded-full border border-[#d7e4f6] bg-[#f5f9ff] px-4 text-sm font-bold text-[#10223d] outline-none"
+              className="mt-1 h-10 w-full rounded-full border border-[#e4dac9] bg-[#faf6ef] px-4 text-sm font-bold text-[#012241] outline-none"
               placeholder="공사명, 공사내용, 진행업체"
             />
           </label>
@@ -225,10 +225,10 @@ export function MeetingFacilityConstructionBoard({
               ) : (
                 filteredRows.map((row) => (
                   <tr key={`${row.department_name}-${row.id}`} className="border-t border-slate-100 align-top">
-                    <td className="break-words px-2 py-2.5 font-black text-[#10223d]">{row.department_name}</td>
+                    <td className="break-words px-2 py-2.5 font-black text-[#012241]">{row.department_name}</td>
                     <td className="break-words px-2 py-2.5">{row.start_date || "-"}</td>
                     <td className="break-words px-2 py-2.5">{row.completion_date || "-"}</td>
-                    <td className="break-words px-2 py-2.5 font-black leading-5 text-[#10223d]">{row.construction_name || "-"}</td>
+                    <td className="break-words px-2 py-2.5 font-black leading-5 text-[#012241]">{row.construction_name || "-"}</td>
                     <td className="whitespace-pre-wrap break-words px-2 py-2.5 leading-5 text-slate-600">{row.construction_content || "-"}</td>
                     <td className="break-words px-2 py-2.5">{row.contractor || "-"}</td>
                     <td className="break-words px-2 py-2.5">{row.construction_amount || "-"}</td>

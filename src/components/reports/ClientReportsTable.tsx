@@ -242,12 +242,12 @@ export function ClientReportsTable({
 
     if (canShowHoverEdit) {
       return (
-        <div className="group relative -m-2 min-h-16 rounded-2xl p-2 transition hover:bg-[#f5f9ff] hover:shadow-[inset_0_0_0_1px_rgba(169,205,252,0.85)]">
+        <div className="group relative -m-2 min-h-16 rounded-2xl p-2 transition hover:bg-[#faf6ef] hover:shadow-[inset_0_0_0_1px_rgba(169,205,252,0.85)]">
           {content}
           <button
             type="button"
             onClick={() => openEditDialog(report.id, period)}
-            className="icon-tool-button absolute right-2 top-2 h-8 w-8 bg-white/95 text-[#075be8] opacity-0 shadow-[0_10px_22px_rgba(16,34,61,0.10)] transition group-hover:opacity-100 group-focus-within:opacity-100"
+            className="icon-tool-button absolute right-2 top-2 h-8 w-8 bg-white/95 text-[#007050] opacity-0 shadow-[0_10px_22px_rgba(16,34,61,0.10)] transition group-hover:opacity-100 group-focus-within:opacity-100"
             aria-label={`${report.clientName} ${period === "current" ? "금주 실시사항" : "차주 예정사항"} 수정`}
             title="수정"
           >
@@ -268,7 +268,7 @@ export function ClientReportsTable({
             openEditDialog(report.id, period);
           }
         }}
-        className="w-full cursor-pointer rounded-2xl border border-dashed border-[#9db8dc] bg-white/80 px-3 py-2 text-left font-bold text-[#075be8] transition hover:border-[#075be8] hover:bg-[#eef6ff]"
+        className="w-full cursor-pointer rounded-2xl border border-dashed border-[#c0b199] bg-white/80 px-3 py-2 text-left font-bold text-[#007050] transition hover:border-[#007050] hover:bg-[#f4ede2]"
       >
         {content}
         <span className="mt-2 block text-xs text-slate-500">클릭해서 수정</span>
@@ -396,7 +396,7 @@ export function ClientReportsTable({
                   key={report.id}
                   className={cn(
                     "border-t border-slate-100 align-top",
-                    isEditing ? "bg-[#eef6ff]" : "bg-white/80"
+                    isEditing ? "bg-[#f4ede2]" : "bg-white/80"
                   )}
                 >
                   <td className="px-3 py-3">
@@ -409,7 +409,7 @@ export function ClientReportsTable({
                     />
                   </td>
                   <td className="px-3 py-3">
-                    <span className="block font-black text-[#10223d]">{report.clientName}</span>
+                    <span className="block font-black text-[#012241]">{report.clientName}</span>
                     <span className="mt-1 block text-[11px] font-bold text-slate-400">{report.weekLabel}</span>
                   </td>
                   <td className="px-3 py-3">{report.authorName}</td>
@@ -505,7 +505,7 @@ function ReportItemList({ items }: { items: ClientReportItem[] }) {
               {item.categoryName}
             </span>
             <span className="min-w-0">
-              <span className="block break-words text-sm font-black leading-5 text-[#10223d]">{item.title}</span>
+              <span className="block break-words text-sm font-black leading-5 text-[#012241]">{item.title}</span>
               <span className="mt-0.5 block whitespace-pre-wrap break-words text-[13px] leading-5 text-slate-600">{item.content}</span>
             </span>
           </li>
@@ -534,7 +534,7 @@ function VolumeConfirmDialog({
         <div className="max-h-[90vh] w-full max-w-7xl overflow-hidden rounded-[1.5rem] border border-white/80 bg-white/95 shadow-[0_28px_80px_rgba(16,34,61,0.24)] backdrop-blur-2xl">
           <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
             <div className="flex items-center gap-3">
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#e8f1ff] text-[#075be8]">
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#e6f1ec] text-[#007050]">
                 <PackageCheck className="h-5 w-5" aria-hidden="true" />
               </span>
               <div>
@@ -549,7 +549,7 @@ function VolumeConfirmDialog({
             </button>
           </div>
 
-          <div className="max-h-[68vh] overflow-y-auto bg-[#f5f9ff] p-5">
+          <div className="max-h-[68vh] overflow-y-auto bg-[#faf6ef] p-5">
             {message ? (
               <div className="sketch-panel p-4 text-sm font-bold text-rose-600">{message}</div>
             ) : loading ? (

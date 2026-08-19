@@ -54,7 +54,7 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
           <span>수정 {formatDateTime(notice.updated_at)}</span>
           <span>조회 {notice.view_count}</span>
         </div>
-        <h1 className="mt-4 text-2xl font-black text-[#10223d]">{notice.title}</h1>
+        <h1 className="mt-4 text-2xl font-black text-[#012241]">{notice.title}</h1>
         <div className="glass-fieldset mt-6 whitespace-pre-wrap p-4 text-sm leading-7 text-slate-800">{notice.content}</div>
       </article>
       <div className="mt-4 flex gap-2">

@@ -121,19 +121,19 @@ export function DepartmentOpenRequestBoard({
   return (
     <>
       <section
-        className="overflow-hidden rounded-2xl border border-[#cfe0f4] bg-white/90 shadow-[0_12px_30px_rgba(16,34,61,0.05)]"
+        className="overflow-hidden rounded-2xl border border-[#ddd2bf] bg-white/90 shadow-[0_12px_30px_rgba(16,34,61,0.05)]"
         aria-labelledby="department-open-request-title"
       >
-        <div className={`flex flex-wrap items-center justify-between gap-2 border-b border-[#e2ebf5] ${compact ? "px-3 py-0.5" : "px-4 py-3"}`}>
+        <div className={`flex flex-wrap items-center justify-between gap-2 border-b border-[#e7ddcd] ${compact ? "px-3 py-0.5" : "px-4 py-3"}`}>
           <div className="flex items-center gap-2.5">
-            <span className={`inline-flex items-center justify-center rounded-lg border border-[#cfe0f4] bg-[#eef6ff] text-[#075be8] ${compact ? "h-7 w-7" : "h-8 w-8"}`}>
+            <span className={`inline-flex items-center justify-center rounded-lg border border-[#ddd2bf] bg-[#f4ede2] text-[#007050] ${compact ? "h-7 w-7" : "h-8 w-8"}`}>
               <ClipboardList className="h-4 w-4" aria-hidden="true" />
             </span>
-            <h2 id="department-open-request-title" className="text-sm font-black text-[#10223d]">
+            <h2 id="department-open-request-title" className="text-sm font-black text-[#012241]">
               {title}
             </h2>
           </div>
-          <span className="inline-flex h-7 items-center rounded-full border border-[#cfe0f4] bg-[#f5f9ff] px-2.5 text-xs font-black text-[#075be8]">
+          <span className="inline-flex h-7 items-center rounded-full border border-[#ddd2bf] bg-[#faf6ef] px-2.5 text-xs font-black text-[#007050]">
             미종결 {rows.length}건
           </span>
         </div>
@@ -141,11 +141,11 @@ export function DepartmentOpenRequestBoard({
         {rows.length === 0 ? (
           <p className={`text-center text-xs font-bold text-slate-400 ${compact ? "px-3 py-3" : "px-4 py-5"}`}>{emptyMessage}</p>
         ) : (
-          <div className="divide-y divide-[#e8eff7]">
+          <div className="divide-y divide-[#ece3d4]">
             {rows.map((request) => (
               <article key={request.requestId} className={`grid lg:grid-cols-[170px_minmax(0,1fr)_minmax(240px,0.8fr)_110px] lg:items-center ${compact ? "gap-2 px-3 py-0.5" : "gap-3 px-4 py-3"}`}>
                 <div className="min-w-0">
-                  <p className="truncate text-xs font-black text-[#075be8]">{request.sourceLabel}</p>
+                  <p className="truncate text-xs font-black text-[#007050]">{request.sourceLabel}</p>
                   <p className={`${compact ? "mt-0.5" : "mt-1"} flex items-center gap-1 text-[11px] font-bold text-slate-400`}>
                     <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
                     {request.weekLabel}
@@ -158,7 +158,7 @@ export function DepartmentOpenRequestBoard({
                   <button
                     type="button"
                     onClick={() => setSelectedRequestId(request.requestId)}
-                    className={`${compact ? "min-w-0 truncate text-[13px]" : "block max-w-full text-sm"} text-left font-black leading-5 text-[#10223d] underline-offset-4 hover:text-[#075be8] hover:underline`}
+                    className={`${compact ? "min-w-0 truncate text-[13px]" : "block max-w-full text-sm"} text-left font-black leading-5 text-[#012241] underline-offset-4 hover:text-[#007050] hover:underline`}
                     style={compact ? { fontSize: "13px" } : undefined}
                   >
                     {request.title}

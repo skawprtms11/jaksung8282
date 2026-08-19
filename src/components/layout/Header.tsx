@@ -338,15 +338,15 @@ function HeaderScopeFilter({
   }
 
   return (
-    <div className="hidden items-center gap-2 rounded-full border border-[#dbe8fb] bg-white/90 px-2 py-1.5 shadow-[0_12px_26px_rgba(16,34,61,0.06)] xl:flex">
-      <label className="flex items-center gap-1.5 rounded-full bg-[#f5f9ff] px-2 py-1 text-xs font-black text-slate-500">
-        <Building2 className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
+    <div className="hidden items-center gap-2 rounded-full border border-[#e7ddcd] bg-white/90 px-2 py-1.5 shadow-[0_12px_26px_rgba(16,34,61,0.06)] xl:flex">
+      <label className="flex items-center gap-1.5 rounded-full bg-[#faf6ef] px-2 py-1 text-xs font-black text-slate-500">
+        <Building2 className="h-4 w-4 text-[#007050]" aria-hidden="true" />
         <span className="sr-only">부서 필터</span>
         <select
           value={effectiveDepartmentId}
           onChange={(event) => handleDepartmentChange(event.target.value)}
           disabled={isPending || isLoadingOptions}
-          className="h-8 w-36 bg-transparent text-sm font-black text-[#10223d] outline-none"
+          className="h-8 w-36 bg-transparent text-sm font-black text-[#012241] outline-none"
           aria-label="부서 필터"
         >
           {isLoadingOptions ? <option value="">부서 불러오는 중</option> : null}
@@ -360,14 +360,14 @@ function HeaderScopeFilter({
           ))}
         </select>
       </label>
-      <label className="flex items-center gap-1.5 rounded-full bg-[#f5f9ff] px-2 py-1 text-xs font-black text-slate-500">
-        <PackageSearch className="h-4 w-4 text-[#075be8]" aria-hidden="true" />
+      <label className="flex items-center gap-1.5 rounded-full bg-[#faf6ef] px-2 py-1 text-xs font-black text-slate-500">
+        <PackageSearch className="h-4 w-4 text-[#007050]" aria-hidden="true" />
         <span className="sr-only">화주 필터</span>
         <select
           value={effectiveClientId}
           onChange={(event) => updateFilter(effectiveDepartmentId, event.target.value)}
           disabled={isPending || isLoadingOptions}
-          className="h-8 w-36 bg-transparent text-sm font-black text-[#10223d] outline-none"
+          className="h-8 w-36 bg-transparent text-sm font-black text-[#012241] outline-none"
           aria-label="화주 필터"
         >
           {isLoadingOptions ? <option value="">화주 불러오는 중</option> : null}
@@ -382,7 +382,7 @@ function HeaderScopeFilter({
         </select>
       </label>
       {isMeetingMaterialsTab ? (
-        <div className="flex items-center gap-1 border-l border-[#dbe8fb] pl-2" aria-label="부서 자료 이동">
+        <div className="flex items-center gap-1 border-l border-[#e7ddcd] pl-2" aria-label="부서 자료 이동">
           <button
             type="button"
             onClick={() => (previousDepartment ? handleDepartmentPager(previousDepartment.id) : undefined)}
@@ -390,7 +390,7 @@ function HeaderScopeFilter({
             onMouseEnter={() => (adjacentDepartmentHrefs.previous ? router.prefetch(adjacentDepartmentHrefs.previous) : undefined)}
             onTouchStart={() => (adjacentDepartmentHrefs.previous ? router.prefetch(adjacentDepartmentHrefs.previous) : undefined)}
             disabled={!previousDepartment || isPending || isLoadingOptions}
-            className="focus-ring flex h-9 w-9 items-center justify-center rounded-full border border-[#dbe8fb] bg-white text-[#075be8] shadow-[0_8px_18px_rgba(7,91,232,0.08)] transition hover:-translate-x-0.5 hover:border-[#9fc2f6] hover:bg-[#eaf3ff] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-x-0"
+            className="focus-ring flex h-9 w-9 items-center justify-center rounded-full border border-[#e7ddcd] bg-white text-[#007050] shadow-[0_8px_18px_rgba(0, 112, 80,0.08)] transition hover:-translate-x-0.5 hover:border-[#c8b89c] hover:bg-[#f4ede2] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-x-0"
             aria-label={previousDepartment ? `이전 부서 ${previousDepartment.department_name} 조회` : "이전 부서 없음"}
             title={previousDepartment ? `이전 부서: ${previousDepartment.department_name}` : "이전 부서 없음"}
           >
@@ -405,7 +405,7 @@ function HeaderScopeFilter({
             onMouseEnter={() => (adjacentDepartmentHrefs.next ? router.prefetch(adjacentDepartmentHrefs.next) : undefined)}
             onTouchStart={() => (adjacentDepartmentHrefs.next ? router.prefetch(adjacentDepartmentHrefs.next) : undefined)}
             disabled={!nextDepartment || isPending || isLoadingOptions}
-            className="focus-ring flex h-9 w-9 items-center justify-center rounded-full border border-[#dbe8fb] bg-white text-[#075be8] shadow-[0_8px_18px_rgba(7,91,232,0.08)] transition hover:translate-x-0.5 hover:border-[#9fc2f6] hover:bg-[#eaf3ff] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-x-0"
+            className="focus-ring flex h-9 w-9 items-center justify-center rounded-full border border-[#e7ddcd] bg-white text-[#007050] shadow-[0_8px_18px_rgba(0, 112, 80,0.08)] transition hover:translate-x-0.5 hover:border-[#c8b89c] hover:bg-[#f4ede2] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-x-0"
             aria-label={nextDepartment ? `다음 부서 ${nextDepartment.department_name} 조회` : "다음 부서 없음"}
             title={nextDepartment ? `다음 부서: ${nextDepartment.department_name}` : "다음 부서 없음"}
           >
@@ -441,24 +441,24 @@ export function Header({
           <button
             type="button"
             onClick={onToggleSidebar}
-            className="focus-ring hidden h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#dbe8fb] bg-white/90 text-[#075be8] shadow-[0_12px_26px_rgba(16,34,61,0.06)] transition hover:-translate-y-0.5 hover:bg-[#eaf3ff] lg:flex"
+            className="focus-ring hidden h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#e7ddcd] bg-white/90 text-[#007050] shadow-[0_12px_26px_rgba(16,34,61,0.06)] transition hover:-translate-y-0.5 hover:bg-[#f4ede2] lg:flex"
             aria-label={isSidebarHidden ? "왼쪽 메뉴 펼치기" : "왼쪽 메뉴 숨기기"}
             title={isSidebarHidden ? "왼쪽 메뉴 펼치기" : "왼쪽 메뉴 숨기기"}
           >
             <PanelLeftOpen className={`h-5 w-5 transition-transform ${isSidebarHidden ? "" : "rotate-180"}`} aria-hidden="true" />
           </button>
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#075be8] text-white shadow-[0_16px_30px_rgba(7,91,232,0.25)]">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#007050] text-white shadow-[0_16px_30px_rgba(0, 112, 80,0.25)]">
             <ShieldCheck className="h-5 w-5" aria-hidden="true" />
           </div>
           <div>
-            <h1 className="truncate text-xl font-black tracking-normal text-[#10223d]">{meta.title}</h1>
+            <h1 className="truncate text-xl font-black tracking-normal text-[#012241]">{meta.title}</h1>
             <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">{meta.description}</p>
           </div>
         </div>
         <div className="flex items-center justify-between gap-4 md:justify-end">
           {shouldShowFilters ? <HeaderScopeFilter pathname={pathname} profile={profile} options={filterOptions} /> : null}
-          <div className="min-w-0 rounded-full border border-[#dbe8fb] bg-white/90 px-4 py-2 text-right shadow-[0_12px_26px_rgba(16,34,61,0.06)]">
-            <p className="truncate text-sm font-black text-[#10223d]">{profile.full_name}</p>
+          <div className="min-w-0 rounded-full border border-[#e7ddcd] bg-white/90 px-4 py-2 text-right shadow-[0_12px_26px_rgba(16,34,61,0.06)]">
+            <p className="truncate text-sm font-black text-[#012241]">{profile.full_name}</p>
             <p className="truncate text-xs font-semibold text-slate-500">
               {roleLabel(profile.app_role)} · {profile.department_name ?? "부서 미지정"}
             </p>
