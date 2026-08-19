@@ -84,7 +84,6 @@ export function MeetingPriorityPanel({ items, openRequests = [] }: { items: Meet
         <div className="mb-3 flex min-h-[54px] flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-black">핵심 이슈</p>
-            <p className="u-muted text-xs font-bold text-slate-500">중요도가 높은 금주·차주 제목을 모아 봅니다.</p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             {(Object.keys(importanceLabels) as MeetingPriorityItem["importance"][]).map((importance) => (
