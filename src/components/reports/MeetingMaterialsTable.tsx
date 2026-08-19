@@ -224,10 +224,10 @@ export function MeetingMaterialsTable({
               return (
                 <tr
                   key={report.id}
-                  className={cn("border-t-2 align-top", isCommonRow ? "border-[#d8cbb4] bg-[#f4ede2]" : "border-[#dde4ec] even:bg-[#f7fafc]")}
+                  className={cn("border-t align-top", isCommonRow ? "border-[#d8cbb4] bg-[#f4ede2]" : "border-[#eef2f6] even:bg-[#f1f5f8]")}
                 >
                   <td className="px-3 py-4">
-                    <div className={cn("text-lg font-black leading-6", isCommonRow ? "text-[#007050]" : "text-[#012241]")}>
+                    <div className={cn("text-base font-black leading-6", isCommonRow ? "text-[#007050]" : "text-[#012241]")}>
                       {report.clients?.client_name ?? "-"}
                     </div>
                     <div className="mt-1 flex items-center gap-1.5 text-xs font-bold text-slate-400">
