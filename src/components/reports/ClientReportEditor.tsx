@@ -17,6 +17,7 @@ import { saveClientReportAction, type SavedClientReportRow } from "@/actions/rep
 import { ActionMessage } from "@/components/common/ActionMessage";
 import { getCurrentWeekOption, getReportMonthByThursday, getWeekEndDate, getWeekOfMonth } from "@/lib/dates/week";
 import { cn } from "@/lib/utils/cn";
+import { VOLUME_UNIT } from "@/types/enums";
 import type { ClientReportStatus, Importance, ItemPeriod, VolumeType, VolumeUnit } from "@/types/enums";
 
 type Department = { id: string; department_name: string };
@@ -75,17 +76,6 @@ const volumeTypeOptions: { value: VolumeType; label: string }[] = [
   { value: "inventory", label: "재고" },
   { value: "order", label: "주문" },
   { value: "return", label: "반품" },
-  { value: "etc", label: "기타" }
-];
-
-const unitOptions: { value: VolumeUnit; label: string }[] = [
-  { value: "EA", label: "EA" },
-  { value: "BOX", label: "BOX" },
-  { value: "CASE", label: "CASE" },
-  { value: "PLT", label: "PLT" },
-  { value: "case_count", label: "건" },
-  { value: "TON", label: "TON" },
-  { value: "CBM", label: "CBM" },
   { value: "etc", label: "기타" }
 ];
 
@@ -196,7 +186,7 @@ export function ClientReportEditor({
   function addVolume() {
     setVolumes((current) => [
       ...current,
-      { volume_type: "inbound", quantity: 0, unit: "BOX", note: "", sort_order: current.length }
+      { volume_type: "inbound", quantity: 0, unit: VOLUME_UNIT, note: "", sort_order: current.length }
     ]);
   }
 
@@ -649,20 +639,12 @@ function VolumeDialog({
                   className="mt-1 h-10 w-full rounded-md border border-slate-300 px-2 text-sm font-normal"
                 />
               </label>
-              <label className="text-xs font-black text-slate-600">
+              <div className="text-xs font-black text-slate-600">
                 단위
-                <select
-                  value={volume.unit}
-                  onChange={(event) => onUpdate(index, { unit: event.target.value as VolumeUnit })}
-                  className="mt-1 h-10 w-full rounded-md border border-slate-300 px-2 text-sm font-normal"
-                >
-                  {unitOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <p className="mt-1 flex h-10 w-full items-center rounded-md border border-slate-200 bg-slate-50 px-2 text-sm font-normal text-slate-600">
+                  {VOLUME_UNIT}
+                </p>
+              </div>
               <label className="text-xs font-black text-slate-600">
                 비고
                 <input
