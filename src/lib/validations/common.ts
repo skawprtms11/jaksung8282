@@ -7,7 +7,7 @@ import {
   itemPeriods,
   noticeTypes,
   volumeTypes,
-  volumeUnits
+  VOLUME_UNIT
 } from "@/types/enums";
 
 export const idSchema = z.string().uuid("올바른 ID가 아닙니다.");
@@ -134,7 +134,7 @@ export const volumeSchema = z.object({
   id: z.string().uuid().optional(),
   volume_type: z.enum(volumeTypes),
   quantity: z.coerce.number().min(0, "수량은 0 이상이어야 합니다."),
-  unit: z.enum(volumeUnits),
+  unit: z.literal(VOLUME_UNIT),
   custom_unit: z.string().trim().optional().nullable(),
   note: z.string().trim().optional().nullable(),
   sort_order: z.coerce.number().int().min(0)
