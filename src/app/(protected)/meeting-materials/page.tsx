@@ -812,6 +812,14 @@ async function MeetingMaterialsContent({
           );
         });
       }
+      const seenOpenRequestIds = new Set<string>();
+      openRequestRows = openRequestRows.filter((request) => {
+        if (seenOpenRequestIds.has(request.id)) {
+          return false;
+        }
+        seenOpenRequestIds.add(request.id);
+        return true;
+      });
       if (activeTab === "collection" || activeTab === "materials") {
         confirmationRequestItems = makeConfirmationRequestItems(
           openRequestRows as unknown as import("@/lib/reports/meeting-materials-tab-data").OpenRequestQueryRow[],
