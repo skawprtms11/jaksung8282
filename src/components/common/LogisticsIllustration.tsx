@@ -1,4 +1,4 @@
-import { ArrowUpRight, Boxes, ChartNoAxesCombined, Globe2, PackageCheck, Radar, Truck } from "lucide-react";
+import { ArrowUpRight, Boxes, ChartNoAxesCombined, Globe2, History, Radar, Truck } from "lucide-react";
 
 export function LogisticsIllustration({ mobileMode = false }: { mobileMode?: boolean }) {
   if (mobileMode) {
@@ -61,10 +61,6 @@ export function LogisticsIllustration({ mobileMode = false }: { mobileMode?: boo
         </div>
       </div>
       <div className="relative flex min-h-[210px] max-w-xl items-end pb-5 md:block md:min-h-0 md:pt-16">
-        <span className="hidden items-center gap-2 rounded-full border border-white/80 bg-white/82 px-4 py-2 text-sm font-bold text-[#012241] shadow-[0_12px_28px_rgba(16,34,61,0.08)] md:inline-flex">
-          <span className="h-2.5 w-2.5 rounded-full bg-[#007050]" />
-          Global Logistics Partner
-        </span>
         <h2 className="text-[28px] font-black leading-tight tracking-normal text-[#012241] md:hidden">
           <span className="block">TPL사업부</span>
           <span className="mt-1 block">주간자료 시스템</span>
@@ -73,9 +69,6 @@ export function LogisticsIllustration({ mobileMode = false }: { mobileMode?: boo
           Logistics that
           <span className="block text-[#007050]">Moves Weekly Data</span>
         </h2>
-        <p className="mt-6 hidden max-w-sm text-base leading-7 text-slate-600 md:block">
-          부서, 화주, 물동량 데이터를 연결하여 주간 운영 흐름을 빠르게 확인합니다.
-        </p>
         <div className="mt-8 hidden flex-wrap gap-3 md:flex">
           <span className="inline-flex items-center gap-2 rounded-2xl bg-[#007050] px-5 py-3 text-sm font-bold text-white shadow-[0_18px_34px_rgba(0, 112, 80,0.28)]">
             업무 시작
@@ -91,7 +84,7 @@ export function LogisticsIllustration({ mobileMode = false }: { mobileMode?: boo
           {[
             { icon: Globe2, label: "부서 연결", value: "All" },
             { icon: Boxes, label: "물동량", value: "Live" },
-            { icon: PackageCheck, label: "승인흐름", value: "4-Step" },
+            { icon: History, label: "이력관리", value: "History" },
             { icon: ChartNoAxesCombined, label: "회의자료", value: "Weekly" }
           ].map((item) => {
             const Icon = item.icon;

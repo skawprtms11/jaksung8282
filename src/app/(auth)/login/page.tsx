@@ -30,7 +30,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <div className={isMobileLogin ? "hidden" : "hidden md:block"}>
             <p className="text-xs font-black uppercase tracking-[0.32em] text-[#007050]">TPL Logistics</p>
             <h1 className="mt-3 text-3xl font-black tracking-normal text-[#012241]">{appConfig.name}</h1>
-            <p className="mt-3 text-sm leading-6 text-slate-500">주간 업무, 물동량, 승인 흐름을 한 곳에서 연결합니다.</p>
+            <p className="mt-3 text-sm leading-6 text-slate-500">주간 업무, 물동량, 업무 흐름을 한 공간에서 연결</p>
           </div>
           <div className={isMobileLogin ? "" : "md:mt-6"}>
             <LoginForm redirectTo={redirectTo} departments={departments} />
