@@ -1,4 +1,4 @@
-import { ArrowUpRight, Boxes, ChartNoAxesCombined, Globe2, History, Radar, Truck } from "lucide-react";
+import { Boxes, ChartNoAxesCombined, Globe2, History, Radar } from "lucide-react";
 
 export function LogisticsIllustration({ mobileMode = false }: { mobileMode?: boolean }) {
   if (mobileMode) {
@@ -66,23 +66,13 @@ export function LogisticsIllustration({ mobileMode = false }: { mobileMode?: boo
           <span className="mt-1 block">주간자료 시스템</span>
         </h2>
         <h2 className="mt-14 hidden text-5xl font-black leading-tight tracking-normal text-[#012241] md:block">
-          Logistics that
-          <span className="block text-[#007050]">Moves Weekly Data</span>
+          TPL Weekly
+          <span className="block text-[#007050]">Hub System</span>
         </h2>
-        <div className="mt-8 hidden flex-wrap gap-3 md:flex">
-          <span className="inline-flex items-center gap-2 rounded-2xl bg-[#007050] px-5 py-3 text-sm font-bold text-white shadow-[0_18px_34px_rgba(0, 112, 80,0.28)]">
-            업무 시작
-            <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
-          </span>
-          <span className="inline-flex items-center gap-2 rounded-2xl border border-[#e7ddcd] bg-white/86 px-5 py-3 text-sm font-bold text-[#012241]">
-            <Truck className="h-4 w-4" aria-hidden="true" />
-            물류 추적
-          </span>
-        </div>
       </div>
       <div className="absolute bottom-7 left-7 right-7 hidden gap-3 rounded-[1.5rem] border border-white/80 bg-white/82 p-5 shadow-[0_24px_60px_rgba(16,34,61,0.14)] backdrop-blur-xl md:grid md:grid-cols-4">
           {[
-            { icon: Globe2, label: "부서 연결", value: "All" },
+            { icon: Globe2, label: "부서 연결", value: "Hub" },
             { icon: Boxes, label: "물동량", value: "Live" },
             { icon: History, label: "이력관리", value: "History" },
             { icon: ChartNoAxesCombined, label: "회의자료", value: "Weekly" }
