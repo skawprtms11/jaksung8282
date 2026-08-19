@@ -136,12 +136,14 @@ function removeRequestFromReports(reports: MeetingMaterialsReport[], requestId: 
 
 export function MeetingMaterialsTable({
   reports,
+  weekLabel,
   currentUserId,
   canManageAllRequests,
   emptyTitle = "선택한 주차의 회의자료가 없습니다.",
   onDataChanged
 }: {
   reports: MeetingMaterialsReport[];
+  weekLabel?: string;
   currentUserId: string;
   canManageAllRequests: boolean;
   emptyTitle?: string;
@@ -222,13 +224,16 @@ export function MeetingMaterialsTable({
               return (
                 <tr
                   key={report.id}
-                  className={cn("border-t align-top", isCommonRow ? "border-[#d8cbb4] bg-[#f4ede2]" : "border-[#eef2f6]")}
+                  className={cn("border-t-2 align-top", isCommonRow ? "border-[#d8cbb4] bg-[#f4ede2]" : "border-[#dde4ec] even:bg-[#f7fafc]")}
                 >
                   <td className="px-3 py-4">
-                    <div className={cn("font-black", isCommonRow ? "text-[#007050]" : "text-[#012241]")}>
+                    <div className={cn("text-lg font-black leading-6", isCommonRow ? "text-[#007050]" : "text-[#012241]")}>
                       {report.clients?.client_name ?? "-"}
                     </div>
-                    <div className="mt-1 text-xs font-bold text-slate-400">{report.departments?.department_name ?? "-"}</div>
+                    <div className="mt-1 flex items-center gap-1.5 text-xs font-bold text-slate-400">
+                      <span>{report.departments?.department_name ?? "-"}</span>
+                      {weekLabel ? <span className="text-[#007050]">· {weekLabel}</span> : null}
+                    </div>
                   </td>
                   <td className="px-3 py-4">
                     <MeetingWorkItemList rows={report.weekly_client_report_items} period="current" isCommon={isCommonRow} onOpen={(item) => openItem(report, item)} />
