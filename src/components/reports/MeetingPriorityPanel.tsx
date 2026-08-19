@@ -212,11 +212,12 @@ function OpenRequestBlock({
 }) {
   return (
     <div className="panel-blush p-4">
-      <p className="text-sm font-black text-[#012241]">확인요청현황</p>
-      <p className="mt-0.5 text-xs font-bold text-[#4a5a6a]">주차와 무관한 미종결 사업부 요청</p>
-      <div className="mt-3 rounded-[1.1rem] bg-white/75 px-4 py-3 shadow-[0_8px_20px_rgba(1,34,65,0.06)] ring-1 ring-white/80">
-        <p className="text-2xl font-black leading-none tabular-nums text-[#012241]">{items.length}</p>
-        <p className="mt-1 text-xs font-black text-[#4a5a6a]">미종결 요청</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-black text-[#012241]">확인요청현황</p>
+        <span className="inline-flex items-baseline gap-1 rounded-full bg-white/75 px-3 py-1 shadow-[0_6px_16px_rgba(1,34,65,0.06)] ring-1 ring-white/80">
+          <span className="text-xs font-bold text-[#4a5a6a]">미종결</span>
+          <span className="text-sm font-black tabular-nums text-[#012241]">{items.length}건</span>
+        </span>
       </div>
       {items.length === 0 ? (
         <p className="mt-3 py-3 text-center text-xs font-bold text-[#4a5a6a]">진행 중인 업무 요청이 없습니다.</p>
@@ -274,7 +275,6 @@ function PriorityPeriodBlock({
   return (
     <div className="panel-dark p-4">
       <p className="text-sm font-black text-white">{title}</p>
-      <p className="mt-0.5 text-xs font-bold text-white/55">중요도 높은 항목 순</p>
       {items.length === 0 ? (
         <p className="mt-3 py-3 text-center text-xs font-bold text-white/45">표시할 제목이 없습니다.</p>
       ) : (

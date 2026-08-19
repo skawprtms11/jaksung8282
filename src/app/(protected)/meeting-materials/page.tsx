@@ -1153,7 +1153,7 @@ function CollectionView({
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="text-[11px] font-black text-slate-500">총건수</p>
-              <p className="mt-1.5 text-sm leading-none tabular-nums text-[#012241]" style={{ fontWeight: 850 }}>{totalClientCount}</p>
+              <p className="mt-1.5 text-3xl leading-none tabular-nums text-[#012241]" style={{ fontWeight: 850 }}>{totalClientCount}</p>
             </div>
             <span className="icon-badge icon-badge-blue" aria-hidden="true">
               <ClipboardList className="h-5 w-5" />
@@ -1164,7 +1164,7 @@ function CollectionView({
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="text-[11px] font-black text-slate-500">완료건수</p>
-              <p className="mt-1.5 text-sm leading-none tabular-nums text-[#007050]" style={{ fontWeight: 850 }}>
+              <p className="mt-1.5 text-3xl leading-none tabular-nums text-[#007050]" style={{ fontWeight: 850 }}>
                 {completedClientCount}
                 <span className="ml-1 text-[11px] font-bold text-slate-400">/ {totalClientCount}</span>
               </p>
@@ -1181,7 +1181,7 @@ function CollectionView({
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="text-[11px] font-black text-slate-500">완료율</p>
-              <p className="mt-1.5 text-sm leading-none tabular-nums text-[#012241]" style={{ fontWeight: 850 }}>
+              <p className="mt-1.5 text-3xl leading-none tabular-nums text-[#012241]" style={{ fontWeight: 850 }}>
                 {completionRate}
                 <span className="ml-0.5 text-[11px] font-bold text-slate-400">%</span>
               </p>
@@ -1201,8 +1201,7 @@ function CollectionView({
           <div className="mb-3 flex min-h-[38px] flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm font-black text-[#012241]">부서별 작성 모니터링</p>
-              <p className="text-xs font-bold text-slate-500">작성완료 여부를 빠르게 확인합니다.</p>
-            </div>
+              </div>
             <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-black text-slate-500">
               <span className="inline-flex items-center gap-1.5">
                 <span className="u-dot u-dot-green" aria-hidden="true" />
@@ -1223,7 +1222,7 @@ function CollectionView({
             </div>
           </div>
           <TableShell>
-            <table className="table-sticky w-full table-fixed text-left text-[13px]">
+            <table className="table-sticky w-full table-fixed text-left text-sm">
               <colgroup>
                 <col className="w-[28%]" />
                 <col className="w-[14%]" />
@@ -1249,7 +1248,7 @@ function CollectionView({
                   const status = compactDepartmentStatus(submission?.status ?? null);
                   return (
                     <tr key={department.id} className="border-t border-slate-100">
-                      <td className="truncate px-2 py-1.5 text-[12px] font-black text-[#012241]" title={department.department_name}>
+                      <td className="truncate px-2 py-1.5 text-sm font-black text-[#012241]" title={department.department_name}>
                         {department.department_name}
                       </td>
                       <td className="px-2 py-1.5">
