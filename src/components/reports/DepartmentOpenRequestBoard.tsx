@@ -140,13 +140,10 @@ export function DepartmentOpenRequestBoard({
               {title}
             </h2>
           </div>
-        </div>
-
-        <div className={compact ? "px-3 pt-2" : "px-4 pt-3"}>
-          <div className={`rounded-[1.1rem] bg-white/75 ring-1 ring-white/80 shadow-[0_8px_20px_rgba(1,34,65,0.06)] ${compact ? "px-3 py-2" : "px-4 py-3"}`}>
-            <p className="text-2xl font-black leading-none tabular-nums text-[#012241]">{rows.length}</p>
-            <p className="mt-1 text-xs font-black text-[#4a5a6a]">미종결 요청</p>
-          </div>
+          <span className="inline-flex items-baseline gap-1 rounded-full bg-white/75 px-3 py-1 shadow-[0_6px_16px_rgba(1,34,65,0.06)] ring-1 ring-white/80">
+            <span className="text-xs font-bold text-[#4a5a6a]">미종결</span>
+            <span className="text-sm font-black tabular-nums text-[#012241]">{rows.length}건</span>
+          </span>
         </div>
 
         {rows.length === 0 ? (
