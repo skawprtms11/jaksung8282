@@ -532,52 +532,6 @@ export default async function DepartmentReportsPage({
     const isDepartmentScopeBlocked = !isAdmin(profile) && !departmentFilter;
     const selectedClientFilter = params.client_id;
     initialLookupDepartmentId = departmentFilter ?? null;
-    // 자료취합 탭: 진행 중 취합건과 이 부서의 작성 내용을 로드한다.
-    if (departmentFilter) {
-      const [{ data: collectionData }, { data: collectionEntryData }] = await Promise.all([
-        dataClient
-          .from("data_collections")
-          .select("id,title,description,example,image_url,entry_mode,link_url,template,created_at")
-          .is("deleted_at", null)
-          .is("closed_at", null)
-          .order("created_at", { ascending: false })
-          .limit(50),
-        dataClient
-          .from("data_collection_entries")
-          .select("collection_id,rows,is_completed")
-          .eq("department_id", departmentFilter)
-      ]);
-      dataCollectionItems = ((collectionData ?? []) as {
-        id: string;
-        title: string;
-        description: string;
-        example: string;
-        image_url: string | null;
-        entry_mode: string;
-        link_url: string | null;
-        template: Json;
-        created_at: string;
-      }[]).map((row) => ({
-        id: row.id,
-        title: row.title,
-        description: row.description,
-        example: row.example,
-        imageUrl: row.image_url,
-        columns: normalizeCollectionColumns(row.template),
-        widths: normalizeCollectionWidths(row.template, normalizeCollectionColumns(row.template).length),
-        entryMode: row.entry_mode === "link" ? ("link" as const) : ("grid" as const),
-        linkUrl: row.link_url,
-        createdAt: row.created_at
-      }));
-      const columnCountById = new Map(dataCollectionItems.map((item) => [item.id, item.columns.length]));
-      dataCollectionEntries = Object.fromEntries(
-        ((collectionEntryData ?? []) as { collection_id: string; rows: Json; is_completed: boolean }[]).map((row) => [
-          row.collection_id,
-          { rows: normalizeEntryRows(row.rows, columnCountById.get(row.collection_id) ?? 0), isCompleted: row.is_completed }
-        ])
-      );
-      canEditDataCollection = Boolean(profile && (isAdmin(profile) || profile.department_id === departmentFilter));
-    }
     const [
       { data: departmentData },
       { data: categoryData },
@@ -593,7 +547,11 @@ export default async function DepartmentReportsPage({
       { data: adminProfileData },
       { data: clientOpenRequestData },
       { data: commonOpenRequestData },
-      { data: summaryReportData, error: summaryReportError }
+      { data: summaryReportData, error: summaryReportError },
+      // 자료취합 탭: 진행 중 취합건과 이 부서의 작성 내용. 별도 순차 await로 두면
+      // 페이지 렌더마다 DB 왕복이 한 번 더 붙으므로 반드시 이 Promise.all 안에서 함께 조회한다.
+      { data: collectionData },
+      { data: collectionEntryData }
     ] = await Promise.all([
       (() => {
         if (isDepartmentScopeBlocked) {
@@ -737,8 +695,53 @@ export default async function DepartmentReportsPage({
             }
             return query;
           })()
-        : Promise.resolve({ data: [], error: null })
+        : Promise.resolve({ data: [], error: null }),
+      departmentFilter
+        ? dataClient
+          .from("data_collections")
+          .select("id,title,description,example,image_url,entry_mode,link_url,template,created_at")
+          .is("deleted_at", null)
+          .is("closed_at", null)
+          .order("created_at", { ascending: false })
+          .limit(50)
+        : Promise.resolve({ data: [] }),
+      departmentFilter
+        ? dataClient
+          .from("data_collection_entries")
+          .select("collection_id,rows,is_completed")
+          .eq("department_id", departmentFilter)
+        : Promise.resolve({ data: [] })
     ]);
+    dataCollectionItems = ((collectionData ?? []) as {
+      id: string;
+      title: string;
+      description: string;
+      example: string;
+      image_url: string | null;
+      entry_mode: string;
+      link_url: string | null;
+      template: Json;
+      created_at: string;
+    }[]).map((row) => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      example: row.example,
+      imageUrl: row.image_url,
+      columns: normalizeCollectionColumns(row.template),
+      widths: normalizeCollectionWidths(row.template, normalizeCollectionColumns(row.template).length),
+      entryMode: row.entry_mode === "link" ? ("link" as const) : ("grid" as const),
+      linkUrl: row.link_url,
+      createdAt: row.created_at
+    }));
+    const columnCountById = new Map(dataCollectionItems.map((item) => [item.id, item.columns.length]));
+    dataCollectionEntries = Object.fromEntries(
+      ((collectionEntryData ?? []) as { collection_id: string; rows: Json; is_completed: boolean }[]).map((row) => [
+        row.collection_id,
+        { rows: normalizeEntryRows(row.rows, columnCountById.get(row.collection_id) ?? 0), isCompleted: row.is_completed }
+      ])
+    );
+    canEditDataCollection = Boolean(departmentFilter && profile && (isAdmin(profile) || profile.department_id === departmentFilter));
     departments = (departmentData ?? []) as DepartmentOption[];
     categories = (categoryData ?? []) as CategoryOption[];
     centerOptions = (centerData ?? []) as CenterOption[];

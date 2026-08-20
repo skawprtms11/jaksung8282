@@ -667,12 +667,21 @@ export function DepartmentSubmissionEditor({
     };
   }, [departmentId, firstCategoryId, weekStartDate]);
 
+  // 같은 부서·같은 달을 이미 불러왔으면 공실현황 탭 재진입 시 재조회하지 않는다.
+  // (저장 후에는 refreshVacancyData가 직접 호출되어 항상 최신 상태를 유지한다.)
+  const vacancyLoadedKeyRef = useRef("");
+
   useEffect(() => {
     if (!departmentId || active !== "vacancy") {
       return;
     }
+    const vacancyKey = `${departmentId}|${selectedWeekOption.year}|${selectedWeekOption.month}`;
+    if (vacancyLoadedKeyRef.current === vacancyKey) {
+      return;
+    }
+    vacancyLoadedKeyRef.current = vacancyKey;
     refreshVacancyData();
-  }, [active, departmentId, refreshVacancyData]);
+  }, [active, departmentId, refreshVacancyData, selectedWeekOption.month, selectedWeekOption.year]);
 
   function handleTabChange(nextTab: DepartmentTabValue) {
     setActive(nextTab);
@@ -682,7 +691,10 @@ export function DepartmentSubmissionEditor({
     }
     const next = new URLSearchParams(searchParams.toString());
     next.set("tab", nextTab);
-    router.replace(`/department-reports?${next.toString()}`, { scroll: false });
+    // 탭 값은 서버 데이터 조회에 쓰이지 않는다(초기 마운트용 initialActiveTab뿐).
+    // router.replace는 탭 전환마다 서버 페이지 전체 재렌더(쿼리 10여 건)를 유발하므로,
+    // 새로고침·딥링크용 URL 동기화는 히스토리만 얕게 갱신한다.
+    window.history.replaceState(null, "", `/department-reports?${next.toString()}`);
   }
 
   function handleWeekSelectionChange(week: WeekOption) {

@@ -27,6 +27,7 @@
       "Bash(git diff --stat)",
       "Bash(git status --porcelain)",
       "Bash(gh pr checks *)",
+      "Bash(gh pr create *)",
       "Bash(gh run watch *)",
       "Bash(curl -s -o /dev/null *)",
       "Bash(curl -sL -o /dev/null *)",

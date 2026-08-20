@@ -158,6 +158,8 @@ export type MaterialsTabData = {
   hasSearchFilters: boolean;
   allDepartments: boolean;
   weekStartDate: string;
+  // 자료 id → 작성자명. 탭 데이터와 같은 주차 기준으로 함께 만들어져야 주차 변경 시 어긋나지 않는다.
+  reportAuthorNames?: Record<string, string>;
 };
 
 export type VolumesTabData = {
@@ -472,8 +474,8 @@ function filterMaterialRows(reports: MeetingReportRow[], weekStartDate: string, 
   }).filter((report): report is MeetingReportRow => Boolean(report));
 }
 
-export function buildMeetingTabData({ tab, payload, params, selectedWeek, openRequests = payload.openRequests, allDepartments = false }: {
-  tab: MeetingTab; payload: MeetingMaterialsPayload; params: MeetingSearchParams; selectedWeek: WeekOption; openRequests?: OpenRequestQueryRow[]; allDepartments?: boolean;
+export function buildMeetingTabData({ tab, payload, params, selectedWeek, openRequests = payload.openRequests, allDepartments = false, reportAuthorNames }: {
+  tab: MeetingTab; payload: MeetingMaterialsPayload; params: MeetingSearchParams; selectedWeek: WeekOption; openRequests?: OpenRequestQueryRow[]; allDepartments?: boolean; reportAuthorNames?: Record<string, string>;
 }): MeetingTabData {
   const departments = payload.departments;
   const submissions = payload.submissions.map((row) => ({ ...row, department_weekly_contents: row.department_weekly_contents ?? [] }));
@@ -497,7 +499,7 @@ export function buildMeetingTabData({ tab, payload, params, selectedWeek, openRe
     const requestDepartmentFilter = allDepartments ? undefined : payload.resolvedDepartmentId ?? undefined;
     return { tab, reports: hasClientReportSearchFilters(filters) && !allDepartments ? filterMaterialRows(materialRows, selectedWeek.weekStartDate, filters, payload.workCategories) : materialRows,
       confirmationRequestItems: makeConfirmationRequestItems(openRequests, payload.workCategories, requestDepartmentFilter, params.client_id),
-      workCategories: payload.workCategories, filters, hasSearchFilters: hasClientReportSearchFilters(filters), allDepartments, weekStartDate: selectedWeek.weekStartDate };
+      workCategories: payload.workCategories, filters, hasSearchFilters: hasClientReportSearchFilters(filters), allDepartments, weekStartDate: selectedWeek.weekStartDate, reportAuthorNames };
   }
   if (tab === "volumes") return { tab, chartRows: makeChartRows(payload.volumeTrendReports, selectedWeek.weekOfMonth),
     departmentRows: makeDepartmentRows(departments, payload.volumeTrendReports, payload.previousVolumeTrendReports) };

@@ -145,10 +145,14 @@ export function ClientReportEditor({
   const normalizedItems = useMemo(() => {
     const sortOrderByPeriod: Record<ItemPeriod, number> = { current: 0, next: 0 };
 
-    return items.map((item) => ({
-      ...item,
-      sort_order: sortOrderByPeriod[item.item_period]++
-    }));
+    // 팝업을 열기만 하면 빈 항목이 자동 추가된다. 제목·내용이 모두 빈 항목을 그대로 보내면
+    // 제목 필수 검증에 걸려 저장 전체가 실패하므로(한쪽만 작성한 자료가 목록에 안 보이는 원인) 저장 대상에서 제외한다.
+    return items
+      .filter((item) => item.title.trim() !== "" || item.content.trim() !== "")
+      .map((item) => ({
+        ...item,
+        sort_order: sortOrderByPeriod[item.item_period]++
+      }));
   }, [items]);
   const normalizedVolumes = useMemo(
     () => volumes.map((volume, index) => ({ ...volume, sort_order: index })),
