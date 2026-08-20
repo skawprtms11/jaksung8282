@@ -549,6 +549,98 @@ export async function deleteClientReportAction(_: ActionResult | null, formData:
   return softDeleteClientReports(reportId ? [reportId] : []);
 }
 
+export type LoadedClientReportForEdit = {
+  id: string;
+  department_id: string;
+  client_id: string;
+  week_start_date: string;
+  items: {
+    item_period: "current" | "next";
+    importance: "very_high" | "high" | "medium" | "low";
+    work_category_id: string;
+    title: string;
+    content: string;
+    sort_order: number;
+  }[];
+  volumes: {
+    volume_type: VolumeType;
+    quantity: number;
+    unit: VolumeUnit;
+    custom_unit?: string | null;
+    note?: string | null;
+    sort_order: number;
+  }[];
+};
+
+// 작성 팝업의 화주 전환용 단건 조회. RLS(부서 접근 범위)가 열람 권한을 강제하므로
+// 프로필 조회 없이 쿼리 1회로 끝낸다 — 전환 반응 속도가 요구사항이다.
+export async function loadClientReportForEditAction({
+  department_id,
+  client_id,
+  week_start_date
+}: {
+  department_id: string;
+  client_id: string;
+  week_start_date: string;
+}): Promise<{ ok: boolean; message?: string; status: ClientReportStatus | null; report: LoadedClientReportForEdit | null }> {
+  const parsed = z
+    .object({
+      department_id: idSchema,
+      client_id: idSchema,
+      week_start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+    })
+    .safeParse({ department_id, client_id, week_start_date });
+  if (!parsed.success) {
+    return { ok: false, message: "화주 선택 정보를 확인하세요.", status: null, report: null };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요.", status: null, report: null };
+  }
+
+  const { data, error } = await supabase
+    .from("weekly_client_reports")
+    .select(
+      "id,department_id,client_id,week_start_date,status,weekly_client_report_items(item_period,importance,work_category_id,title,content,sort_order),weekly_volumes(volume_type,quantity,unit,custom_unit,note,sort_order)"
+    )
+    .eq("department_id", parsed.data.department_id)
+    .eq("client_id", parsed.data.client_id)
+    .eq("week_start_date", parsed.data.week_start_date)
+    .is("deleted_at", null)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    return { ok: false, message: safeErrorMessage(error.message), status: null, report: null };
+  }
+  if (!data) {
+    return { ok: true, status: null, report: null };
+  }
+
+  const row = data as unknown as {
+    id: string;
+    department_id: string;
+    client_id: string;
+    week_start_date: string;
+    status: ClientReportStatus;
+    weekly_client_report_items: LoadedClientReportForEdit["items"];
+    weekly_volumes: LoadedClientReportForEdit["volumes"];
+  };
+  return {
+    ok: true,
+    status: row.status,
+    report: {
+      id: row.id,
+      department_id: row.department_id,
+      client_id: row.client_id,
+      week_start_date: row.week_start_date,
+      items: (row.weekly_client_report_items ?? []).slice().sort((left, right) => left.sort_order - right.sort_order),
+      volumes: (row.weekly_volumes ?? []).slice().sort((left, right) => left.sort_order - right.sort_order)
+    }
+  };
+}
+
 export async function submitSelectedClientReportsAction(_: ActionResult | null, formData: FormData): Promise<ActionResult> {
   const reportIds = getSelectedReportIds(formData);
   if (reportIds.length === 0) {
