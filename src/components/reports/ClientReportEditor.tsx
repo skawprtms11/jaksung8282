@@ -86,6 +86,8 @@ function moveItem<T>(items: T[], from: number, to: number) {
   return next;
 }
 
+export const NO_SPECIAL_ISSUE_TEXT = "특이사항 없음";
+
 export function ClientReportEditor({
   departments,
   clients,
@@ -218,6 +220,38 @@ export function ClientReportEditor({
     setItems((current) => current.map((row, index) => (index === actualIndex ? { ...row, ...patch } : row)));
   }
 
+  function setNoSpecialIssue(period: ItemPeriod, checked: boolean) {
+    setItems((current) => {
+      const others = current.filter((item) => item.item_period !== period);
+      if (checked) {
+        const periodItems = current.filter((item) => item.item_period === period);
+        const hasWrittenContent = periodItems.some(
+          (item) =>
+            (item.title.trim() && item.title.trim() !== NO_SPECIAL_ISSUE_TEXT) ||
+            (item.content.trim() && item.content.trim() !== NO_SPECIAL_ISSUE_TEXT)
+        );
+        if (hasWrittenContent && !window.confirm(`작성 중인 내용이 '${NO_SPECIAL_ISSUE_TEXT}'으로 대체됩니다. 계속할까요?`)) {
+          return current;
+        }
+        return [
+          ...others,
+          {
+            item_period: period,
+            importance: "low" as Importance,
+            work_category_id: firstCategory,
+            title: NO_SPECIAL_ISSUE_TEXT,
+            content: NO_SPECIAL_ISSUE_TEXT,
+            sort_order: 0
+          }
+        ];
+      }
+      return [
+        ...others,
+        { item_period: period, importance: "medium" as Importance, work_category_id: firstCategory, title: "", content: "", sort_order: 0 }
+      ];
+    });
+  }
+
   function updateVolume(index: number, patch: Partial<VolumeDraft>) {
     setVolumes((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
   }
@@ -306,6 +340,7 @@ export function ClientReportEditor({
           period={activeDialog}
           items={items}
           categories={categories}
+          onSetNoIssue={(checked) => setNoSpecialIssue(activeDialog, checked)}
           onAdd={() => addItem(activeDialog)}
           onClose={closeDialogAndRemoveEditParam}
           onComplete={completeDialog}
@@ -465,6 +500,7 @@ function ItemDialog({
   period,
   items,
   categories,
+  onSetNoIssue,
   onAdd,
   onClose,
   onComplete,
@@ -475,6 +511,7 @@ function ItemDialog({
   period: ItemPeriod;
   items: ItemDraft[];
   categories: Category[];
+  onSetNoIssue: (checked: boolean) => void;
   onAdd: () => void;
   onClose: () => void;
   onComplete: () => void;
@@ -485,6 +522,10 @@ function ItemDialog({
   const dialogItems = items
     .map((item, index) => ({ item, actualIndex: index }))
     .filter(({ item }) => item.item_period === period);
+  const isNoIssueChecked =
+    dialogItems.length === 1 &&
+    dialogItems[0].item.title === NO_SPECIAL_ISSUE_TEXT &&
+    dialogItems[0].item.content === NO_SPECIAL_ISSUE_TEXT;
   const title = period === "current" ? "금주 실시사항 작성" : "차주 예정사항 작성";
 
   return (
@@ -503,9 +544,20 @@ function ItemDialog({
               <p className="mt-1 text-sm font-semibold text-slate-500">중요도, 업무구분, 내용을 입력하면 아래 미리보기에 바로 표시됩니다.</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
-            <X className="h-4 w-4" aria-hidden="true" />
-          </button>
+          <div className="flex shrink-0 items-center gap-3">
+            <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-[#e7ddcd] bg-[#faf6ef] px-3 py-2 text-sm font-black text-[#012241]">
+              <input
+                type="checkbox"
+                checked={isNoIssueChecked}
+                onChange={(event) => onSetNoIssue(event.target.checked)}
+                className="h-4 w-4 accent-[#007050]"
+              />
+              특이사항 없음
+            </label>
+            <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
         <div className="max-h-[62vh] space-y-3 overflow-y-auto bg-white px-6 py-5">
           {dialogItems.map(({ item, actualIndex }) => (
@@ -553,12 +605,11 @@ function ItemDialog({
               <label className="text-xs font-black text-slate-600">
                 내용
                 <textarea
-                  required
                   value={item.content}
                   rows={3}
                   onChange={(event) => onUpdate(actualIndex, { content: event.target.value })}
                   className="mt-1 min-h-[86px] w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-normal"
-                  placeholder="작성할 내용을 입력하세요."
+                  placeholder="작성할 내용을 입력하세요. (비워도 저장됩니다)"
                 />
               </label>
               <div className="flex items-end gap-1">
