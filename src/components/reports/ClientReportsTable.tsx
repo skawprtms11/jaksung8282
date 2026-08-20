@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { CheckCircle2, Eye, Loader2, PackageCheck, Pencil, RotateCcw, Save, X } from "lucide-react";
+import { CheckCircle2, Eye, Loader2, PackageCheck, Pencil, RotateCcw, Save, Trash2, X } from "lucide-react";
 import {
   cancelSubmittedClientReportsAction,
+  deleteSelectedClientReportsAction,
   loadClientHistoricalVolumesAction,
   submitSelectedClientReportsAction
 } from "@/actions/reports";
@@ -114,6 +115,7 @@ export function ClientReportsTable({
   onCancelEdit,
   onOpenEditDialog,
   onReportStatusChange,
+  onReportsDeleted,
   hideVolumes = false
 }: {
   reports: ClientReportTableRow[];
@@ -121,6 +123,7 @@ export function ClientReportsTable({
   onCancelEdit: () => void;
   onOpenEditDialog: (report: ClientReportEditorInitialReport, period: ItemPeriod) => void;
   onReportStatusChange?: (reportIds: string[], status: ClientReportStatus, submittedAt: string | null) => void;
+  onReportsDeleted?: (reportIds: string[]) => void;
   hideVolumes?: boolean;
 }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -133,7 +136,7 @@ export function ClientReportsTable({
     message?: string;
   } | null>(null);
   const [localMessage, setLocalMessage] = useState<{ ok: boolean; message: string } | null>(null);
-  const [pendingAction, setPendingAction] = useState<"submit" | "cancel-submit" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"submit" | "cancel-submit" | "delete" | null>(null);
   const displayedReports = useMemo(
     () =>
       reports
@@ -156,6 +159,8 @@ export function ClientReportsTable({
     selectedReports.every((report) => report.status === "submitted") &&
     !hasExpiredCancelSelection;
   const canSubmitSelected =
+    selectedReports.length > 0 && selectedReports.every((report) => isEditableStatus(report.status));
+  const canDeleteSelected =
     selectedReports.length > 0 && selectedReports.every((report) => isEditableStatus(report.status));
   const actionMessage = localMessage;
 
@@ -202,6 +207,20 @@ export function ClientReportsTable({
       return next;
     });
     onReportStatusChange?.(ids, nextStatus, nextSubmittedAt);
+    setSelectedIds([]);
+  }
+
+  async function runDeleteAction(form: HTMLFormElement) {
+    const ids = selectedIds.slice();
+    setPendingAction("delete");
+    setLocalMessage(null);
+    const result = await deleteSelectedClientReportsAction(null, new FormData(form));
+    setPendingAction(null);
+    setLocalMessage({ ok: result.ok, message: result.message });
+    if (!result.ok) {
+      return;
+    }
+    onReportsDeleted?.(ids);
     setSelectedIds([]);
   }
 
@@ -299,6 +318,38 @@ export function ClientReportsTable({
               </button>
             </>
           ) : null}
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (
+                selectedIds.length === 0 ||
+                !window.confirm("선택한 화주별 자료를 삭제하시겠습니까? 삭제한 자료는 복구할 수 없습니다.")
+              ) {
+                return;
+              }
+              runDeleteAction(event.currentTarget);
+            }}
+          >
+            {selectedIds.map((id) => (
+              <input key={id} type="hidden" name="report_ids" value={id} />
+            ))}
+            <BatchActionButton
+              variant="danger"
+              pending={pendingAction === "delete"}
+              disabledReason={
+                activeEditingReportId
+                  ? "수정 내용을 저장한 뒤 목록에서 삭제하세요."
+                  : selectedReports.length === 0
+	                    ? "삭제할 자료를 선택하세요."
+	                    : !canDeleteSelected
+	                      ? "확정 전(저장·반려) 상태의 자료만 삭제할 수 있습니다."
+	                      : undefined
+	              }
+	            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              삭제
+            </BatchActionButton>
+          </form>
           <form
             onSubmit={(event) => {
               if (selectedIds.length === 0 || !window.confirm("선택한 화주별 자료를 확정하시겠습니까?")) {

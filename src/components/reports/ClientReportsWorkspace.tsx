@@ -43,6 +43,8 @@ export function ClientReportsWorkspace({
   const [editingReport, setEditingReport] = useState<ClientReportEditorInitialReport | null>(null);
   const [activeDialog, setActiveDialog] = useState<ItemPeriod | "volumes" | null>(null);
   const [localReports, setLocalReports] = useState<ClientReportTableRow[]>(reports);
+  // 목록에서 삭제한 자료 id. 서버가 내려준 editorReport가 삭제된 자료로 편집을 되살리지 않게 막는다.
+  const [deletedReportIds, setDeletedReportIds] = useState<ReadonlySet<string>>(() => new Set());
   const selectedReport = useMemo(
     () =>
       editingReport
@@ -50,9 +52,9 @@ export function ClientReportsWorkspace({
         : defaultClientId
           ? localReports.find(
               (report) => report.clientId === defaultClientId && report.weekStartDate === selectedWeekStartDate
-            ) ?? editorReport ?? null
+            ) ?? (editorReport && !deletedReportIds.has(editorReport.id) ? editorReport : null)
           : null,
-    [defaultClientId, editingReport, editorReport, localReports, selectedWeekStartDate]
+    [defaultClientId, deletedReportIds, editingReport, editorReport, localReports, selectedWeekStartDate]
   );
   const canContinueSelectedReport = !editingReport && isEditableReportStatus(selectedReport?.status);
   const editorInitialReport = editingReport ?? (canContinueSelectedReport ? selectedReport?.editReport ?? null : null);
@@ -93,6 +95,12 @@ export function ClientReportsWorkspace({
     );
   }, []);
 
+  const handleReportsDeleted = useCallback((reportIds: string[]) => {
+    const reportIdSet = new Set(reportIds);
+    setLocalReports((current) => current.filter((report) => !reportIdSet.has(report.id)));
+    setDeletedReportIds((current) => new Set([...current, ...reportIds]));
+  }, []);
+
   return (
     <>
       <ClientReportsToolbar
@@ -125,6 +133,7 @@ export function ClientReportsWorkspace({
           onCancelEdit={clearEditMode}
           onOpenEditDialog={openEditDialog}
           onReportStatusChange={handleReportStatusChange}
+          onReportsDeleted={handleReportsDeleted}
           hideVolumes={hasSearchFilters}
         />
       )}
