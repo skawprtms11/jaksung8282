@@ -16,6 +16,8 @@ export type DepartmentCollectionItem = {
   imageUrl: string | null;
   columns: string[];
   widths: number[];
+  entryMode: "grid" | "link";
+  linkUrl: string | null;
   createdAt: string;
 };
 
@@ -215,6 +217,29 @@ export function DepartmentCollectionWorkspace({
     }
   }
 
+  const [linkStatusOverrides, setLinkStatusOverrides] = useState<Record<string, { written: boolean; delivered: boolean }>>({});
+
+  function handleLinkStatusSave(written: boolean, delivered: boolean) {
+    if (!selected) {
+      return;
+    }
+    const collectionId = selected.id;
+    setLinkStatusOverrides((current) => ({ ...current, [collectionId]: { written: written || delivered, delivered: written && delivered } }));
+    setMessage(null);
+    startSaving(async () => {
+      const formData = new FormData();
+      formData.set("collection_id", selected.id);
+      formData.set("department_id", departmentId);
+      formData.set("rows", JSON.stringify([]));
+      formData.set("is_completed", String(written && delivered));
+      const result = await saveCollectionEntryAction(null, formData);
+      setMessage(result);
+      if (result.ok) {
+        router.refresh();
+      }
+    });
+  }
+
   function handleSave(markCompleted: boolean) {
     if (!selected || !draft) {
       return;
@@ -291,6 +316,42 @@ export function DepartmentCollectionWorkspace({
             </div>
           ) : null}
 
+          {selected.entryMode === "link" ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 border border-slate-300 bg-white px-4 py-3">
+              <a
+                href={selected.linkUrl ?? "#"}
+                target="_blank"
+                rel="noreferrer"
+                className="min-w-0 flex-1 truncate text-sm font-black text-[#007050] underline underline-offset-4"
+                title="링크로 이동해 자료를 작성하세요"
+              >
+                {selected.linkUrl ?? "링크가 등록되지 않았습니다."}
+              </a>
+              <div className="flex shrink-0 items-center gap-4">
+                <label className="flex cursor-pointer items-center gap-1.5 text-sm font-black text-[#012241]">
+                  <input
+                    type="checkbox"
+                    checked={linkStatusOverrides[selected.id]?.written ?? Boolean(initialEntries[selected.id])}
+                    disabled={!canEdit || isSaving}
+                    onChange={(event) => handleLinkStatusSave(event.target.checked, false)}
+                    className="h-4 w-4 accent-[#007050]"
+                  />
+                  작성완료
+                </label>
+                <label className="flex cursor-pointer items-center gap-1.5 text-sm font-black text-[#012241]">
+                  <input
+                    type="checkbox"
+                    checked={linkStatusOverrides[selected.id]?.delivered ?? initialEntries[selected.id]?.isCompleted ?? false}
+                    disabled={!canEdit || isSaving}
+                    onChange={(event) => handleLinkStatusSave(true, event.target.checked)}
+                    className="h-4 w-4 accent-[#007050]"
+                  />
+                  자료전달
+                </label>
+              </div>
+            </div>
+          ) : (
+          <>
           <div className="overflow-x-auto border border-slate-300 bg-white">
             <table ref={tableRef} onKeyDown={handleGridKeyDown} className="w-full border-collapse bg-white text-sm">
               <colgroup>
@@ -318,7 +379,13 @@ export function DepartmentCollectionWorkspace({
                       {rowIndex + 1}
                     </td>
                     {row.map((cellValue, columnIndex) => (
-                      <td key={columnIndex} className="border border-slate-200 bg-white p-0 align-top transition-colors focus-within:bg-[#f0f7f3] focus-within:ring-2 focus-within:ring-inset focus-within:ring-[#007050]/60">
+                      <td
+                        key={columnIndex}
+                        className={cn(
+                          "border border-slate-200 p-0 align-top transition-colors focus-within:bg-[#f0f7f3] focus-within:ring-2 focus-within:ring-inset focus-within:ring-[#007050]/60",
+                          (initialEntries[selected.id]?.isCompleted ?? false) && !cellValue.trim() ? "bg-slate-200/70" : "bg-white"
+                        )}
+                      >
                         <textarea
                           ref={(element) => {
                             if (element) {
@@ -378,6 +445,8 @@ export function DepartmentCollectionWorkspace({
               </button>
             </div>
           </div>
+          </>
+          )}
         </div>
       ) : null}
     </div>

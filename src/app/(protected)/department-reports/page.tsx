@@ -537,7 +537,7 @@ export default async function DepartmentReportsPage({
       const [{ data: collectionData }, { data: collectionEntryData }] = await Promise.all([
         dataClient
           .from("data_collections")
-          .select("id,title,description,example,image_url,template,created_at")
+          .select("id,title,description,example,image_url,entry_mode,link_url,template,created_at")
           .is("deleted_at", null)
           .is("closed_at", null)
           .order("created_at", { ascending: false })
@@ -553,6 +553,8 @@ export default async function DepartmentReportsPage({
         description: string;
         example: string;
         image_url: string | null;
+        entry_mode: string;
+        link_url: string | null;
         template: Json;
         created_at: string;
       }[]).map((row) => ({
@@ -563,6 +565,8 @@ export default async function DepartmentReportsPage({
         imageUrl: row.image_url,
         columns: normalizeCollectionColumns(row.template),
         widths: normalizeCollectionWidths(row.template, normalizeCollectionColumns(row.template).length),
+        entryMode: row.entry_mode === "link" ? ("link" as const) : ("grid" as const),
+        linkUrl: row.link_url,
         createdAt: row.created_at
       }));
       const columnCountById = new Map(dataCollectionItems.map((item) => [item.id, item.columns.length]));
