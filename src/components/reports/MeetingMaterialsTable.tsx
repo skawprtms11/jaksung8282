@@ -136,14 +136,14 @@ function removeRequestFromReports(reports: MeetingMaterialsReport[], requestId: 
 
 export function MeetingMaterialsTable({
   reports,
-  weekLabel,
+  reportAuthorNames,
   currentUserId,
   canManageAllRequests,
   emptyTitle = "선택한 주차의 회의자료가 없습니다.",
   onDataChanged
 }: {
   reports: MeetingMaterialsReport[];
-  weekLabel?: string;
+  reportAuthorNames?: Record<string, string>;
   currentUserId: string;
   canManageAllRequests: boolean;
   emptyTitle?: string;
@@ -213,7 +213,7 @@ export function MeetingMaterialsTable({
           </colgroup>
           <thead>
             <tr>
-              <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">화주</th>
+              <th className="px-3 py-3 text-center text-xs font-black tracking-[0.02em] text-slate-500!">화주</th>
               <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">금주 실시사항</th>
               <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">차주 예정사항</th>
             </tr>
@@ -226,14 +226,13 @@ export function MeetingMaterialsTable({
                   key={report.id}
                   className={cn("border-t align-top", isCommonRow ? "border-[#d8cbb4] bg-[#f4ede2]" : "border-[#eef2f6] even:bg-[#f1f5f8]")}
                 >
-                  <td className="px-3 py-4">
+                  <td className="px-3 py-4 text-center align-middle">
                     <div className={cn("text-base font-black leading-6", isCommonRow ? "text-[#007050]" : "text-[#012241]")}>
                       {report.clients?.client_name ?? "-"}
                     </div>
-                    <div className="mt-1 flex items-center gap-1.5 text-xs font-bold text-slate-400">
-                      <span>{report.departments?.department_name ?? "-"}</span>
-                      {weekLabel ? <span className="text-[#007050]">· {weekLabel}</span> : null}
-                    </div>
+                    {!isCommonRow && reportAuthorNames?.[report.id] ? (
+                      <div className="mt-0.5 text-xs font-bold text-slate-400">{reportAuthorNames[report.id]}</div>
+                    ) : null}
                   </td>
                   <td className="px-3 py-4">
                     <MeetingWorkItemList rows={report.weekly_client_report_items} period="current" onOpen={(item) => openItem(report, item)} />
