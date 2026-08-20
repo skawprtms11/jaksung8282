@@ -34,6 +34,8 @@ export type DataCollectionView = {
   columns: string[];
   widths: number[];
   collectionType: "regular" | "adhoc";
+  entryMode: "grid" | "link";
+  linkUrl: string | null;
   authorName: string;
   createdAt: string;
   entries: CollectionEntryView[];
@@ -321,6 +323,14 @@ function CollectionEntriesPanel({ collection, departments }: { collection: DataC
         </div>
       ) : null}
 
+      {collection.entryMode === "link" && collection.linkUrl ? (
+        <p className="rounded-[1.1rem] border border-[#cfe3da] bg-[#e6f1ec] px-4 py-2.5 text-sm font-bold text-[#012241]">
+          취합 링크:{" "}
+          <a href={collection.linkUrl} target="_blank" rel="noreferrer" className="font-black text-[#007050] underline underline-offset-4">
+            {collection.linkUrl}
+          </a>
+        </p>
+      ) : null}
       <TableShell>
         <table className="w-full min-w-[860px] border-collapse bg-white text-sm">
           <colgroup>
@@ -352,7 +362,13 @@ function CollectionEntriesPanel({ collection, departments }: { collection: DataC
                     </td>
                   ) : null}
                   {collection.columns.map((_, columnIndex) => (
-                    <td key={columnIndex} className="h-9 whitespace-pre-wrap border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-700">
+                    <td
+                      key={columnIndex}
+                      className={cn(
+                        "h-9 whitespace-pre-wrap border border-slate-200 px-2 py-1.5 text-sm text-slate-700",
+                        (entry?.isCompleted ?? false) && !(rows[rowIndex]?.[columnIndex] ?? "").trim() ? "bg-slate-200/70" : "bg-white"
+                      )}
+                    >
                       {rows[rowIndex]?.[columnIndex] ?? ""}
                     </td>
                   ))}
@@ -392,6 +408,8 @@ function DataCollectionEditorDialog({
   const [description, setDescription] = useState(initialRow?.description ?? "");
   const [example, setExample] = useState(initialRow?.example ?? "");
   const [imageUrl, setImageUrl] = useState(initialRow?.imageUrl ?? "");
+  const [entryMode, setEntryMode] = useState<"grid" | "link">(initialRow?.entryMode ?? "grid");
+  const [linkUrl, setLinkUrl] = useState(initialRow?.linkUrl ?? "");
   const [columns, setColumns] = useState<string[]>(() => (initialRow ? [...initialRow.columns] : ["항목", "내용", "비고"]));
   const [widths, setWidths] = useState<number[]>(() =>
     initialRow
@@ -449,6 +467,8 @@ function DataCollectionEditorDialog({
     setImageUrl(template.imageUrl ?? "");
     setColumns([...template.columns]);
     setWidths(template.columns.map((_, index) => template.widths[index] || DEFAULT_COLUMN_WIDTH));
+    setEntryMode(template.entryMode);
+    setLinkUrl(template.linkUrl ?? "");
   }
 
   function focusColumn(index: number) {
@@ -503,6 +523,8 @@ function DataCollectionEditorDialog({
       formData.set("columns", JSON.stringify(columns));
       formData.set("widths", JSON.stringify(widths));
       formData.set("collection_type", collectionType);
+      formData.set("entry_mode", entryMode);
+      formData.set("link_url", linkUrl);
       const result = await saveDataCollectionAction(null, formData);
       if (!result.ok) {
         setMessage(result);
@@ -639,6 +661,38 @@ function DataCollectionEditorDialog({
               </div>
             </div>
             <div>
+              <p className="mb-1 text-xs font-black text-slate-600">취합 방식</p>
+              <div className="flex gap-2">
+                {([["grid", "표형식으로 취합"], ["link", "링크등록으로 취합"]] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setEntryMode(value)}
+                    className={cn(
+                      "tool-button h-9",
+                      entryMode === value && "tool-button-primary"
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {entryMode === "link" ? (
+                <label className="mt-2 block text-xs font-black text-slate-600">
+                  취합 링크 URL
+                  <input
+                    value={linkUrl}
+                    onChange={(event) => setLinkUrl(event.target.value)}
+                    maxLength={1000}
+                    placeholder="https:// 로 시작하는 작성 링크를 입력하세요"
+                    className="mt-1 h-10 w-full rounded-md border border-slate-300 px-3 text-sm font-normal"
+                  />
+                  <span className="mt-1 block text-[11px] font-bold text-slate-400">부서는 이 링크로 이동해 자료를 작성하고, 작성완료·자료전달만 체크합니다.</span>
+                </label>
+              ) : null}
+            </div>
+            {entryMode === "grid" ? (
+            <div>
               <p className="mb-1 text-xs font-black text-slate-600">취합 컬럼 설정</p>
               <div className="overflow-x-auto rounded-[1.1rem] border border-[#e7ddcd] bg-[#faf6ef] p-3">
                 <div ref={columnRowRef} onKeyDown={handleColumnKeyDown} className="flex items-start">
@@ -705,6 +759,7 @@ function DataCollectionEditorDialog({
                 <p className="mt-1 text-[11px] font-bold text-slate-400">칸 오른쪽 가장자리를 좌우로 드래그하면 열너비가 조정됩니다(값은 각 칸 아래 표시) · Enter로 다음/새 컬럼</p>
               </div>
             </div>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#eee6d8] px-6 py-4">
             <ActionMessage state={message} />

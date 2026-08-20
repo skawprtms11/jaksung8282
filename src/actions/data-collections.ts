@@ -17,11 +17,7 @@ export type CollectionTemplate = {
   columns: string[];
 };
 
-const columnsSchema = z
-  .array(z.string().trim().max(60))
-  .min(1, "취합 컬럼을 1개 이상 설정하세요.")
-  .max(MAX_TEMPLATE_COLUMNS)
-  .refine((columns) => columns.some((column) => column.trim()), { message: "컬럼명을 입력하세요." });
+const columnsSchema = z.array(z.string().trim().max(60)).max(MAX_TEMPLATE_COLUMNS);
 
 const dataCollectionSchema = z.object({
   id: z.string().uuid().optional().or(z.literal("").transform(() => undefined)),
@@ -31,7 +27,17 @@ const dataCollectionSchema = z.object({
   image_url: z.string().trim().max(1000).default(""),
   columns: columnsSchema,
   widths: z.array(z.coerce.number().int().min(0).max(2000)).optional(),
-  collection_type: z.enum(["regular", "adhoc"]).default("adhoc")
+  collection_type: z.enum(["regular", "adhoc"]).default("adhoc"),
+  entry_mode: z.enum(["grid", "link"]).default("grid"),
+  link_url: z.string().trim().max(1000).default("")
+}).superRefine((value, ctx) => {
+  if (value.entry_mode === "grid") {
+    if (value.columns.length === 0 || value.columns.every((column) => !column.trim())) {
+      ctx.addIssue({ code: "custom", path: ["columns"], message: "취합 컬럼을 1개 이상 설정하세요." });
+    }
+  } else if (!/^https?:\/\//.test(value.link_url)) {
+    ctx.addIssue({ code: "custom", path: ["link_url"], message: "http:// 또는 https:// 로 시작하는 링크를 입력하세요." });
+  }
 });
 
 function parseJsonForm(formData: FormData, field: string) {
@@ -58,7 +64,9 @@ export async function saveDataCollectionAction(_: ActionResult | null, formData:
     image_url: String(formData.get("image_url") ?? ""),
     columns: parseJsonForm(formData, "columns"),
     widths: parseJsonForm(formData, "widths") ?? undefined,
-    collection_type: String(formData.get("collection_type") ?? "adhoc")
+    collection_type: String(formData.get("collection_type") ?? "adhoc"),
+    entry_mode: String(formData.get("entry_mode") ?? "grid"),
+    link_url: String(formData.get("link_url") ?? "")
   });
   if (!parsed.success) {
     return { ok: false, message: parsed.error.issues[0]?.message ?? "입력값을 확인하세요." };
@@ -76,6 +84,8 @@ export async function saveDataCollectionAction(_: ActionResult | null, formData:
     description,
     example,
     collection_type: parsed.data.collection_type,
+    entry_mode: parsed.data.entry_mode,
+    link_url: parsed.data.entry_mode === "link" ? parsed.data.link_url : null,
     image_url: image_url || null,
     template: { columns, widths } as unknown as Json,
     updated_by: profile.id,
@@ -214,7 +224,7 @@ export async function saveCollectionEntryAction(_: ActionResult | null, formData
 
   const { data: collection, error: collectionError } = await supabase
     .from("data_collections")
-    .select("id,template,closed_at")
+    .select("id,template,closed_at,entry_mode")
     .eq("id", parsed.data.collection_id)
     .is("deleted_at", null)
     .maybeSingle();
@@ -233,9 +243,6 @@ export async function saveCollectionEntryAction(_: ActionResult | null, formData
   const rows = parsed.data.rows
     .map((row) => Array.from({ length: columnCount }, (_, index) => String(row[index] ?? "")))
     .filter((row) => row.some((cell) => cell.trim()));
-  if (parsed.data.is_completed && rows.length === 0) {
-    return { ok: false, message: "작성 내용 없이 확정할 수 없습니다. 내용을 입력한 뒤 확정하세요." };
-  }
 
   const { error } = await supabase.from("data_collection_entries").upsert(
     {

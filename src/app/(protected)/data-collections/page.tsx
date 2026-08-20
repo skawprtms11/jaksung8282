@@ -14,6 +14,8 @@ type CollectionQueryRow = {
   example: string;
   image_url: string | null;
   collection_type: string;
+  entry_mode: string;
+  link_url: string | null;
   template: Json;
   created_by: string | null;
   created_at: string;
@@ -46,7 +48,7 @@ export default async function DataCollectionsPage() {
     const [{ data: collectionData }, { data: departmentData }, { data: regularData }] = await Promise.all([
       supabase
         .from("data_collections")
-        .select("id,title,description,example,image_url,collection_type,template,created_by,created_at")
+        .select("id,title,description,example,image_url,collection_type,entry_mode,link_url,template,created_by,created_at")
         .is("deleted_at", null)
         .is("closed_at", null)
         .order("created_at", { ascending: false })
@@ -54,7 +56,7 @@ export default async function DataCollectionsPage() {
       supabase.from("departments").select("id,department_name").eq("is_active", true).order("sort_order", { ascending: true }).order("department_name", { ascending: true }),
       supabase
         .from("data_collections")
-        .select("id,title,description,example,image_url,collection_type,template,created_by,created_at")
+        .select("id,title,description,example,image_url,collection_type,entry_mode,link_url,template,created_by,created_at")
         .eq("collection_type", "regular")
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
@@ -93,6 +95,8 @@ export default async function DataCollectionsPage() {
         columns,
         widths,
         collectionType: row.collection_type === "regular" ? ("regular" as const) : ("adhoc" as const),
+        entryMode: row.entry_mode === "link" ? ("link" as const) : ("grid" as const),
+        linkUrl: row.link_url,
         authorName: (row.created_by ? nameById.get(row.created_by) : undefined) ?? "-",
         createdAt: row.created_at,
         entries: entries

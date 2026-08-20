@@ -196,6 +196,8 @@ export type Tables = {
       example: string;
       image_url: string | null;
       collection_type: string;
+      entry_mode: string;
+      link_url: string | null;
       template: Json;
       closed_at: string | null;
       closed_by: string | null;
