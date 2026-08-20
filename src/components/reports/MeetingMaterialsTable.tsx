@@ -213,9 +213,9 @@ export function MeetingMaterialsTable({
           </colgroup>
           <thead>
             <tr>
-              <th className="px-3 py-3 text-center text-xs font-black tracking-[0.02em] text-slate-500!">화주</th>
-              <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">금주 실시사항</th>
-              <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">차주 예정사항</th>
+              <th className="px-3 py-3 text-center text-sm font-black tracking-[0.02em] text-slate-500!">화주</th>
+              <th className="px-3 py-3 text-sm font-black tracking-[0.02em] text-slate-500!">금주 실시사항</th>
+              <th className="px-3 py-3 text-sm font-black tracking-[0.02em] text-slate-500!">차주 예정사항</th>
             </tr>
           </thead>
           <tbody>
@@ -224,7 +224,7 @@ export function MeetingMaterialsTable({
               return (
                 <tr
                   key={report.id}
-                  className={cn("border-t align-top", isCommonRow ? "border-[#d8cbb4] bg-[#f4ede2]" : "border-[#eef2f6] even:bg-[#f1f5f8]")}
+                  className={cn("border-t align-top", isCommonRow ? "border-[#d8cbb4] bg-[#f4ede2]" : "border-[#eef2f6] even:bg-[#e7eef5]")}
                 >
                   <td className="px-3 py-4 text-center align-middle">
                     <div className={cn("text-base font-black leading-6", isCommonRow ? "text-[#007050]" : "text-[#012241]")}>

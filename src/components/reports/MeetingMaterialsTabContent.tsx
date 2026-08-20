@@ -104,15 +104,17 @@ export function MeetingMaterialsTabContent({ data, currentUserId, canManageAllRe
         <DepartmentCommonSearchToolbar key={Object.values(data.filters).join("|")} categories={data.workCategories} filters={data.filters} resultCount={data.reports.length} detailsId="meeting-materials-detailed-search" unifiedDataSearch showQuickReset inlineQuickSearch />
       </div>
     </div>
-    <DepartmentOpenRequestBoard
-      requests={data.confirmationRequestItems}
-      currentUserId={currentUserId}
-      canManageAllRequests={canManageAllRequests}
-      title="확인요청현황"
-      emptyMessage="진행 중인 확인요청이 없습니다."
-      onDataChanged={onDataChanged}
-      compact
-    />
+    {data.confirmationRequestItems.length > 0 ? (
+      <DepartmentOpenRequestBoard
+        requests={data.confirmationRequestItems}
+        currentUserId={currentUserId}
+        canManageAllRequests={canManageAllRequests}
+        title="확인요청현황"
+        emptyMessage="진행 중인 확인요청이 없습니다."
+        onDataChanged={onDataChanged}
+        compact
+      />
+    ) : null}
     {data.allDepartments ? (
       <section className="sketch-panel flex min-h-44 items-center justify-center p-6 text-center">
         <p className="text-sm font-black text-slate-500">부서를 선택하면 회의자료가 표시됩니다.</p>
