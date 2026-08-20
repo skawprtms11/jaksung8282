@@ -354,6 +354,24 @@ async function softDeleteClientReports(reportIds: string[]) {
     return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요." };
   }
 
+  // 화면 규칙: 확정 전(저장·반려) 상태만 삭제할 수 있다. RPC는 역할별로 확정 자료 삭제를
+  // 일부 허용하므로 호출 경로와 무관하게 여기서 상태를 확인해 막는다.
+  const { data: statusRows, error: statusError } = await supabase
+    .from("weekly_client_reports")
+    .select("id,status")
+    .in("id", reportIds)
+    .is("deleted_at", null);
+  if (statusError) {
+    return { ok: false, message: safeErrorMessage(statusError.message) };
+  }
+  const targets = (statusRows ?? []) as { id: string; status: ClientReportStatus }[];
+  if (targets.length !== reportIds.length) {
+    return { ok: false, message: "선택한 자료 중 조회할 수 없는 자료가 있습니다. 새로고침 후 다시 시도하세요." };
+  }
+  if (targets.some((target) => target.status !== "draft" && target.status !== "rejected")) {
+    return { ok: false, message: "확정 전(저장·반려) 상태의 자료만 삭제할 수 있습니다. 확정취소 후 삭제하세요." };
+  }
+
   const { error } = await supabase.rpc("soft_delete_client_reports_atomic", {
     p_report_ids: reportIds
   });
