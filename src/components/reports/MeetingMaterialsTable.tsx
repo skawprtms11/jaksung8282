@@ -284,13 +284,13 @@ function MeetingWorkItemList({
   }
 
   return (
-    <ol className="divide-y divide-[#012241]/10">
+    <ol className="space-y-2.5">
       {values.map((row, index) => {
         const hasRequest = row.weekly_report_item_requests.length > 0;
         const hasResult = row.weekly_report_item_requests.some((request) => Boolean(request.result_content));
         const hasClosed = row.weekly_report_item_requests.some((request) => Boolean(request.closed_at));
         return (
-          <li key={`${period}-${row.id}-${index}`} className="flex gap-2.5 py-2.5 first:pt-0 last:pb-0">
+          <li key={`${period}-${row.id}-${index}`} className="flex gap-2.5">
             <span
               className={cn("u-dot mt-[7px] shrink-0", importanceDotClassName(row.importance))}
               title={`중요도 ${importanceLabels[row.importance]}`}
