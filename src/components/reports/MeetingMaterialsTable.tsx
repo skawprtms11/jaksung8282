@@ -236,10 +236,10 @@ export function MeetingMaterialsTable({
                     </div>
                   </td>
                   <td className="px-3 py-4">
-                    <MeetingWorkItemList rows={report.weekly_client_report_items} period="current" isCommon={isCommonRow} onOpen={(item) => openItem(report, item)} />
+                    <MeetingWorkItemList rows={report.weekly_client_report_items} period="current" onOpen={(item) => openItem(report, item)} />
                   </td>
                   <td className="px-3 py-4">
-                    <MeetingWorkItemList rows={report.weekly_client_report_items} period="next" isCommon={isCommonRow} onOpen={(item) => openItem(report, item)} />
+                    <MeetingWorkItemList rows={report.weekly_client_report_items} period="next" onOpen={(item) => openItem(report, item)} />
                   </td>
                 </tr>
               );
@@ -262,15 +262,20 @@ export function MeetingMaterialsTable({
   );
 }
 
+const importanceLabels: Record<Importance, string> = {
+  very_high: "매우높음",
+  high: "높음",
+  medium: "보통",
+  low: "낮음"
+};
+
 function MeetingWorkItemList({
   rows,
   period,
-  isCommon,
   onOpen
 }: {
   rows: MeetingReportItem[];
   period: ItemPeriod;
-  isCommon: boolean;
   onOpen: (item: MeetingReportItem) => void;
 }) {
   const values = rows.filter((row) => row.item_period === period);
@@ -279,17 +284,18 @@ function MeetingWorkItemList({
   }
 
   return (
-    <ol className="space-y-3">
+    <ol className="divide-y divide-[#012241]/10">
       {values.map((row, index) => {
         const hasRequest = row.weekly_report_item_requests.length > 0;
         const hasResult = row.weekly_report_item_requests.some((request) => Boolean(request.result_content));
         const hasClosed = row.weekly_report_item_requests.some((request) => Boolean(request.closed_at));
         return (
-          <li key={`${period}-${row.id}-${index}`} className={cn("flex gap-2.5 rounded-2xl px-3 py-2.5", isCommon ? "bg-white/82" : "bg-[#fbf8f2]")}>
-            <span className="mt-1.5 inline-flex shrink-0 items-center gap-1.5" title={row.work_categories?.category_name ?? "기타"}>
-              <span className={cn("u-dot", importanceDotClassName(row.importance))} aria-hidden="true" />
-              <span className="text-[11px] font-bold text-slate-500">{row.work_categories?.category_name ?? "기타"}</span>
-            </span>
+          <li key={`${period}-${row.id}-${index}`} className="flex gap-2.5 py-2.5 first:pt-0 last:pb-0">
+            <span
+              className={cn("u-dot mt-[7px] shrink-0", importanceDotClassName(row.importance))}
+              title={`중요도 ${importanceLabels[row.importance]}`}
+              aria-label={`중요도 ${importanceLabels[row.importance]}`}
+            />
             <span className="min-w-0">
               <button
                 type="button"
