@@ -1180,14 +1180,16 @@ async function MeetingMaterialsContent({
             />
             </div>
           </div>
-          <DepartmentOpenRequestBoard
-            requests={confirmationRequestItems}
-            currentUserId={profile.id}
-            canManageAllRequests={isAdmin(profile)}
-            title="확인요청현황"
-            emptyMessage="진행 중인 확인요청이 없습니다."
-            compact
-          />
+          {confirmationRequestItems.length > 0 ? (
+            <DepartmentOpenRequestBoard
+              requests={confirmationRequestItems}
+              currentUserId={profile.id}
+              canManageAllRequests={isAdmin(profile)}
+              title="확인요청현황"
+              emptyMessage="진행 중인 확인요청이 없습니다."
+              compact
+            />
+          ) : null}
           {isMaterialsAllDept ? (
             <section className="sketch-panel flex min-h-44 items-center justify-center p-6 text-center">
               <p className="text-sm font-black text-slate-500">부서를 선택하면 회의자료가 표시됩니다.</p>
