@@ -236,6 +236,8 @@ function parseCommonContentItems(
   return parseDepartmentCommonContentItems(value, fallbackImportance, fallbackCategoryId);
 }
 
+const NO_SPECIAL_ISSUE_TEXT = "특이사항 없음";
+
 function commonDialogItems(value: string, fallbackImportance: Importance, fallbackCategoryId: string): DepartmentCommonContentItem[] {
   const items = parseCommonContentItems(value, fallbackImportance, fallbackCategoryId);
   return items.length > 0
@@ -2735,6 +2737,36 @@ function DepartmentContentPeriodDialog({
     }
     onComplete();
   };
+  const isNoIssueChecked =
+    isCommonSection &&
+    draftCommonItems.length === 1 &&
+    draftCommonItems[0].title === NO_SPECIAL_ISSUE_TEXT &&
+    draftCommonItems[0].content === NO_SPECIAL_ISSUE_TEXT;
+  const setNoSpecialIssue = (checked: boolean) => {
+    if (checked) {
+      const hasWrittenContent = draftCommonItems.some(
+        (item) =>
+          (item.title.trim() && item.title.trim() !== NO_SPECIAL_ISSUE_TEXT) ||
+          (item.content.trim() && item.content.trim() !== NO_SPECIAL_ISSUE_TEXT)
+      );
+      if (hasWrittenContent && !window.confirm(`작성 중인 내용이 '${NO_SPECIAL_ISSUE_TEXT}'으로 대체됩니다. 계속할까요?`)) {
+        return;
+      }
+      updateCommonItems([
+        {
+          importance: "low",
+          work_category_id: categoryId || categories[0]?.id || "",
+          title: NO_SPECIAL_ISSUE_TEXT,
+          content: NO_SPECIAL_ISSUE_TEXT,
+          sort_order: 0
+        }
+      ]);
+      return;
+    }
+    updateCommonItems([
+      { importance: "medium", work_category_id: categoryId || categories[0]?.id || "", title: "", content: "", sort_order: 0 }
+    ]);
+  };
 
   useEffect(() => {
     if (!isCommonSection) {
@@ -2761,9 +2793,22 @@ function DepartmentContentPeriodDialog({
               </h2>
               <p className="mt-1 text-sm text-slate-500">중요도, 업무구분, 내용을 입력하면 선택한 탭에 바로 표시됩니다.</p>
             </div>
-            <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
-              <X className="h-4 w-4" aria-hidden="true" />
-            </button>
+            <div className="flex shrink-0 items-center gap-3">
+              {isCommonSection ? (
+                <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-[#e7ddcd] bg-[#faf6ef] px-3 py-2 text-sm font-black text-[#012241]">
+                  <input
+                    type="checkbox"
+                    checked={isNoIssueChecked}
+                    onChange={(event) => setNoSpecialIssue(event.target.checked)}
+                    className="h-4 w-4 accent-[#007050]"
+                  />
+                  특이사항 없음
+                </label>
+              ) : null}
+              <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
           </div>
           <div ref={commonScrollRef} className="max-h-[62vh] space-y-3 overflow-y-auto bg-[#faf6ef] px-5 py-4">
             {isCommonSection ? (
