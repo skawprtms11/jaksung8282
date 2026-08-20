@@ -90,11 +90,10 @@ function VolumesContent({ data }: { data: Extract<MeetingTabData, { tab: "volume
   </div>;
 }
 
-export function MeetingMaterialsTabContent({ data, currentUserId, canManageAllRequests, reportAuthorNames, onDataChanged }: {
+export function MeetingMaterialsTabContent({ data, currentUserId, canManageAllRequests, onDataChanged }: {
   data: MeetingTabData;
   currentUserId: string;
   canManageAllRequests: boolean;
-  reportAuthorNames?: Record<string, string>;
   onDataChanged?: () => void;
 }) {
   if (data.tab === "collection") return <CollectionContent data={data} />;
@@ -119,7 +118,7 @@ export function MeetingMaterialsTabContent({ data, currentUserId, canManageAllRe
         <p className="text-sm font-black text-slate-500">부서를 선택하면 회의자료가 표시됩니다.</p>
       </section>
     ) : (
-      <MeetingMaterialsTable reports={data.reports} reportAuthorNames={reportAuthorNames} currentUserId={currentUserId} canManageAllRequests={canManageAllRequests} emptyTitle={data.hasSearchFilters ? "검색 조건에 맞는 회의자료가 없습니다." : "선택한 주차의 회의자료가 없습니다."} onDataChanged={onDataChanged} />
+      <MeetingMaterialsTable reports={data.reports} reportAuthorNames={data.reportAuthorNames} currentUserId={currentUserId} canManageAllRequests={canManageAllRequests} emptyTitle={data.hasSearchFilters ? "검색 조건에 맞는 회의자료가 없습니다." : "선택한 주차의 회의자료가 없습니다."} onDataChanged={onDataChanged} />
     )}
   </div>;
   if (data.tab === "volumes") return <VolumesContent data={data} />;

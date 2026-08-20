@@ -26,7 +26,6 @@ export function MeetingMaterialsWorkspace({
   initialTab,
   currentUserId,
   canManageAllRequests,
-  reportAuthorNames,
   weekFilter,
   children
 }: {
@@ -34,7 +33,6 @@ export function MeetingMaterialsWorkspace({
   initialTab: MeetingTabValue;
   currentUserId: string;
   canManageAllRequests: boolean;
-  reportAuthorNames: Record<string, string>;
   weekFilter: ReactNode;
   children: ReactNode;
 }) {
@@ -150,7 +148,7 @@ export function MeetingMaterialsWorkspace({
       </div>
     </div>
     <div data-meeting-tab-content={activeTab} aria-busy={Boolean(pendingTab)}>
-      {activeData ? <MeetingMaterialsTabContent data={activeData} currentUserId={currentUserId} canManageAllRequests={canManageAllRequests} reportAuthorNames={reportAuthorNames} onDataChanged={handleDataChanged} /> : pendingTab ? (
+      {activeData ? <MeetingMaterialsTabContent data={activeData} currentUserId={currentUserId} canManageAllRequests={canManageAllRequests} onDataChanged={handleDataChanged} /> : pendingTab ? (
         <div className="sketch-panel flex min-h-44 items-center justify-center p-4 text-sm font-black text-slate-500">화면을 불러오는 중입니다.</div>
       ) : children}
     </div>

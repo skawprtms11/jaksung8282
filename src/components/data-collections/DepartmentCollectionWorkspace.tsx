@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Save, Trash2 } from "lucide-react";
 import { saveCollectionEntryAction } from "@/actions/data-collections";
@@ -79,7 +79,11 @@ export function DepartmentCollectionWorkspace({
   const tableRef = useRef<HTMLTableElement>(null);
 
   // router.refresh 등으로 취합건 목록·컬럼 수가 바뀌면 드래프트를 보충·보정한다.
-  useEffect(() => {
+  // effect에서 setState를 부르면 커밋 후 렌더가 한 번 더 도는 데다 lint(set-state-in-effect)에도 걸리므로,
+  // 이전 렌더의 입력을 기억해 렌더 중에 보정하는 패턴(react.dev의 storing-information-from-previous-renders)을 쓴다.
+  const [syncedProps, setSyncedProps] = useState({ collections, initialEntries });
+  if (syncedProps.collections !== collections || syncedProps.initialEntries !== initialEntries) {
+    setSyncedProps({ collections, initialEntries });
     setDrafts((current) => {
       const next = { ...current };
       collections.forEach((collection) => {
@@ -101,7 +105,7 @@ export function DepartmentCollectionWorkspace({
       });
       return next;
     });
-  }, [collections, initialEntries]);
+  }
 
   const selected = collections.find((collection) => collection.id === selectedId) ?? collections[0] ?? null;
   const draft = selected ? drafts[selected.id] : null;

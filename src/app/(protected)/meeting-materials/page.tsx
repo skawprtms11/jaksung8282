@@ -25,6 +25,7 @@ import {
   resolveWeekFromSelection,
   type WeekOption
 } from "@/lib/dates/week";
+import { loadMeetingReportAuthorNames } from "@/lib/reports/meeting-report-authors";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
@@ -693,33 +694,8 @@ export default async function MeetingMaterialsPage({
   const defaultDepartmentId =
     params.department_id ??
     (!isAdmin(profile) ? profile.department_id ?? undefined : undefined);
-  // 회의자료 표의 화주명 아래에 화주담당자(자료 작성자)명을 표시하기 위한 맵.
-  // 페이로드 RPC에는 작성자 정보가 없어 별도 조회한다.
-  let reportAuthorNames: Record<string, string> = {};
-  const authorLookupClient = await createSupabaseServerClient();
-  if (authorLookupClient) {
-    let reportQuery = authorLookupClient
-      .from("weekly_client_reports")
-      .select("id,created_by")
-      .eq("week_start_date", selectedWeek.weekStartDate)
-      .is("deleted_at", null);
-    if (defaultDepartmentId) {
-      reportQuery = reportQuery.eq("department_id", defaultDepartmentId);
-    }
-    const { data: authorReportRows } = await reportQuery;
-    const reportRowsForAuthors = (authorReportRows ?? []) as { id: string; created_by: string | null }[];
-    const creatorIds = Array.from(new Set(reportRowsForAuthors.map((row) => row.created_by).filter((id): id is string => Boolean(id))));
-    if (creatorIds.length > 0) {
-      const { data: authorProfiles } = await authorLookupClient.from("profiles").select("id,full_name").in("id", creatorIds);
-      const nameById = new Map(((authorProfiles ?? []) as { id: string; full_name: string }[]).map((row) => [row.id, row.full_name]));
-      reportAuthorNames = Object.fromEntries(
-        reportRowsForAuthors.flatMap((row) => {
-          const name = row.created_by ? nameById.get(row.created_by) : undefined;
-          return name ? [[row.id, name]] : [];
-        })
-      );
-    }
-  }
+  // 작성자명 맵은 materials 탭에서만 쓰이는데 여기서 순차 조회하면 모든 탭의 첫 화면이
+  // DB 왕복 2회만큼 늦게 뜬다. MeetingMaterialsContent(Suspense 내부)에서 RPC와 병렬로 조회한다.
   const contentKey = [
     activeTab,
     selectedWeek.weekStartDate,
@@ -733,7 +709,6 @@ export default async function MeetingMaterialsPage({
       initialTab={activeTab}
       currentUserId={profile.id}
       canManageAllRequests={isAdmin(profile)}
-      reportAuthorNames={reportAuthorNames}
       tabs={tabs.map((tab) => ({
         ...tab,
         href: buildTabHref(tab.value, params, selectedWeek, defaultDepartmentId)
@@ -741,7 +716,7 @@ export default async function MeetingMaterialsPage({
       weekFilter={<MeetingMaterialsWeekFilter defaultWeekStartDate={selectedWeek.weekStartDate} />}
     >
       <Suspense key={contentKey} fallback={<PanelLoading label={meetingTabLoadingLabels[activeTab]} />}>
-        <MeetingMaterialsContent params={params} activeTab={activeTab} selectedWeek={selectedWeek} profile={profile} reportAuthorNames={reportAuthorNames} />
+        <MeetingMaterialsContent params={params} activeTab={activeTab} selectedWeek={selectedWeek} profile={profile} defaultDepartmentId={defaultDepartmentId} />
       </Suspense>
     </MeetingMaterialsWorkspace>
   );
@@ -752,13 +727,13 @@ async function MeetingMaterialsContent({
   activeTab,
   selectedWeek,
   profile,
-  reportAuthorNames
+  defaultDepartmentId
 }: {
   params: MeetingSearchParams;
   activeTab: MeetingTab;
   selectedWeek: WeekOption;
   profile: ProfileSummary;
-  reportAuthorNames: Record<string, string>;
+  defaultDepartmentId?: string;
 }) {
   const searchFilters = parseClientReportSearchFilters(params);
   const hasSearchFilters = hasClientReportSearchFilters(searchFilters);
@@ -776,8 +751,30 @@ async function MeetingMaterialsContent({
   let commonReports: MeetingReportRow[] = [];
   let volumeTrendReports: VolumeTrendReportRow[] = [];
   let previousVolumeTrendReports: VolumeTrendReportRow[] = [];
+  let reportAuthorNames: Record<string, string> = {};
+  let initialMemoContent = "";
+  let weekMemoItems: WeekMemoItem[] = [];
+  const memoDepartmentId = activeTab === "materials" && isAdmin(profile) ? params.department_id ?? null : null;
 
   if (supabase && profile) {
+    // 작성자명·메모·주차메모는 RPC 결과와 무관하므로 순차 await 대신 아래 Promise.all에 함께 태워
+    // materials 탭의 DB 왕복을 줄인다.
+    const reportAuthorNamesPromise =
+      activeTab === "materials" && !isMaterialsAllDept
+        ? loadMeetingReportAuthorNames(supabase, selectedWeek.weekStartDate, defaultDepartmentId ?? null)
+        : Promise.resolve<Record<string, string>>({});
+    const memoContentPromise = memoDepartmentId
+      ? supabase
+          .from("department_meeting_memos")
+          .select("content")
+          .eq("department_id", memoDepartmentId)
+          .eq("week_start_date", selectedWeek.weekStartDate)
+          .maybeSingle()
+      : Promise.resolve({ data: null });
+    const weekMemosPromise =
+      activeTab === "materials" && isAdmin(profile)
+        ? loadWeekMemosAction({ week_start_date: selectedWeek.weekStartDate })
+        : Promise.resolve(null);
     const compatibilityRequestPromise = (async (): Promise<OpenRequestQueryRow[] | null> => {
       if (activeTab !== "collection" && activeTab !== "materials") {
         return null;
@@ -796,7 +793,7 @@ async function MeetingMaterialsContent({
         return null;
       }
     })();
-    const [{ data: rpcData, error: rpcError }, compatibilityRequestData] = await Promise.all([
+    const [{ data: rpcData, error: rpcError }, compatibilityRequestData, loadedAuthorNames, memoRowResult, weekMemosResult] = await Promise.all([
       supabase.rpc("get_meeting_materials_payload", {
         p_tab: activeTab,
         p_week_start_date: selectedWeek.weekStartDate,
@@ -806,8 +803,16 @@ async function MeetingMaterialsContent({
         p_department_id: params.department_id ?? null,
         p_client_id: params.client_id ?? null
       }),
-      compatibilityRequestPromise
+      compatibilityRequestPromise,
+      reportAuthorNamesPromise,
+      memoContentPromise,
+      weekMemosPromise
     ]);
+    reportAuthorNames = loadedAuthorNames;
+    initialMemoContent = (memoRowResult.data as { content?: string | null } | null)?.content ?? "";
+    if (weekMemosResult?.ok) {
+      weekMemoItems = weekMemosResult.items;
+    }
 
     if (!rpcError && isMeetingMaterialsPayload(rpcData)) {
       departments = rpcData.departments;
@@ -1126,28 +1131,9 @@ async function MeetingMaterialsContent({
   const { clientCountMap, writtenClientMap } =
     activeTab === "collection" ? countByDepartment(clients, reports) : { clientCountMap: new Map(), writtenClientMap: new Map() };
 
-  const memoDepartmentId = activeTab === "materials" && isAdmin(profile) ? params.department_id ?? null : null;
-  let initialMemoContent = "";
-  if (memoDepartmentId && supabase) {
-    const { data: memoRow } = await supabase
-      .from("department_meeting_memos")
-      .select("content")
-      .eq("department_id", memoDepartmentId)
-      .eq("week_start_date", selectedWeek.weekStartDate)
-      .maybeSingle();
-    initialMemoContent = memoRow?.content ?? "";
-  }
   const memoDepartmentName = memoDepartmentId
     ? departments.find((department) => department.id === memoDepartmentId)?.department_name ?? null
     : null;
-
-  let weekMemoItems: WeekMemoItem[] = [];
-  if (activeTab === "materials" && isAdmin(profile)) {
-    const weekMemos = await loadWeekMemosAction({ week_start_date: selectedWeek.weekStartDate });
-    if (weekMemos.ok) {
-      weekMemoItems = weekMemos.items;
-    }
-  }
 
   return (
     <>

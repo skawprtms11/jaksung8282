@@ -365,9 +365,16 @@ async function softDeleteClientReports(reportIds: string[]) {
 }
 
 export async function saveClientReportAction(_: ActionResult<SavedClientReportRow> | null, formData: FormData): Promise<ActionResult<SavedClientReportRow>> {
+  // 편집 팝업이 자동 추가한 빈 항목(제목·내용 모두 공백)이 섞이면 제목 필수 검증으로 저장 전체가 막힌다.
+  // 한쪽 기간만 작성한 저장이 실패하지 않도록 검증 전에 걸러낸다.
+  const rawItems = parseJsonField<Record<string, unknown>[]>(formData, "items", []);
   const object = {
     ...formDataToObject(formData),
-    items: parseJsonField(formData, "items", []),
+    items: Array.isArray(rawItems)
+      ? rawItems.filter(
+          (item) => String(item?.title ?? "").trim() !== "" || String(item?.content ?? "").trim() !== ""
+        )
+      : [],
     volumes: parseJsonField(formData, "volumes", [])
   };
   const parsed = clientReportSchema.safeParse(object);
@@ -406,7 +413,9 @@ export async function saveClientReportAction(_: ActionResult<SavedClientReportRo
     return { ok: false, message: safeErrorMessage(error.message) };
   }
 
-  revalidatePath("/department-reports");
+  // revalidatePath를 호출하면 Next가 저장 응답에 현재 페이지(화주자료) 전체 재렌더(무거운 목록 조회 포함)를
+  // 끼워 넣어 저장이 수 배 느려진다. 관련 페이지는 모두 쿠키 기반 동적 렌더라 방문 시점에 항상 최신이므로
+  // 여기서는 재검증하지 않는다. 목록 갱신은 onSaved 콜백이 클라이언트 상태로 처리한다.
 
   const savedId =
     savedResult && typeof savedResult === "object" && !Array.isArray(savedResult) && "id" in savedResult
