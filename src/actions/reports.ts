@@ -637,6 +637,7 @@ export async function saveDepartmentSubmissionAction(
   // 부서 확정 시 화주자료가 없는 화주는 '특이사항 없음'으로 자동 확정 처리한다.
   // 자동 처리 실패는 부서 확정 자체를 막지 않는다.
   let autoFilledCount = 0;
+  let autoSubmittedCount = 0;
   if (status === "submitted_to_division") {
     try {
       const [{ data: linkRows }, { data: existingReports }, { data: categoryRows }] = await Promise.all([
@@ -647,13 +648,14 @@ export async function saveDepartmentSubmissionAction(
           .eq("is_active", true),
         supabase
           .from("weekly_client_reports")
-          .select("client_id")
+          .select("id,client_id,status")
           .eq("department_id", parsed.data.department_id)
           .eq("week_start_date", parsed.data.week_start_date)
           .is("deleted_at", null),
         supabase.from("work_categories").select("id").eq("is_active", true).order("sort_order").limit(1)
       ]);
-      const existingClientIds = new Set(((existingReports ?? []) as { client_id: string }[]).map((row) => row.client_id));
+      const existingReportRows = (existingReports ?? []) as { id: string; client_id: string; status: ClientReportStatus }[];
+      const existingClientIds = new Set(existingReportRows.map((row) => row.client_id));
       const missingClientIds = Array.from(
         new Set(((linkRows ?? []) as { client_id: string }[]).map((row) => row.client_id))
       ).filter((clientId) => !existingClientIds.has(clientId));
@@ -688,7 +690,19 @@ export async function saveDepartmentSubmissionAction(
           }
         }
       }
-      if (autoFilledCount > 0) {
+      // 담당자가 확정하지 않은 기존 화주자료(저장/반려)도 부서 확정과 함께 확정한다.
+      const pendingReportIds = existingReportRows
+        .filter((row) => row.status === "draft" || row.status === "rejected")
+        .map((row) => row.id);
+      if (pendingReportIds.length > 0) {
+        const { error: submitError } = await supabase.rpc("submit_client_reports_atomic", {
+          p_report_ids: pendingReportIds
+        });
+        if (!submitError) {
+          autoSubmittedCount = pendingReportIds.length;
+        }
+      }
+      if (autoFilledCount > 0 || autoSubmittedCount > 0) {
         revalidatePath("/client-reports");
         revalidatePath("/meeting-materials");
       }
@@ -705,7 +719,7 @@ export async function saveDepartmentSubmissionAction(
     ok: true,
     message:
       status === "submitted_to_division"
-        ? `사업부 검토요청을 완료했습니다.${autoFilledCount > 0 ? ` (미작성 화주 ${autoFilledCount}건은 '${NO_SPECIAL_ISSUE_TEXT}'으로 자동 확정)` : ""}`
+        ? `사업부 검토요청을 완료했습니다.${autoFilledCount > 0 ? ` (미작성 화주 ${autoFilledCount}건은 '${NO_SPECIAL_ISSUE_TEXT}'으로 자동 확정)` : ""}${autoSubmittedCount > 0 ? ` (미확정 화주자료 ${autoSubmittedCount}건 함께 확정)` : ""}`
         : "부서자료를 저장했습니다.",
     data: {
       id: typeof saved.id === "string" ? saved.id : id,
