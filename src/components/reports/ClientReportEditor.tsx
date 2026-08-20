@@ -7,13 +7,14 @@ import {
   ArrowUp,
   Boxes,
   ClipboardList,
+  LoaderCircle,
   Pencil,
   Plus,
   Save,
   Trash2,
   X
 } from "lucide-react";
-import { saveClientReportAction, type SavedClientReportRow } from "@/actions/reports";
+import { loadClientReportForEditAction, saveClientReportAction, type SavedClientReportRow } from "@/actions/reports";
 import { ActionMessage } from "@/components/common/ActionMessage";
 import { getCurrentWeekOption, getReportMonthByThursday, getWeekEndDate, getWeekOfMonth } from "@/lib/dates/week";
 import { cn } from "@/lib/utils/cn";
@@ -86,6 +87,17 @@ function moveItem<T>(items: T[], from: number, to: number) {
   return next;
 }
 
+// 저장 페이로드와 같은 규칙(빈 항목 제외, 기간별 순번 재부여)으로 직렬화해
+// 팝업의 화주 전환 시 "저장 안 된 변경이 있는지"를 판별한다.
+function makeDraftSnapshot(items: ItemDraft[], volumes: VolumeDraft[]) {
+  const sortOrderByPeriod: Record<ItemPeriod, number> = { current: 0, next: 0 };
+  const normalizedItems = items
+    .filter((item) => item.title.trim() !== "" || item.content.trim() !== "")
+    .map((item) => ({ ...item, sort_order: sortOrderByPeriod[item.item_period]++ }));
+  const normalizedVolumes = volumes.map((volume, index) => ({ ...volume, sort_order: index }));
+  return `${JSON.stringify(normalizedItems)}|${JSON.stringify(normalizedVolumes)}`;
+}
+
 export const NO_SPECIAL_ISSUE_TEXT = "특이사항 없음";
 
 export function ClientReportEditor({
@@ -123,8 +135,19 @@ export function ClientReportEditor({
   const selectedClient =
     clients.find((client) => client.id === initialReport?.client_id) ??
     (defaultClientId ? clients.find((client) => client.id === defaultClientId) : null);
-  const departmentId = initialReport?.department_id ?? selectedClient?.department_id ?? defaultDepartmentId ?? departments[0]?.id ?? "";
   const clientId = initialReport?.client_id ?? selectedClient?.id ?? "";
+  // 작성 팝업에서 화주를 전환하면 대상 화주·자료 id가 헤더 선택과 달라진다. 폼 전송은 이 상태를 따른다.
+  const [activeClientId, setActiveClientId] = useState(clientId);
+  const [activeReportId, setActiveReportId] = useState(initialReport?.id ?? "");
+  const [isSwitchingClient, setIsSwitchingClient] = useState(false);
+  const activeClient = clients.find((client) => client.id === activeClientId) ?? selectedClient;
+  const departmentId =
+    (activeClientId !== clientId ? activeClient?.department_id : null) ??
+    initialReport?.department_id ??
+    selectedClient?.department_id ??
+    defaultDepartmentId ??
+    departments[0]?.id ??
+    "";
   const fallbackWeek = getCurrentWeekOption();
   const reportWeekStartDate = /^\d{4}-\d{2}-\d{2}$/.test(initialReport?.week_start_date ?? selectedWeekStartDate)
     ? initialReport?.week_start_date ?? selectedWeekStartDate
@@ -160,6 +183,17 @@ export function ClientReportEditor({
   );
   const serializedItems = useMemo(() => JSON.stringify(normalizedItems), [normalizedItems]);
   const serializedVolumes = useMemo(() => JSON.stringify(normalizedVolumes), [normalizedVolumes]);
+  // 화주 전환 시 미저장 변경 감지용: 마지막으로 불러오거나 저장한 시점의 스냅샷과 현재 상태를 비교한다.
+  const initialSnapshot = useMemo(
+    () => makeDraftSnapshot(initialReport?.items ?? [], initialReport?.volumes ?? []),
+    [initialReport]
+  );
+  const draftSnapshotRef = useRef(initialSnapshot);
+  const latestSnapshotRef = useRef(initialSnapshot);
+
+  useEffect(() => {
+    latestSnapshotRef.current = `${serializedItems}|${serializedVolumes}`;
+  }, [serializedItems, serializedVolumes]);
 
   useEffect(() => {
     if (initialDialog && previousInitialDialogRef.current !== initialDialog) {
@@ -172,6 +206,7 @@ export function ClientReportEditor({
     if (!state?.ok) {
       return;
     }
+    draftSnapshotRef.current = latestSnapshotRef.current;
     onSaved?.(state.data);
   }, [onSaved, state]);
 
@@ -274,6 +309,92 @@ export function ClientReportEditor({
     draftSubmitRef.current?.click();
   }
 
+  async function handleDialogClientChange(nextClientId: string) {
+    if (!nextClientId || nextClientId === activeClientId || isSwitchingClient) {
+      return;
+    }
+    const nextClient = clients.find((client) => client.id === nextClientId);
+    if (!nextClient) {
+      return;
+    }
+    if (
+      latestSnapshotRef.current !== draftSnapshotRef.current &&
+      !window.confirm("저장하지 않은 작성 내용이 있습니다. 화주를 변경하면 사라집니다. 계속할까요?")
+    ) {
+      return;
+    }
+    setIsSwitchingClient(true);
+    setSelectionMessage(null);
+    try {
+      const result = await loadClientReportForEditAction({
+        department_id: nextClient.department_id,
+        client_id: nextClientId,
+        week_start_date: reportWeekStartDate
+      });
+      if (!result.ok) {
+        setSelectionMessage({ ok: false, message: result.message ?? "화주 자료를 불러오지 못했습니다." });
+        return;
+      }
+      if (result.status && result.status !== "draft" && result.status !== "rejected") {
+        setSelectionMessage({
+          ok: false,
+          message: `${nextClient.client_name} 자료는 확정 상태입니다. 확정취소 후 수정할 수 있습니다.`
+        });
+        return;
+      }
+      const loadedItems = result.report?.items ?? [];
+      const loadedVolumes = result.report?.volumes ?? [];
+      draftSnapshotRef.current = makeDraftSnapshot(loadedItems, loadedVolumes);
+      // 열려 있는 팝업에서 바로 이어 쓸 수 있게 빈 입력칸을 보충한다.
+      setItems(
+        (activeDialog === "current" || activeDialog === "next") &&
+          !loadedItems.some((item) => item.item_period === activeDialog)
+          ? [
+              ...loadedItems,
+              {
+                item_period: activeDialog,
+                importance: "medium" as Importance,
+                work_category_id: firstCategory,
+                title: "",
+                content: "",
+                sort_order: loadedItems.filter((item) => item.item_period === activeDialog).length
+              }
+            ]
+          : loadedItems
+      );
+      setVolumes(
+        activeDialog === "volumes" && loadedVolumes.length === 0
+          ? [{ volume_type: "inbound", quantity: 0, unit: VOLUME_UNIT, note: "", sort_order: 0 }]
+          : loadedVolumes
+      );
+      setActiveReportId(result.report?.id ?? "");
+      setActiveClientId(nextClientId);
+    } finally {
+      setIsSwitchingClient(false);
+    }
+  }
+
+  const dialogClientSelector =
+    !mobileMode && (!isEditMode || autoSaveExistingReport) && clients.length > 0 ? (
+      <label className="flex shrink-0 items-center gap-2 rounded-xl border border-[#e7ddcd] bg-[#faf6ef] px-3 py-2 text-sm font-black text-[#012241]">
+        화주
+        <select
+          value={activeClientId}
+          onChange={(event) => void handleDialogClientChange(event.target.value)}
+          disabled={isSwitchingClient}
+          aria-label="작성 대상 화주 선택"
+          className="h-8 min-w-36 max-w-56 rounded-md border border-slate-300 bg-white px-2 text-sm font-bold text-[#012241] disabled:opacity-60"
+        >
+          {clients.map((client) => (
+            <option key={client.id} value={client.id}>
+              {client.client_name}
+            </option>
+          ))}
+        </select>
+        {isSwitchingClient ? <LoaderCircle className="h-4 w-4 animate-spin text-[#007050]" aria-hidden="true" /> : null}
+      </label>
+    ) : null;
+
   return (
     <form
       id="client-report-editor-form"
@@ -282,9 +403,9 @@ export function ClientReportEditor({
     >
       <input type="hidden" name="items" value={serializedItems} />
       <input type="hidden" name="volumes" value={serializedVolumes} />
-      <input type="hidden" name="id" value={initialReport?.id ?? ""} />
+      <input type="hidden" name="id" value={activeReportId} />
       <input type="hidden" name="department_id" value={departmentId} />
-      <input type="hidden" name="client_id" value={clientId} />
+      <input type="hidden" name="client_id" value={activeClientId} />
       <input type="hidden" name="report_year" value={reportMonth.year} />
       <input type="hidden" name="report_month" value={reportMonth.month} />
       <input type="hidden" name="week_of_month" value={reportWeekOfMonth} />
@@ -344,6 +465,7 @@ export function ClientReportEditor({
           period={activeDialog}
           items={items}
           categories={categories}
+          clientSelector={dialogClientSelector}
           onSetNoIssue={(checked) => setNoSpecialIssue(activeDialog, checked)}
           onAdd={() => addItem(activeDialog)}
           onClose={closeDialogAndRemoveEditParam}
@@ -357,6 +479,7 @@ export function ClientReportEditor({
       {activeDialog === "volumes" && (
         <VolumeDialog
           volumes={volumes}
+          clientSelector={dialogClientSelector}
           onAdd={addVolume}
           onClose={closeDialogAndRemoveEditParam}
           onComplete={completeDialog}
@@ -504,6 +627,7 @@ function ItemDialog({
   period,
   items,
   categories,
+  clientSelector,
   onSetNoIssue,
   onAdd,
   onClose,
@@ -515,6 +639,7 @@ function ItemDialog({
   period: ItemPeriod;
   items: ItemDraft[];
   categories: Category[];
+  clientSelector?: React.ReactNode;
   onSetNoIssue: (checked: boolean) => void;
   onAdd: () => void;
   onClose: () => void;
@@ -548,7 +673,8 @@ function ItemDialog({
               <p className="mt-1 text-sm font-semibold text-slate-500">중요도, 업무구분, 내용을 입력하면 아래 미리보기에 바로 표시됩니다.</p>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-3">
+            {clientSelector}
             <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-[#e7ddcd] bg-[#faf6ef] px-3 py-2 text-sm font-black text-[#012241]">
               <input
                 type="checkbox"
@@ -642,6 +768,7 @@ function ItemDialog({
 
 function VolumeDialog({
   volumes,
+  clientSelector,
   onAdd,
   onClose,
   onComplete,
@@ -651,6 +778,7 @@ function VolumeDialog({
   onUpdate
 }: {
   volumes: VolumeDraft[];
+  clientSelector?: React.ReactNode;
   onAdd: () => void;
   onClose: () => void;
   onComplete: () => void;
@@ -675,9 +803,12 @@ function VolumeDialog({
               <p className="mt-1 text-sm font-semibold text-slate-500">입고, 출고, 재고 등 여러 물동량을 등록할 수 있습니다.</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
-            <X className="h-4 w-4" aria-hidden="true" />
-          </button>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-3">
+            {clientSelector}
+            <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
         <div className="max-h-[62vh] space-y-3 overflow-y-auto bg-white px-6 py-5">
           {volumes.map((volume, index) => (

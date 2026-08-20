@@ -18,8 +18,8 @@ import type { DepartmentSubmissionStatus } from "@/types/enums";
 function compactStatus(status: DepartmentSubmissionStatus | null) {
   if (!status) return { label: "미작성", className: "border-slate-200 bg-slate-50 text-slate-600" };
   if (status === "draft") return { label: "작성 중", className: "border-slate-200 bg-slate-50 text-slate-700" };
-  if (status === "submitted_to_division") return { label: "검토", className: "border-blue-200 bg-blue-50 text-blue-700" };
-  if (status === "division_approved") return { label: "승인", className: "border-emerald-200 bg-emerald-50 text-emerald-700" };
+  // 부서 확정(submitted_to_division)이 운영 흐름의 최종 단계라 모니터링에서는 곧 승인으로 표시한다.
+  if (status === "submitted_to_division" || status === "division_approved") return { label: "승인", className: "border-emerald-200 bg-emerald-50 text-emerald-700" };
   return { label: "반려", className: "border-rose-200 bg-rose-50 text-rose-700" };
 }
 

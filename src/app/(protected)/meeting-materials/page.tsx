@@ -669,10 +669,9 @@ function compactDepartmentStatus(status: DepartmentSubmissionStatus | null) {
   if (status === "draft") {
     return { label: "작성 중", dotClassName: "u-dot-amber", textClassName: "text-[#012241]" };
   }
-  if (status === "submitted_to_division") {
-    return { label: "검토", dotClassName: "u-dot-blue", textClassName: "text-[#012241]" };
-  }
-  if (status === "division_approved") {
+  // 부서 확정(submitted_to_division)이 이 앱 운영 흐름의 최종 단계다(별도 사업부 승인 UI 없음).
+  // 취합현황 모니터링에서는 확정을 곧 승인으로 표시한다.
+  if (status === "submitted_to_division" || status === "division_approved") {
     return { label: "승인", dotClassName: "u-dot-green", textClassName: "text-[#007050]" };
   }
   return { label: "반려", dotClassName: "u-dot-pink", textClassName: "text-[#c2566d]" };
@@ -1293,10 +1292,6 @@ function CollectionView({
               <span className="inline-flex items-center gap-1.5">
                 <span className="u-dot u-dot-green" aria-hidden="true" />
                 승인
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="u-dot u-dot-blue" aria-hidden="true" />
-                검토
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <span className="u-dot u-dot-amber" aria-hidden="true" />
