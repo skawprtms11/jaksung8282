@@ -21,6 +21,10 @@ const routeMeta: Record<string, { title: string; description: string }> = {
     title: "사업부 공지사항",
     description: "공지와 안내를 빠르게 확인합니다."
   },
+  "/data-collections": {
+    title: "자료취합",
+    description: "취합 양식을 등록하고 공유합니다."
+  },
   "/meeting-materials": {
     title: "부서별 회의자료",
     description: "주간자료와 물동량 증감을 회의용으로 봅니다."

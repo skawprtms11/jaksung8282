@@ -188,6 +188,47 @@ export type Tables = {
     };
     Update: Partial<Tables["user_registration_requests"]["Row"]>;
   };
+  data_collections: {
+    Row: {
+      id: string;
+      title: string;
+      description: string;
+      example: string;
+      image_url: string | null;
+      collection_type: string;
+      template: Json;
+      closed_at: string | null;
+      closed_by: string | null;
+      created_by: string | null;
+      created_at: string;
+      updated_by: string | null;
+      updated_at: string;
+      deleted_at: string | null;
+      deleted_by: string | null;
+    };
+    Insert: Partial<Tables["data_collections"]["Row"]> & {
+      title: string;
+    };
+    Update: Partial<Tables["data_collections"]["Row"]>;
+  };
+  data_collection_entries: {
+    Row: {
+      id: string;
+      collection_id: string;
+      department_id: string;
+      rows: Json;
+      is_completed: boolean;
+      created_by: string | null;
+      created_at: string;
+      updated_by: string | null;
+      updated_at: string;
+    };
+    Insert: Partial<Tables["data_collection_entries"]["Row"]> & {
+      collection_id: string;
+      department_id: string;
+    };
+    Update: Partial<Tables["data_collection_entries"]["Row"]>;
+  };
   notices: {
     Row: {
       id: string;

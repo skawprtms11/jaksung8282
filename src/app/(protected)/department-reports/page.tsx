@@ -14,6 +14,13 @@ import type {
   DepartmentVacancyTrendPointValue
 } from "@/components/reports/DepartmentSubmissionEditor";
 import { EmptyState } from "@/components/common/EmptyState";
+import {
+  DepartmentCollectionWorkspace,
+  type DepartmentCollectionEntry,
+  type DepartmentCollectionItem
+} from "@/components/data-collections/DepartmentCollectionWorkspace";
+import { normalizeCollectionColumns, normalizeCollectionWidths, normalizeEntryRows } from "@/lib/data-collections/template";
+import type { Json } from "@/types/database";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { TableShell } from "@/components/common/TableShell";
 import { pickDefaultDepartmentId } from "@/lib/auth/default-scope";
@@ -151,7 +158,7 @@ type DepartmentReportsSearchParams = {
   date_to?: string;
 };
 
-const DEPARTMENT_TAB_VALUES: DepartmentTabValue[] = ["common", "volume", "facility", "vacancy", "holiday_work"];
+const DEPARTMENT_TAB_VALUES: DepartmentTabValue[] = ["common", "volume", "facility", "vacancy", "holiday_work", "data_collection"];
 const CLIENT_REVIEW_LIMIT = 300;
 const OPEN_REQUEST_LIMIT = 200;
 const OPEN_REQUEST_FIELDS =
@@ -498,6 +505,9 @@ export default async function DepartmentReportsPage({
   let initialSubmission: DepartmentSubmissionEditorInitialSubmission | null = null;
   let departmentOpenRequests: DepartmentOpenRequestItem[] = [];
   let initialLookupDepartmentId: string | null = null;
+  let dataCollectionItems: DepartmentCollectionItem[] = [];
+  let dataCollectionEntries: Record<string, DepartmentCollectionEntry> = {};
+  let canEditDataCollection = false;
   const currentWeek = resolveWeek(params);
   const activeTab = resolveActiveTab(params);
   if (supabase && profile) {
@@ -522,6 +532,48 @@ export default async function DepartmentReportsPage({
     const isDepartmentScopeBlocked = !isAdmin(profile) && !departmentFilter;
     const selectedClientFilter = params.client_id;
     initialLookupDepartmentId = departmentFilter ?? null;
+    // 자료취합 탭: 진행 중 취합건과 이 부서의 작성 내용을 로드한다.
+    if (departmentFilter) {
+      const [{ data: collectionData }, { data: collectionEntryData }] = await Promise.all([
+        dataClient
+          .from("data_collections")
+          .select("id,title,description,example,image_url,template,created_at")
+          .is("deleted_at", null)
+          .is("closed_at", null)
+          .order("created_at", { ascending: false })
+          .limit(50),
+        dataClient
+          .from("data_collection_entries")
+          .select("collection_id,rows,is_completed")
+          .eq("department_id", departmentFilter)
+      ]);
+      dataCollectionItems = ((collectionData ?? []) as {
+        id: string;
+        title: string;
+        description: string;
+        example: string;
+        image_url: string | null;
+        template: Json;
+        created_at: string;
+      }[]).map((row) => ({
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        example: row.example,
+        imageUrl: row.image_url,
+        columns: normalizeCollectionColumns(row.template),
+        widths: normalizeCollectionWidths(row.template, normalizeCollectionColumns(row.template).length),
+        createdAt: row.created_at
+      }));
+      const columnCountById = new Map(dataCollectionItems.map((item) => [item.id, item.columns.length]));
+      dataCollectionEntries = Object.fromEntries(
+        ((collectionEntryData ?? []) as { collection_id: string; rows: Json; is_completed: boolean }[]).map((row) => [
+          row.collection_id,
+          { rows: normalizeEntryRows(row.rows, columnCountById.get(row.collection_id) ?? 0), isCompleted: row.is_completed }
+        ])
+      );
+      canEditDataCollection = Boolean(profile && (isAdmin(profile) || profile.department_id === departmentFilter));
+    }
     const [
       { data: departmentData },
       { data: categoryData },
@@ -772,6 +824,17 @@ export default async function DepartmentReportsPage({
         commonSearchFilters={searchFilters}
         requireExplicitDepartmentSelection={false}
         volumeSlot={<DepartmentVolumeBoard clients={holidayClientOptions} reports={volumeReports} />}
+        dataCollectionSlot={
+          initialLookupDepartmentId ? (
+            <DepartmentCollectionWorkspace
+              departmentId={initialLookupDepartmentId}
+              collections={dataCollectionItems}
+              initialEntries={dataCollectionEntries}
+              canEdit={canEditDataCollection}
+            />
+          ) : undefined
+        }
+        dataCollectionHasNew={dataCollectionItems.some((item) => !dataCollectionEntries[item.id])}
         commonRequestSlot={
           profile ? (
             <DepartmentOpenRequestBoard

@@ -38,6 +38,7 @@ URL 범위:
 - `facility`: 시설공사
 - `vacancy`: 공실
 - `holiday_work`: 공휴일근무
+- `data_collection`: 자료취합 — 관리자가 자료취합 메뉴에서 등록한 취합건의 컬럼으로 자동 구성된 그리드에 부서가 행을 자유 추가하며 작성한다. 상세 계약은 [data-collections.md](./data-collections.md).
 
 `/department-reports`의 탭은 URL `tab` 파라미터다. 서버가 값을 검증해 `DepartmentSubmissionEditor`의 초기 탭으로 내려주고, 탭 전환은 다른 파라미터를 보존한 채 `tab`만 `router.replace`로 갱신한다. 값이 없거나 유효하지 않으면 첫 탭을 쓴다. `/mobile`은 탭을 URL에 쓰지 않고 로컬 상태로만 유지한다.
 

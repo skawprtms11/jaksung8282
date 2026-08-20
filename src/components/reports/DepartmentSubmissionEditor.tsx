@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { useActionState, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BarChart3, Building2, CalendarDays, CheckCircle2, ChevronDown, ClipboardList, Eye, Hammer, Pencil, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
+import { BarChart3, Building2, CalendarDays, CheckCircle2, ChevronDown, ClipboardList, Eye, Hammer, Pencil, Plus, RotateCcw, Save, Table2, Trash2, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
@@ -42,7 +42,7 @@ type CenterOption = { id: string; center_name: string };
 type HolidayClientOption = { id: string; client_name: string };
 type HolidayWorkerOption = { id: string; full_name: string };
 type SectionValue = (typeof sections)[number]["value"];
-export type DepartmentTabValue = SectionValue | "volume";
+export type DepartmentTabValue = SectionValue | "volume" | "data_collection";
 type DepartmentContent = {
   section_type: SectionValue;
   current_importance: Importance;
@@ -131,7 +131,8 @@ const departmentTabs: { value: DepartmentTabValue; label: string; icon: typeof C
   { value: "volume", label: "물동량", icon: BarChart3 },
   { value: "facility", label: "시설공사", icon: Hammer },
   { value: "vacancy", label: "공실", icon: Building2 },
-  { value: "holiday_work", label: "공휴일근무", icon: CalendarDays }
+  { value: "holiday_work", label: "공휴일근무", icon: CalendarDays },
+  { value: "data_collection", label: "자료취합", icon: Table2 }
 ];
 
 const importanceOptions: { value: Importance; label: string }[] = [
@@ -410,6 +411,8 @@ export function DepartmentSubmissionEditor({
   canSubmit,
   children,
   volumeSlot,
+  dataCollectionSlot,
+  dataCollectionHasNew = false,
   reviewSlot,
   commonRequestSlot,
   commonSearchSlot,
@@ -434,6 +437,8 @@ export function DepartmentSubmissionEditor({
   canSubmit: boolean;
   children?: ReactNode;
   volumeSlot?: ReactNode;
+  dataCollectionSlot?: ReactNode;
+  dataCollectionHasNew?: boolean;
   reviewSlot?: ReactNode;
   commonRequestSlot?: ReactNode;
   commonSearchSlot?: ReactNode;
@@ -780,12 +785,17 @@ export function DepartmentSubmissionEditor({
                     aria-selected={isSelected}
                     onClick={() => handleTabChange(section.value)}
                     className={cn(
-                      mobileMode ? "relative flex h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 font-black" : REPORT_TAB_ITEM_CLASS_NAME,
+                      mobileMode ? "relative flex h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 font-black" : cn(REPORT_TAB_ITEM_CLASS_NAME, "relative"),
                       isSelected ? REPORT_TAB_ACTIVE_CLASS_NAME : REPORT_TAB_IDLE_CLASS_NAME
                     )}
                   >
                     <Icon className={mobileMode ? "h-4 w-4" : REPORT_TAB_ICON_CLASS_NAME} aria-hidden="true" />
                     <span className={mobileMode ? "break-keep text-[13px] font-black leading-none" : "text-[13px] font-bold leading-none"}>{section.label}</span>
+                    {section.value === "data_collection" && dataCollectionHasNew ? (
+                      <span className="absolute -right-1 -top-1 rounded-full bg-[#e4574f] px-1.5 py-0.5 text-[9px] font-black leading-none text-white shadow-[0_4px_10px_rgba(228,87,79,0.4)]">
+                        New
+                      </span>
+                    ) : null}
                     {isSelected ? (
                       <span className={REPORT_TAB_INDICATOR_CLASS_NAME} aria-hidden="true" />
                     ) : null}
@@ -870,7 +880,7 @@ export function DepartmentSubmissionEditor({
       {active === "common" ? commonRequestSlot : null}
 
       <section className="rounded-2xl border border-[#e7ddcd] bg-white/86 p-3 shadow-[0_14px_32px_rgba(16,34,61,0.05)]">
-        {active === "holiday_work" || active === "vacancy" || active === "volume" ? null : (
+        {active === "holiday_work" || active === "vacancy" || active === "volume" || active === "data_collection" ? null : (
           mobileMode && active === "common" ? (
             <div className={cn(isMobileCommonExpanded && "mb-3")}>
               <button
@@ -923,7 +933,13 @@ export function DepartmentSubmissionEditor({
             </div>
           )
         )}
-        {mobileMode && active === "common" && !isMobileCommonExpanded ? null : active === "volume" ? (
+        {mobileMode && active === "common" && !isMobileCommonExpanded ? null : active === "data_collection" ? (
+          dataCollectionSlot ?? (
+            <div className="rounded-2xl border border-dashed border-[#d3c6b0] px-4 py-6 text-center text-sm font-bold text-slate-500">
+              부서를 선택하면 자료취합 작성 화면이 표시됩니다.
+            </div>
+          )
+        ) : active === "volume" ? (
           volumeSlot ?? (
             <div className="rounded-2xl border border-dashed border-[#d3c6b0] px-4 py-6 text-center text-sm font-bold text-slate-500">
               선택한 주차의 물동량 자료가 없습니다.

@@ -13,6 +13,7 @@ import {
   LoaderCircle,
   PackageSearch,
   PanelLeftClose,
+  Table2,
   UsersRound,
   Warehouse
 } from "lucide-react";
@@ -20,6 +21,7 @@ import type { ProfileSummary } from "@/lib/auth/permissions";
 import { canManageMasters, canViewDepartmentMaster, canViewMeetingMaterials } from "@/lib/auth/permissions";
 
 const noticeMenu = { href: "/notices", label: "공지사항", icon: Home };
+const dataCollectionMenu = { href: "/data-collections", label: "자료취합", icon: Table2 };
 const meetingMaterialsMenu = { href: "/meeting-materials", label: "회의자료", icon: ChartNoAxesCombined };
 const baseMenus = [
   { href: "/department-reports", label: "부서자료", icon: ClipboardCheck },
@@ -80,6 +82,7 @@ export function Sidebar({
   const menus = useMemo(
     () => [
       noticeMenu,
+      ...(canViewMeetingMaterials(profile) ? [dataCollectionMenu] : []),
       ...(canViewMeetingMaterials(profile) ? [meetingMaterialsMenu] : []),
       ...baseMenus,
       ...(canViewDepartmentMaster(profile) ? [departmentMasterMenu] : []),
