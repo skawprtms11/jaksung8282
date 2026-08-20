@@ -379,7 +379,7 @@ export function ClientReportsTable({
                   className="h-4 w-4 rounded border-slate-300"
                 />
               </th>
-              <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">화주</th>
+              <th className="px-3 py-3 text-center text-xs font-black tracking-[0.02em] text-slate-500!">화주</th>
               <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">작성자</th>
               <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">금주실시사항</th>
               <th className="px-3 py-3 text-xs font-black tracking-[0.02em] text-slate-500!">차주예정사항</th>
@@ -408,9 +408,8 @@ export function ClientReportsTable({
                       className="h-4 w-4 rounded border-slate-300"
                     />
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="px-3 py-3 text-center align-middle">
                     <span className="block font-black text-[#012241]">{report.clientName}</span>
-                    <span className="mt-1 block text-[11px] font-bold text-slate-400">{report.weekLabel}</span>
                   </td>
                   <td className="px-3 py-3">{report.authorName}</td>
                   <td className="w-[34%] px-3 py-3">{renderEditableCell(report, "current", report.currentItems)}</td>
