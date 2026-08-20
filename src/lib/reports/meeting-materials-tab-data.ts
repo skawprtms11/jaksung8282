@@ -158,7 +158,6 @@ export type MaterialsTabData = {
   hasSearchFilters: boolean;
   allDepartments: boolean;
   weekStartDate: string;
-  weekLabel: string;
 };
 
 export type VolumesTabData = {
@@ -498,8 +497,7 @@ export function buildMeetingTabData({ tab, payload, params, selectedWeek, openRe
     const requestDepartmentFilter = allDepartments ? undefined : payload.resolvedDepartmentId ?? undefined;
     return { tab, reports: hasClientReportSearchFilters(filters) && !allDepartments ? filterMaterialRows(materialRows, selectedWeek.weekStartDate, filters, payload.workCategories) : materialRows,
       confirmationRequestItems: makeConfirmationRequestItems(openRequests, payload.workCategories, requestDepartmentFilter, params.client_id),
-      workCategories: payload.workCategories, filters, hasSearchFilters: hasClientReportSearchFilters(filters), allDepartments, weekStartDate: selectedWeek.weekStartDate,
-      weekLabel: `${selectedWeek.month}월${selectedWeek.weekOfMonth}주차` };
+      workCategories: payload.workCategories, filters, hasSearchFilters: hasClientReportSearchFilters(filters), allDepartments, weekStartDate: selectedWeek.weekStartDate };
   }
   if (tab === "volumes") return { tab, chartRows: makeChartRows(payload.volumeTrendReports, selectedWeek.weekOfMonth),
     departmentRows: makeDepartmentRows(departments, payload.volumeTrendReports, payload.previousVolumeTrendReports) };

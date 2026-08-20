@@ -693,6 +693,33 @@ export default async function MeetingMaterialsPage({
   const defaultDepartmentId =
     params.department_id ??
     (!isAdmin(profile) ? profile.department_id ?? undefined : undefined);
+  // 회의자료 표의 화주명 아래에 화주담당자(자료 작성자)명을 표시하기 위한 맵.
+  // 페이로드 RPC에는 작성자 정보가 없어 별도 조회한다.
+  let reportAuthorNames: Record<string, string> = {};
+  const authorLookupClient = await createSupabaseServerClient();
+  if (authorLookupClient) {
+    let reportQuery = authorLookupClient
+      .from("weekly_client_reports")
+      .select("id,created_by")
+      .eq("week_start_date", selectedWeek.weekStartDate)
+      .is("deleted_at", null);
+    if (defaultDepartmentId) {
+      reportQuery = reportQuery.eq("department_id", defaultDepartmentId);
+    }
+    const { data: authorReportRows } = await reportQuery;
+    const reportRowsForAuthors = (authorReportRows ?? []) as { id: string; created_by: string | null }[];
+    const creatorIds = Array.from(new Set(reportRowsForAuthors.map((row) => row.created_by).filter((id): id is string => Boolean(id))));
+    if (creatorIds.length > 0) {
+      const { data: authorProfiles } = await authorLookupClient.from("profiles").select("id,full_name").in("id", creatorIds);
+      const nameById = new Map(((authorProfiles ?? []) as { id: string; full_name: string }[]).map((row) => [row.id, row.full_name]));
+      reportAuthorNames = Object.fromEntries(
+        reportRowsForAuthors.flatMap((row) => {
+          const name = row.created_by ? nameById.get(row.created_by) : undefined;
+          return name ? [[row.id, name]] : [];
+        })
+      );
+    }
+  }
   const contentKey = [
     activeTab,
     selectedWeek.weekStartDate,
@@ -706,6 +733,7 @@ export default async function MeetingMaterialsPage({
       initialTab={activeTab}
       currentUserId={profile.id}
       canManageAllRequests={isAdmin(profile)}
+      reportAuthorNames={reportAuthorNames}
       tabs={tabs.map((tab) => ({
         ...tab,
         href: buildTabHref(tab.value, params, selectedWeek, defaultDepartmentId)
@@ -713,7 +741,7 @@ export default async function MeetingMaterialsPage({
       weekFilter={<MeetingMaterialsWeekFilter defaultWeekStartDate={selectedWeek.weekStartDate} />}
     >
       <Suspense key={contentKey} fallback={<PanelLoading label={meetingTabLoadingLabels[activeTab]} />}>
-        <MeetingMaterialsContent params={params} activeTab={activeTab} selectedWeek={selectedWeek} profile={profile} />
+        <MeetingMaterialsContent params={params} activeTab={activeTab} selectedWeek={selectedWeek} profile={profile} reportAuthorNames={reportAuthorNames} />
       </Suspense>
     </MeetingMaterialsWorkspace>
   );
@@ -723,12 +751,14 @@ async function MeetingMaterialsContent({
   params,
   activeTab,
   selectedWeek,
-  profile
+  profile,
+  reportAuthorNames
 }: {
   params: MeetingSearchParams;
   activeTab: MeetingTab;
   selectedWeek: WeekOption;
   profile: ProfileSummary;
+  reportAuthorNames: Record<string, string>;
 }) {
   const searchFilters = parseClientReportSearchFilters(params);
   const hasSearchFilters = hasClientReportSearchFilters(searchFilters);
@@ -1180,7 +1210,7 @@ async function MeetingMaterialsContent({
             <MeetingMaterialsTable
               key={`materials-${selectedWeek.weekStartDate}-${params.department_id ?? "all"}-${params.client_id ?? "all"}-${Object.values(searchFilters).join("-")}`}
               reports={filteredMaterialRows}
-              weekLabel={`${selectedWeek.month}월${selectedWeek.weekOfMonth}주차`}
+              reportAuthorNames={reportAuthorNames}
               currentUserId={profile?.id ?? ""}
               canManageAllRequests={isAdmin(profile)}
               emptyTitle={hasSearchFilters ? "검색 조건에 맞는 회의자료가 없습니다." : "선택한 주차의 회의자료가 없습니다."}
