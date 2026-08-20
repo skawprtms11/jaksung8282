@@ -126,7 +126,8 @@ export const reportItemSchema = z.object({
   importance: z.enum(importanceValues),
   work_category_id: idSchema,
   title: z.string().trim().min(1, "제목을 입력하세요.").max(120, "제목은 120자 이하로 입력하세요."),
-  content: z.string().trim().min(1, "내용을 입력하세요."),
+  // 제목만 작성한 항목도 저장을 허용한다.
+  content: z.string().trim().default(""),
   sort_order: z.coerce.number().int().min(0)
 });
 

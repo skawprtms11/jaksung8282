@@ -617,6 +617,7 @@ export async function saveDepartmentSubmissionAction(
   }
 
   const { id, contents, status } = parsed.data;
+  const NO_SPECIAL_ISSUE_TEXT = "특이사항 없음";
   const { data: savedResult, error } = await supabase.rpc("save_department_submission_atomic", {
     p_submission_id: id ?? null,
     p_department_id: parsed.data.department_id,
@@ -633,13 +634,79 @@ export async function saveDepartmentSubmissionAction(
     return { ok: false, message: safeErrorMessage(error.message) };
   }
 
+  // 부서 확정 시 화주자료가 없는 화주는 '특이사항 없음'으로 자동 확정 처리한다.
+  // 자동 처리 실패는 부서 확정 자체를 막지 않는다.
+  let autoFilledCount = 0;
+  if (status === "submitted_to_division") {
+    try {
+      const [{ data: linkRows }, { data: existingReports }, { data: categoryRows }] = await Promise.all([
+        supabase
+          .from("department_client_links")
+          .select("client_id")
+          .eq("department_id", parsed.data.department_id)
+          .eq("is_active", true),
+        supabase
+          .from("weekly_client_reports")
+          .select("client_id")
+          .eq("department_id", parsed.data.department_id)
+          .eq("week_start_date", parsed.data.week_start_date)
+          .is("deleted_at", null),
+        supabase.from("work_categories").select("id").eq("is_active", true).order("sort_order").limit(1)
+      ]);
+      const existingClientIds = new Set(((existingReports ?? []) as { client_id: string }[]).map((row) => row.client_id));
+      const missingClientIds = Array.from(
+        new Set(((linkRows ?? []) as { client_id: string }[]).map((row) => row.client_id))
+      ).filter((clientId) => !existingClientIds.has(clientId));
+      const defaultCategoryId = ((categoryRows ?? []) as { id: string }[])[0]?.id;
+      if (defaultCategoryId) {
+        for (const clientId of missingClientIds) {
+          const { error: autoFillError } = await supabase.rpc("save_client_report_atomic", {
+            p_report_id: null,
+            p_department_id: parsed.data.department_id,
+            p_client_id: clientId,
+            p_week_start_date: parsed.data.week_start_date,
+            p_week_end_date: parsed.data.week_end_date,
+            p_report_year: parsed.data.report_year,
+            p_report_month: parsed.data.report_month,
+            p_week_of_month: parsed.data.week_of_month,
+            p_status: "submitted",
+            p_no_special_issue: true,
+            p_items: [
+              {
+                item_period: "current",
+                importance: "low",
+                work_category_id: defaultCategoryId,
+                title: NO_SPECIAL_ISSUE_TEXT,
+                content: NO_SPECIAL_ISSUE_TEXT,
+                sort_order: 0
+              }
+            ] as unknown as Json,
+            p_volumes: [] as unknown as Json
+          });
+          if (!autoFillError) {
+            autoFilledCount += 1;
+          }
+        }
+      }
+      if (autoFilledCount > 0) {
+        revalidatePath("/client-reports");
+        revalidatePath("/meeting-materials");
+      }
+    } catch {
+      // 자동 처리 중 예외는 무시하고 확정 결과만 반환한다.
+    }
+  }
+
   const saved =
     savedResult && typeof savedResult === "object" && !Array.isArray(savedResult)
       ? (savedResult as { id?: unknown; status?: unknown })
       : {};
   return {
     ok: true,
-    message: status === "submitted_to_division" ? "사업부 검토요청을 완료했습니다." : "부서자료를 저장했습니다.",
+    message:
+      status === "submitted_to_division"
+        ? `사업부 검토요청을 완료했습니다.${autoFilledCount > 0 ? ` (미작성 화주 ${autoFilledCount}건은 '${NO_SPECIAL_ISSUE_TEXT}'으로 자동 확정)` : ""}`
+        : "부서자료를 저장했습니다.",
     data: {
       id: typeof saved.id === "string" ? saved.id : id,
       status: status === "submitted_to_division" ? "submitted_to_division" : status,
