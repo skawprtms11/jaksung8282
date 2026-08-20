@@ -8,7 +8,6 @@ import {
   type MeetingReportItemRequest
 } from "@/components/reports/MeetingMaterialsTable";
 import { cn } from "@/lib/utils/cn";
-import { formatDateTime } from "@/lib/utils/labels";
 
 export type DepartmentOpenRequestItem = {
   requestId: string;
@@ -175,16 +174,7 @@ export function DepartmentOpenRequestBoard({
                     {request.title}
                   </button>
                   <p className="mt-1 truncate text-[11px] font-bold text-[#4a5a6a]">
-                    {request.sourceLabel} · {request.categoryName} · {request.resultContent ? "처리결과 등록" : "처리대기"} ·{" "}
-                    {request.weekLabel} · {formatDateTime(request.requestCreatedAt)} 등록
-                  </p>
-                  <p
-                    className={cn(
-                      "mt-1 whitespace-pre-wrap text-xs font-semibold leading-5 text-[#3a4a5a]",
-                      compact ? "line-clamp-1" : "line-clamp-2"
-                    )}
-                  >
-                    {request.requestContent}
+                    {request.sourceLabel.split(" · ")[0]} · {request.weekLabel}
                   </p>
                 </div>
               </article>
