@@ -13,3 +13,6 @@ netlify/.next/
 .harness/
 supabase/.temp/
 .claude/settings.local.json
+
+# Playwright MCP debug artifacts
+.playwright-mcp/

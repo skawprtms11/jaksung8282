@@ -5,6 +5,7 @@
 | 메뉴 | 경로 | 상세 문서 |
 | --- | --- | --- |
 | 공지사항 | `/notices` | [notices.md](./notices.md) |
+| 자료취합 | `/data-collections` | [data-collections.md](./data-collections.md) |
 | 회의자료 | `/meeting-materials` | [meeting-materials.md](./meeting-materials.md) |
 | 부서자료 | `/department-reports` | [department-reports.md](./department-reports.md) |
 | 화주자료 | `/client-reports` | [client-reports.md](./client-reports.md) |
