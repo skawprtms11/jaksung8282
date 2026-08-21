@@ -25,6 +25,8 @@ type Department = { id: string; department_name: string };
 type Client = { id: string; client_name: string; department_id: string };
 type Category = { id: string; category_name: string; icon_key: string };
 type ItemDraft = {
+  // 저장 payload에 실려 DB 항목과 id 기준으로 매칭된다(요청사항·관리자수정 이력 보존). 신규 항목은 없음.
+  id?: string;
   item_period: ItemPeriod;
   importance: Importance;
   work_category_id: string;

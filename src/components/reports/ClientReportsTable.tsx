@@ -11,6 +11,7 @@ import {
 } from "@/actions/reports";
 import { ActionMessage } from "@/components/common/ActionMessage";
 import { TableShell } from "@/components/common/TableShell";
+import { AdminEditCompareDialog, AdminEditedMark, type AdminEditCompareTarget } from "@/components/reports/AdminEditCompareDialog";
 import { VolumeAnalysisPanel, type VolumeAnalysisHistoricalVolume } from "@/components/reports/VolumeAnalysisPanel";
 import { cn } from "@/lib/utils/cn";
 import type { ClientReportEditorInitialReport } from "@/components/reports/ClientReportEditor";
@@ -28,6 +29,9 @@ type ClientReportItem = {
   title: string;
   content: string;
   categoryName: string;
+  originalTitle?: string | null;
+  originalContent?: string | null;
+  adminEditedAt?: string | null;
 };
 
 export type ClientReportTableRow = {
@@ -137,6 +141,7 @@ export function ClientReportsTable({
   } | null>(null);
   const [localMessage, setLocalMessage] = useState<{ ok: boolean; message: string } | null>(null);
   const [pendingAction, setPendingAction] = useState<"submit" | "cancel-submit" | "delete" | null>(null);
+  const [adminCompareTarget, setAdminCompareTarget] = useState<AdminEditCompareTarget | null>(null);
   const displayedReports = useMemo(
     () =>
       reports
@@ -251,10 +256,20 @@ export function ClientReportsTable({
     });
   }
 
+  function showAdminEditCompare(item: ClientReportItem) {
+    setAdminCompareTarget({
+      title: item.title,
+      content: item.content,
+      originalTitle: item.originalTitle ?? null,
+      originalContent: item.originalContent ?? null,
+      adminEditedAt: item.adminEditedAt ?? null
+    });
+  }
+
   function renderEditableCell(report: ClientReportTableRow, period: ItemPeriod, items: ClientReportItem[]) {
     const isEditing = activeEditingReportId === report.id && isEditableStatus(report.status);
     const canShowHoverEdit = !activeEditingReportId && isEditableStatus(report.status);
-    const content = <ReportItemList items={items} />;
+    const content = <ReportItemList items={items} onShowAdminEdit={showAdminEditCompare} />;
     if (!isEditing && !canShowHoverEdit) {
       return content;
     }
@@ -493,6 +508,10 @@ export function ClientReportsTable({
         </table>
       </TableShell>
 
+      {adminCompareTarget ? (
+        <AdminEditCompareDialog target={adminCompareTarget} onClose={() => setAdminCompareTarget(null)} />
+      ) : null}
+
       {volumeDialogState ? (
         <VolumeConfirmDialog
           report={volumeDialogState.report}
@@ -536,7 +555,13 @@ function BatchActionButton({
   );
 }
 
-function ReportItemList({ items }: { items: ClientReportItem[] }) {
+function ReportItemList({
+  items,
+  onShowAdminEdit
+}: {
+  items: ClientReportItem[];
+  onShowAdminEdit?: (item: ClientReportItem) => void;
+}) {
   if (items.length === 0) {
     return <span className="text-slate-400">-</span>;
   }
@@ -551,7 +576,25 @@ function ReportItemList({ items }: { items: ClientReportItem[] }) {
               <span className="text-[11px] font-bold text-slate-500">{item.categoryName}</span>
             </span>
             <span className="min-w-0">
-              <span className="block break-words text-sm font-black leading-5 text-[#012241]">{item.title}</span>
+              <span className="block break-words text-sm font-black leading-5 text-[#012241]">
+                {item.adminEditedAt && onShowAdminEdit ? (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      // 셀 전체가 수정 진입 영역인 경우가 있어 비교 팝업 클릭이 수정으로 번지지 않게 막는다.
+                      event.stopPropagation();
+                      onShowAdminEdit(item);
+                    }}
+                    className="break-words text-left underline-offset-4 hover:underline"
+                    title="관리자 수정 내역 보기"
+                  >
+                    {item.title}
+                  </button>
+                ) : (
+                  item.title
+                )}
+                {item.adminEditedAt ? <AdminEditedMark /> : null}
+              </span>
               <span className="mt-0.5 block whitespace-pre-wrap break-words text-[13px] leading-5 text-slate-600">{item.content}</span>
             </span>
           </li>

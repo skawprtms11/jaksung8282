@@ -339,6 +339,10 @@ export type Tables = {
       title: string;
       content: string;
       sort_order: number;
+      original_title: string | null;
+      original_content: string | null;
+      admin_edited_by: string | null;
+      admin_edited_at: string | null;
       created_at: string;
       updated_at: string;
     };
@@ -601,6 +605,14 @@ export type Database = {
       soft_delete_client_reports_atomic: {
         Args: {
           p_report_ids: string[];
+        };
+        Returns: Json;
+      };
+      admin_edit_client_report_item: {
+        Args: {
+          p_item_id: string;
+          p_title: string;
+          p_content: string;
         };
         Returns: Json;
       };

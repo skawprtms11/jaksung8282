@@ -13,7 +13,6 @@ import type {
   DepartmentVacancyRecordValue,
   DepartmentVacancyTrendPointValue
 } from "@/components/reports/DepartmentSubmissionEditor";
-import { EmptyState } from "@/components/common/EmptyState";
 import {
   DepartmentCollectionWorkspace,
   type DepartmentCollectionEntry,
@@ -21,11 +20,10 @@ import {
 } from "@/components/data-collections/DepartmentCollectionWorkspace";
 import { normalizeCollectionColumns, normalizeCollectionWidths, normalizeEntryRows } from "@/lib/data-collections/template";
 import type { Json } from "@/types/database";
-import { StatusBadge } from "@/components/common/StatusBadge";
-import { TableShell } from "@/components/common/TableShell";
+import { ClientReviewTable } from "@/components/reports/ClientReviewTable";
 import { pickDefaultDepartmentId } from "@/lib/auth/default-scope";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
-import { canSubmitDepartment, isAdmin } from "@/lib/auth/permissions";
+import { canReviewClientReport, canSubmitDepartment, isAdmin } from "@/lib/auth/permissions";
 import {
   filterClientReportSearchItems,
   filterDepartmentCommonSearchItems,
@@ -44,7 +42,7 @@ import {
   resolveWeekFromSelection,
   type WeekOption
 } from "@/lib/dates/week";
-import { formatDateTime, volumeUnitLabels } from "@/lib/utils/labels";
+import { volumeUnitLabels } from "@/lib/utils/labels";
 import type { ClientReportStatus, Importance, VolumeType, VolumeUnit } from "@/types/enums";
 
 type DepartmentOption = { id: string; department_name: string };
@@ -55,12 +53,16 @@ type HolidayClientLinkRow = { clients: { id: string; client_name: string } | nul
 type HolidayWorkerOption = { id: string; full_name: string };
 type ProfileNameRow = HolidayWorkerOption & { is_active: boolean };
 type ClientReviewItem = {
+  id: string;
   item_period: "current" | "next";
   importance: Importance;
   work_category_id: string;
   title: string;
   content: string;
   sort_order: number;
+  original_title: string | null;
+  original_content: string | null;
+  admin_edited_at: string | null;
   work_categories: { category_name: string; icon_key: string } | null;
 };
 type ClientReviewRow = {
@@ -232,35 +234,6 @@ function importanceIconClassName(importance: Importance) {
     return "border-emerald-100 bg-emerald-50 text-emerald-600";
   }
   return "border-slate-200 bg-slate-50 text-slate-500";
-}
-
-function WorkItemList({ rows, period }: { rows: ClientReviewRow["weekly_client_report_items"]; period: "current" | "next" }) {
-  const values = rows.filter((row) => row.item_period === period).sort((left, right) => left.sort_order - right.sort_order);
-  if (values.length === 0) {
-    return <span className="text-slate-400">-</span>;
-  }
-
-  return (
-    <ol className="space-y-2">
-      {values.map((row, index) => (
-        <li key={`${period}-${row.title}-${index}`} className="flex gap-2">
-          <span
-            className={cn(
-              "mt-0.5 inline-flex h-7 min-w-11 shrink-0 items-center justify-center rounded-xl border px-2 text-xs font-black",
-              importanceIconClassName(row.importance)
-            )}
-            title={row.work_categories?.category_name ?? "기타"}
-          >
-            {row.work_categories?.category_name ?? "기타"}
-          </span>
-          <span className="min-w-0">
-            <span className="block break-words text-sm font-black leading-5 text-[#012241]">{row.title}</span>
-            <span className="mt-0.5 block whitespace-pre-wrap break-words text-[13px] leading-5 text-slate-600">{row.content}</span>
-          </span>
-        </li>
-      ))}
-    </ol>
-  );
 }
 
 function summarizeVolumeByUnit(reports: SummaryReportRow[], volumeType: VolumeType) {
@@ -570,7 +543,7 @@ export default async function DepartmentReportsPage({
         }
         let query = dataClient
           .from("weekly_client_reports")
-          .select("id,created_by,report_year,report_month,week_of_month,week_start_date,status,updated_at,clients(client_name),weekly_client_report_items(item_period,importance,work_category_id,title,content,sort_order,work_categories(category_name,icon_key)),weekly_volumes(volume_type,quantity,unit)")
+          .select("id,created_by,report_year,report_month,week_of_month,week_start_date,status,updated_at,clients(client_name),weekly_client_report_items(id,item_period,importance,work_category_id,title,content,sort_order,original_title,original_content,admin_edited_at,work_categories(category_name,icon_key)),weekly_volumes(volume_type,quantity,unit)")
           .is("deleted_at", null)
           .order("week_start_date", { ascending: false })
           .order("updated_at", { ascending: false })
@@ -862,48 +835,11 @@ export default async function DepartmentReportsPage({
           />
         }
         reviewSlot={
-          <>
-            <h2 className="section-doodle-title mb-3 mt-6">화주별 자료 검토</h2>
-            {reviewReports.length === 0 ? (
-              <EmptyState title={hasSearchFilters ? "검색 조건에 맞는 화주자료가 없습니다." : "검토할 화주별 자료가 없습니다."} />
-            ) : (
-              <TableShell>
-                <table className="table-sticky min-w-[1080px] w-full text-left text-sm">
-                  <thead>
-                    <tr>
-                      <th className="px-3 py-3">화주명</th>
-                      <th className="px-3 py-3">담당자</th>
-                      <th className="px-3 py-3">금주 실시사항</th>
-                      <th className="px-3 py-3">차주 예정사항</th>
-                      <th className="px-3 py-3">작성상태</th>
-                      <th className="px-3 py-3">최종수정일</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {reviewReports.map((report) => (
-                      <tr key={report.id} className="border-t border-slate-100 align-top">
-                        <td className="px-3 py-3">
-                          <span className="block font-medium">{report.clients?.client_name ?? "-"}</span>
-                          <span className="mt-1 block text-[11px] font-bold text-slate-400">
-                            {report.report_year}.{String(report.report_month).padStart(2, "0")} {report.week_of_month}주차
-                          </span>
-                        </td>
-                        <td className="px-3 py-3">{report.profiles?.full_name ?? "-"}</td>
-                        <td className="w-[34%] px-3 py-3">
-                          <WorkItemList rows={report.weekly_client_report_items} period="current" />
-                        </td>
-                        <td className="w-[34%] px-3 py-3">
-                          <WorkItemList rows={report.weekly_client_report_items} period="next" />
-                        </td>
-                        <td className="px-3 py-3"><StatusBadge type="client" value={report.status} /></td>
-                        <td className="px-3 py-3">{formatDateTime(report.updated_at)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </TableShell>
-            )}
-          </>
+          <ClientReviewTable
+            reports={reviewReports}
+            canAdminEdit={canReviewClientReport(profile)}
+            hasSearchFilters={hasSearchFilters}
+          />
         }
       >
         <div className="grid auto-rows-fr gap-3 xl:grid-cols-[0.9fr_1.3fr_1fr]">
