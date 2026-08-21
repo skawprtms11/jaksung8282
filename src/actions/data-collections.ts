@@ -27,6 +27,7 @@ const dataCollectionSchema = z.object({
   image_url: z.string().trim().max(1000).default(""),
   columns: columnsSchema,
   widths: z.array(z.coerce.number().int().min(0).max(2000)).optional(),
+  options: z.array(z.array(z.string().trim().max(120))).optional(),
   collection_type: z.enum(["regular", "adhoc"]).default("adhoc"),
   entry_mode: z.enum(["grid", "link"]).default("grid"),
   link_url: z.string().trim().max(1000).default("")
@@ -64,6 +65,7 @@ export async function saveDataCollectionAction(_: ActionResult | null, formData:
     image_url: String(formData.get("image_url") ?? ""),
     columns: parseJsonForm(formData, "columns"),
     widths: parseJsonForm(formData, "widths") ?? undefined,
+    options: parseJsonForm(formData, "options") ?? undefined,
     collection_type: String(formData.get("collection_type") ?? "adhoc"),
     entry_mode: String(formData.get("entry_mode") ?? "grid"),
     link_url: String(formData.get("link_url") ?? "")
@@ -79,6 +81,10 @@ export async function saveDataCollectionAction(_: ActionResult | null, formData:
 
   const { id, title, description, example, image_url, columns } = parsed.data;
   const widths = Array.from({ length: columns.length }, (_, index) => parsed.data.widths?.[index] ?? 0);
+  // 컬럼별 목록박스 선택지. 빈 배열이면 일반 텍스트 컬럼이다.
+  const options = Array.from({ length: columns.length }, (_, index) =>
+    (parsed.data.options?.[index] ?? []).map((option) => option.trim()).filter(Boolean).slice(0, 100)
+  );
   const payload = {
     title,
     description,
@@ -87,7 +93,7 @@ export async function saveDataCollectionAction(_: ActionResult | null, formData:
     entry_mode: parsed.data.entry_mode,
     link_url: parsed.data.entry_mode === "link" ? parsed.data.link_url : null,
     image_url: image_url || null,
-    template: { columns, widths } as unknown as Json,
+    template: { columns, widths, options } as unknown as Json,
     updated_by: profile.id,
     updated_at: new Date().toISOString()
   };

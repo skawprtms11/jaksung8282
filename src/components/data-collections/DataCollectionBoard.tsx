@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Check, CheckCircle2, Download, ImagePlus, Pencil, Plus, Save, Table2, Trash2, X } from "lucide-react";
+import { Check, CheckCircle2, Download, ImagePlus, List, Pencil, Plus, Save, Table2, Trash2, X } from "lucide-react";
 import {
   closeDataCollectionAction,
   deleteDataCollectionAction,
@@ -33,6 +33,8 @@ export type DataCollectionView = {
   imageUrl: string | null;
   columns: string[];
   widths: number[];
+  // 컬럼별 목록박스 선택지. 빈 배열 = 일반 텍스트 컬럼.
+  options: string[][];
   collectionType: "regular" | "adhoc";
   entryMode: "grid" | "link";
   linkUrl: string | null;
@@ -43,6 +45,15 @@ export type DataCollectionView = {
 
 const VISIBLE_COLLECTION_LIMIT = 5;
 const MAX_COLUMNS = 30;
+
+// 목록박스 편집 원문(줄 단위)을 선택지 배열로 변환한다.
+function parseOptionLines(text: string) {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 100);
+}
 
 function ModalPortal({ children }: { children: React.ReactNode }) {
   if (typeof document === "undefined") {
@@ -416,6 +427,11 @@ function DataCollectionEditorDialog({
       ? initialRow.columns.map((_, index) => initialRow.widths[index] || DEFAULT_COLUMN_WIDTH)
       : [DEFAULT_COLUMN_WIDTH, DEFAULT_COLUMN_WIDTH, DEFAULT_COLUMN_WIDTH]
   );
+  // 컬럼별 목록박스 선택지 편집 원문(줄 단위). 저장 시 빈 줄을 걸러 배열로 변환한다.
+  const [optionsText, setOptionsText] = useState<string[]>(() =>
+    initialRow ? initialRow.columns.map((_, index) => (initialRow.options[index] ?? []).join("\n")) : ["", "", ""]
+  );
+  const [optionsEditorIndex, setOptionsEditorIndex] = useState<number | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; message: string } | null>(null);
   const [isSaving, startSaving] = useTransition();
   const [isUploading, startUploading] = useTransition();
@@ -467,6 +483,8 @@ function DataCollectionEditorDialog({
     setImageUrl(template.imageUrl ?? "");
     setColumns([...template.columns]);
     setWidths(template.columns.map((_, index) => template.widths[index] || DEFAULT_COLUMN_WIDTH));
+    setOptionsText(template.columns.map((_, index) => (template.options[index] ?? []).join("\n")));
+    setOptionsEditorIndex(null);
     setEntryMode(template.entryMode);
     setLinkUrl(template.linkUrl ?? "");
   }
@@ -487,6 +505,7 @@ function DataCollectionEditorDialog({
       if (index === columns.length - 1 && columns.length < MAX_COLUMNS) {
         setColumns((current) => [...current, ""]);
         setWidths((current) => [...current, DEFAULT_COLUMN_WIDTH]);
+        setOptionsText((current) => [...current, ""]);
         requestAnimationFrame(() => focusColumn(index + 1));
       } else {
         focusColumn(index + 1);
@@ -522,6 +541,10 @@ function DataCollectionEditorDialog({
       formData.set("image_url", imageUrl);
       formData.set("columns", JSON.stringify(columns));
       formData.set("widths", JSON.stringify(widths));
+      formData.set(
+        "options",
+        JSON.stringify(columns.map((_, index) => parseOptionLines(optionsText[index] ?? "")))
+      );
       formData.set("collection_type", collectionType);
       formData.set("entry_mode", entryMode);
       formData.set("link_url", linkUrl);
@@ -718,6 +741,10 @@ function DataCollectionEditorDialog({
                             }
                             setColumns((current) => current.filter((_, currentIndex) => currentIndex !== index));
                             setWidths((current) => current.filter((_, currentIndex) => currentIndex !== index));
+                            setOptionsText((current) => current.filter((_, currentIndex) => currentIndex !== index));
+                            setOptionsEditorIndex((current) =>
+                              current === null ? null : current === index ? null : current > index ? current - 1 : current
+                            );
                           }}
                           disabled={columns.length <= 1}
                           tabIndex={-1}
@@ -728,7 +755,25 @@ function DataCollectionEditorDialog({
                           <X className="h-3.5 w-3.5" aria-hidden="true" />
                         </button>
                       </div>
-                      <p className="mt-1 text-center text-[10px] font-bold tabular-nums text-slate-400">{widths[index] || DEFAULT_COLUMN_WIDTH}px</p>
+                      <div className="mt-1 flex items-center justify-center gap-1.5">
+                        <span className="text-[10px] font-bold tabular-nums text-slate-400">{widths[index] || DEFAULT_COLUMN_WIDTH}px</span>
+                        <button
+                          type="button"
+                          onClick={() => setOptionsEditorIndex((current) => (current === index ? null : index))}
+                          className={cn(
+                            "inline-flex h-5 items-center gap-0.5 rounded-md border px-1 text-[10px] font-black",
+                            parseOptionLines(optionsText[index] ?? "").length > 0
+                              ? "border-[#8fc7ae] bg-[#e6f1ec] text-[#007050]"
+                              : "border-slate-200 bg-white text-slate-400 hover:text-[#007050]",
+                            optionsEditorIndex === index && "ring-2 ring-[#007050]/40"
+                          )}
+                          aria-label={`컬럼 ${index + 1} 목록박스 설정`}
+                          title="목록박스 설정 — 선택지를 등록하면 부서는 목록에서 골라 입력합니다"
+                        >
+                          <List className="h-3 w-3" aria-hidden="true" />
+                          {parseOptionLines(optionsText[index] ?? "").length > 0 ? `목록 ${parseOptionLines(optionsText[index] ?? "").length}` : "목록"}
+                        </button>
+                      </div>
                       <div
                         role="separator"
                         aria-label={`컬럼 ${index + 1} 너비 조정`}
@@ -747,6 +792,7 @@ function DataCollectionEditorDialog({
                       }
                       setColumns((current) => [...current, ""]);
                       setWidths((current) => [...current, DEFAULT_COLUMN_WIDTH]);
+                      setOptionsText((current) => [...current, ""]);
                     }}
                     disabled={columns.length >= MAX_COLUMNS}
                     className="ml-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[#007050] hover:bg-[#e6f1ec] disabled:opacity-30"
@@ -756,7 +802,38 @@ function DataCollectionEditorDialog({
                     <Plus className="h-4 w-4" aria-hidden="true" />
                   </button>
                 </div>
-                <p className="mt-1 text-[11px] font-bold text-slate-400">칸 오른쪽 가장자리를 좌우로 드래그하면 열너비가 조정됩니다(값은 각 칸 아래 표시) · Enter로 다음/새 컬럼</p>
+                {optionsEditorIndex !== null && optionsEditorIndex < columns.length ? (
+                  <div className="mt-3 rounded-md border border-[#cfe4da] bg-white p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-black text-[#012241]">
+                        &ldquo;{columns[optionsEditorIndex] || `컬럼${optionsEditorIndex + 1}`}&rdquo; 목록박스 선택지
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setOptionsEditorIndex(null)}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100"
+                        aria-label="목록 설정 닫기"
+                      >
+                        <X className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </div>
+                    <textarea
+                      value={optionsText[optionsEditorIndex] ?? ""}
+                      rows={5}
+                      onChange={(event) =>
+                        setOptionsText((current) =>
+                          current.map((value, currentIndex) => (currentIndex === optionsEditorIndex ? event.target.value : value))
+                        )
+                      }
+                      placeholder={"한 줄에 선택지 하나씩 입력하세요.\n예)\n진행중\n완료\n해당없음"}
+                      className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-normal outline-none focus:border-[#007050]"
+                    />
+                    <p className="mt-1 text-[11px] font-bold text-slate-400">
+                      선택지를 등록하면 부서 작성 화면에서 이 컬럼은 목록에서 선택합니다. 비워두면 일반 텍스트 입력으로 돌아갑니다.
+                    </p>
+                  </div>
+                ) : null}
+                <p className="mt-1 text-[11px] font-bold text-slate-400">칸 오른쪽 가장자리를 좌우로 드래그하면 열너비가 조정됩니다(값은 각 칸 아래 표시) · Enter로 다음/새 컬럼 · 목록 버튼으로 선택지 설정</p>
               </div>
             </div>
             ) : null}
