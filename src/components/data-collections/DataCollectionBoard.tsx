@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Check, CheckCircle2, Download, GripVertical, ImagePlus, List, Pencil, Plus, Save, Table2, Trash2, X } from "lucide-react";
+import { CheckCircle2, Download, GripVertical, List, Pencil, Plus, Save, Table2, Trash2, X } from "lucide-react";
 import {
   closeDataCollectionAction,
   deleteDataCollectionAction,
@@ -453,7 +453,6 @@ function DataCollectionEditorDialog({
   const [message, setMessage] = useState<{ ok: boolean; message: string } | null>(null);
   const [isSaving, startSaving] = useTransition();
   const [isUploading, startUploading] = useTransition();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const columnRowRef = useRef<HTMLDivElement>(null);
 
   function handleUpload(file: File | null) {
@@ -681,34 +680,25 @@ function DataCollectionEditorDialog({
               </div>
               {collectionType === "regular" ? (
                 <div className="min-w-0 flex-1 border-l border-[#e7ddcd] pl-5">
-                  <p className="mb-1.5 text-xs font-black text-slate-600">기존 정기취합 불러오기</p>
-                  {regularTemplates.length > 0 ? (
-                    <>
-                      <ul role="listbox" aria-label="기존 정기취합 목록" className="max-h-36 overflow-y-auto rounded-md border border-slate-300 bg-white py-1">
-                        {[{ id: "", label: "직접 새로 작성" }, ...regularTemplates.map((template) => ({
-                          id: template.id,
-                          label: `${template.title} · ${template.createdAt.slice(2, 10).replaceAll("-", ".")} 등록`
-                        }))].map((option) => (
-                          <li key={option.id || "blank"} role="option" aria-selected={loadedTemplateId === option.id}>
-                            <button
-                              type="button"
-                              onClick={() => loadRegularTemplate(option.id)}
-                              className={cn(
-                                "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-[#f0f7f3]",
-                                loadedTemplateId === option.id ? "font-black text-[#007050]" : "text-[#012241]"
-                              )}
-                            >
-                              <Check className={cn("h-4 w-4 shrink-0", loadedTemplateId === option.id ? "text-[#007050]" : "text-transparent")} aria-hidden="true" />
-                              <span className="min-w-0 truncate">{option.label}</span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                      <p className="mt-1 text-[11px] font-bold text-slate-400">선택하면 제목·설명·예시·사진·컬럼 양식을 그대로 불러옵니다.</p>
-                    </>
-                  ) : (
-                    <p className="text-xs font-bold text-slate-400">불러올 기존 정기취합이 없습니다. 새로 작성하세요.</p>
-                  )}
+                  <label className="block text-xs font-black text-slate-600">
+                    기존 정기취합 불러오기
+                    <select
+                      value={loadedTemplateId}
+                      onChange={(event) => loadRegularTemplate(event.target.value)}
+                      aria-label="기존 정기취합 목록"
+                      className="mt-1 h-9 w-full max-w-xs rounded-md border border-slate-300 bg-white px-2 text-sm font-bold text-[#012241] outline-none focus:border-[#007050]"
+                    >
+                      <option value="">직접 새로 작성</option>
+                      {regularTemplates.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.title} · {template.createdAt.slice(2, 10).replaceAll("-", ".")} 등록
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <p className="mt-1 text-[11px] font-bold text-slate-400">
+                    양식을 선택하면 제목·설명·예시·사진·컬럼을 불러오고, 직접 새로 작성은 아래 제목 그대로 저장됩니다.
+                  </p>
                 </div>
               ) : null}
             </div>
@@ -727,52 +717,41 @@ function DataCollectionEditorDialog({
               <textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                rows={3}
                 placeholder="취합 목적과 작성 방법을 설명하세요."
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-normal"
-              />
-            </label>
-            <label className="block text-xs font-black text-slate-600">
-              작성 예시
-              <textarea
-                value={example}
-                onChange={(event) => setExample(event.target.value)}
-                rows={2}
-                placeholder="예: 안전팀 / 소화기 점검 / 이상 없음"
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-normal"
+                className="mt-1 h-40 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-normal"
               />
             </label>
             <div className="text-xs font-black text-slate-600">
-              안내 사진
-              <div className="mt-1 flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploading}
-                  className="tool-button h-9 disabled:opacity-50"
-                >
-                  <ImagePlus className="h-4 w-4" aria-hidden="true" />
-                  {isUploading ? "업로드 중" : imageUrl ? "사진 변경" : "사진 첨부"}
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(event) => handleUpload(event.target.files?.[0] ?? null)}
+              <label className="block">
+                작성 예시
+                <textarea
+                  value={example}
+                  onChange={(event) => setExample(event.target.value)}
+                  onPaste={(event) => {
+                    // 클립보드에 이미지가 있으면 텍스트 대신 안내 사진으로 업로드한다.
+                    const imageFile = Array.from(event.clipboardData?.items ?? [])
+                      .find((item) => item.kind === "file" && item.type.startsWith("image/"))
+                      ?.getAsFile();
+                    if (imageFile) {
+                      event.preventDefault();
+                      handleUpload(imageFile);
+                    }
+                  }}
+                  placeholder="예: 안전팀 / 소화기 점검 / 이상 없음 · 이미지를 붙여넣으면(Ctrl+V) 안내 사진으로 첨부됩니다"
+                  className="mt-1 h-40 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-normal"
                 />
-                {imageUrl ? (
-                  <div className="flex items-center gap-2">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={imageUrl} alt="취합 안내 사진 미리보기" className="h-14 rounded-lg border border-[#e7ddcd] object-contain" />
-                    <button type="button" onClick={() => setImageUrl("")} className="icon-tool-button h-8 w-8 text-rose-600" aria-label="사진 제거" title="사진 제거">
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </div>
-                ) : (
-                  <span className="text-xs font-bold text-slate-400">필요 시 안내용 사진 1장을 첨부할 수 있습니다.</span>
-                )}
-              </div>
+              </label>
+              {isUploading ? (
+                <p className="mt-1 text-[11px] font-bold text-[#007050]">이미지 업로드 중…</p>
+              ) : imageUrl ? (
+                <div className="mt-2 flex items-center gap-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={imageUrl} alt="취합 안내 사진 미리보기" className="h-14 rounded-lg border border-[#e7ddcd] object-contain" />
+                  <button type="button" onClick={() => setImageUrl("")} className="icon-tool-button h-8 w-8 text-rose-600" aria-label="사진 제거" title="사진 제거">
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
+              ) : null}
             </div>
             <div>
               <p className="mb-1 text-xs font-black text-slate-600">취합 방식</p>
@@ -869,7 +848,7 @@ function DataCollectionEditorDialog({
                           }
                           placeholder={`컬럼${index + 1}`}
                           aria-label={`컬럼 ${index + 1} 이름`}
-                          className="h-8 w-full min-w-0 bg-transparent pr-1 text-[13px] font-bold text-[#012241] outline-none"
+                          className="h-8 w-full min-w-0 bg-transparent pr-1 text-[11px] font-bold text-[#012241] outline-none"
                         />
                         <button
                           type="button"
@@ -893,7 +872,7 @@ function DataCollectionEditorDialog({
                           <X className="h-3 w-3" aria-hidden="true" />
                         </button>
                       </div>
-                      <div className="mt-0.5 flex h-4 items-center justify-center gap-1 text-[9px] font-bold text-slate-400">
+                      <div className="mt-0.5 flex h-5 items-center justify-center gap-1 text-[11px] font-bold text-slate-400">
                         {widthEditIndex === index ? (
                           <input
                             autoFocus
@@ -912,7 +891,7 @@ function DataCollectionEditorDialog({
                               }
                             }}
                             aria-label={`컬럼 ${index + 1} 너비(px) 직접 입력`}
-                            className="h-4 w-11 rounded border border-[#8fc7ae] bg-white px-1 text-center text-[9px] font-bold tabular-nums text-[#012241] outline-none"
+                            className="h-5 w-14 rounded border border-[#8fc7ae] bg-white px-1 text-center text-[11px] font-bold tabular-nums text-[#012241] outline-none"
                           />
                         ) : (
                           <button
@@ -936,7 +915,7 @@ function DataCollectionEditorDialog({
                             syncOptionsPanelOffset(nextIndex);
                           }}
                           className={cn(
-                            "inline-flex h-4 items-center gap-0.5 rounded-full px-1.5 text-[9px] font-black transition-colors",
+                            "inline-flex h-5 items-center gap-1 rounded-full px-2 text-[11px] font-black transition-colors",
                             optionCount > 0
                               ? "bg-[#007050] text-white hover:bg-[#005c42]"
                               : "text-slate-400 hover:bg-[#e6f1ec] hover:text-[#007050]",
@@ -945,7 +924,7 @@ function DataCollectionEditorDialog({
                           aria-label={`컬럼 ${index + 1} 목록박스 설정`}
                           title="목록박스 설정 — 선택지를 등록하면 부서는 목록에서 골라 입력합니다"
                         >
-                          <List className="h-2.5 w-2.5" aria-hidden="true" />
+                          <List className="h-3 w-3" aria-hidden="true" />
                           {optionCount > 0 ? `목록 ${optionCount}` : "목록"}
                         </button>
                       </div>
