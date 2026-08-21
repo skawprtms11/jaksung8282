@@ -36,7 +36,8 @@ type ItemDraft = {
 };
 type VolumeDraft = {
   volume_type: VolumeType;
-  quantity: number;
+  // 빈 문자열 = 아직 수량을 입력하지 않은 행. 저장 시 제외되거나(메모 없음) 0으로 변환된다.
+  quantity: number | "";
   unit: VolumeUnit;
   custom_unit?: string | null;
   note?: string | null;
@@ -91,13 +92,26 @@ function moveItem<T>(items: T[], from: number, to: number) {
 
 // 저장 페이로드와 같은 규칙(빈 항목 제외, 기간별 순번 재부여)으로 직렬화해
 // 팝업의 화주 전환 시 "저장 안 된 변경이 있는지"를 판별한다.
+// 수량이 비어 있고 메모·단위도 없는 행은 손대지 않은 기본 행이므로 저장 대상에서 제외한다.
+function normalizeVolumeDrafts(volumes: VolumeDraft[]) {
+  return volumes
+    .filter(
+      (volume) =>
+        volume.quantity !== "" || (volume.note ?? "").trim() !== "" || (volume.custom_unit ?? "").trim() !== ""
+    )
+    .map((volume, index) => ({
+      ...volume,
+      quantity: volume.quantity === "" ? 0 : volume.quantity,
+      sort_order: index
+    }));
+}
+
 function makeDraftSnapshot(items: ItemDraft[], volumes: VolumeDraft[]) {
   const sortOrderByPeriod: Record<ItemPeriod, number> = { current: 0, next: 0 };
   const normalizedItems = items
     .filter((item) => item.title.trim() !== "" || item.content.trim() !== "")
     .map((item) => ({ ...item, sort_order: sortOrderByPeriod[item.item_period]++ }));
-  const normalizedVolumes = volumes.map((volume, index) => ({ ...volume, sort_order: index }));
-  return `${JSON.stringify(normalizedItems)}|${JSON.stringify(normalizedVolumes)}`;
+  return `${JSON.stringify(normalizedItems)}|${JSON.stringify(normalizeVolumeDrafts(volumes))}`;
 }
 
 export const NO_SPECIAL_ISSUE_TEXT = "특이사항 없음";
@@ -179,10 +193,7 @@ export function ClientReportEditor({
         sort_order: sortOrderByPeriod[item.item_period]++
       }));
   }, [items]);
-  const normalizedVolumes = useMemo(
-    () => volumes.map((volume, index) => ({ ...volume, sort_order: index })),
-    [volumes]
-  );
+  const normalizedVolumes = useMemo(() => normalizeVolumeDrafts(volumes), [volumes]);
   const serializedItems = useMemo(() => JSON.stringify(normalizedItems), [normalizedItems]);
   const serializedVolumes = useMemo(() => JSON.stringify(normalizedVolumes), [normalizedVolumes]);
   // 화주 전환 시 미저장 변경 감지용: 마지막으로 불러오거나 저장한 시점의 스냅샷과 현재 상태를 비교한다.
@@ -229,7 +240,7 @@ export function ClientReportEditor({
   function addVolume() {
     setVolumes((current) => [
       ...current,
-      { volume_type: "inbound", quantity: 0, unit: VOLUME_UNIT, note: "", sort_order: current.length }
+      { volume_type: "inbound", quantity: "", unit: VOLUME_UNIT, note: "", sort_order: current.length }
     ]);
   }
 
@@ -252,7 +263,11 @@ export function ClientReportEditor({
     }
     setSelectionMessage(null);
     if (volumes.length === 0) {
-      addVolume();
+      // 기본으로 입고·출고 두 행을 띄워 행 추가 없이 바로 작성하게 한다.
+      setVolumes([
+        { volume_type: "inbound", quantity: "", unit: VOLUME_UNIT, note: "", sort_order: 0 },
+        { volume_type: "outbound", quantity: "", unit: VOLUME_UNIT, note: "", sort_order: 1 }
+      ]);
     }
     setActiveDialog("volumes");
   }
@@ -366,7 +381,10 @@ export function ClientReportEditor({
       );
       setVolumes(
         activeDialog === "volumes" && loadedVolumes.length === 0
-          ? [{ volume_type: "inbound", quantity: 0, unit: VOLUME_UNIT, note: "", sort_order: 0 }]
+          ? [
+              { volume_type: "inbound", quantity: "", unit: VOLUME_UNIT, note: "", sort_order: 0 },
+              { volume_type: "outbound", quantity: "", unit: VOLUME_UNIT, note: "", sort_order: 1 }
+            ]
           : loadedVolumes
       );
       setActiveReportId(result.report?.id ?? "");
@@ -836,7 +854,10 @@ function VolumeDialog({
                   min={0}
                   step="0.01"
                   value={volume.quantity}
-                  onChange={(event) => onUpdate(index, { quantity: Number(event.target.value) })}
+                  placeholder="수량 입력"
+                  onChange={(event) =>
+                    onUpdate(index, { quantity: event.target.value === "" ? "" : Number(event.target.value) })
+                  }
                   className="mt-1 h-10 w-full rounded-md border border-slate-300 px-2 text-sm font-normal"
                 />
               </label>
