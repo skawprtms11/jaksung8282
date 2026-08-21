@@ -16,6 +16,8 @@ export type DepartmentCollectionItem = {
   imageUrl: string | null;
   columns: string[];
   widths: number[];
+  // 컬럼별 목록박스 선택지. 빈 배열 = 일반 텍스트 입력.
+  options: string[][];
   entryMode: "grid" | "link";
   linkUrl: string | null;
   createdAt: string;
@@ -390,24 +392,46 @@ export function DepartmentCollectionWorkspace({
                           (initialEntries[selected.id]?.isCompleted ?? false) && !cellValue.trim() ? "bg-slate-200/70" : "bg-white"
                         )}
                       >
-                        <textarea
-                          ref={(element) => {
-                            if (element) {
-                              autoResizeCell(element);
-                            }
-                          }}
-                          data-cell={`${rowIndex}:${columnIndex}`}
-                          value={cellValue}
-                          maxLength={1000}
-                          rows={1}
-                          disabled={!canEdit}
-                          onChange={(event) => {
-                            updateCell(rowIndex, columnIndex, event.target.value);
-                            autoResizeCell(event.target);
-                          }}
-                          aria-label={`${rowIndex + 1}행 ${columnIndex + 1}열`}
-                          className="block min-h-9 w-full resize-none overflow-hidden rounded-none! border-0! bg-transparent! px-2 py-1.5 text-sm leading-6 shadow-none! outline-none focus:shadow-none! disabled:cursor-not-allowed disabled:text-slate-400"
-                        />
+                        {(selected.options[columnIndex]?.length ?? 0) > 0 ? (
+                          <select
+                            data-cell={`${rowIndex}:${columnIndex}`}
+                            value={cellValue}
+                            disabled={!canEdit}
+                            onChange={(event) => updateCell(rowIndex, columnIndex, event.target.value)}
+                            aria-label={`${rowIndex + 1}행 ${columnIndex + 1}열 선택`}
+                            className="block min-h-9 w-full cursor-pointer rounded-none! border-0! bg-transparent! px-2 py-1.5 text-sm leading-6 shadow-none! outline-none focus:shadow-none! disabled:cursor-not-allowed disabled:text-slate-400"
+                          >
+                            <option value="">선택</option>
+                            {selected.options[columnIndex].map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                            {cellValue && !selected.options[columnIndex].includes(cellValue) ? (
+                              // 목록 변경 전에 저장된 기존 값은 잃지 않도록 그대로 보여준다.
+                              <option value={cellValue}>{cellValue}</option>
+                            ) : null}
+                          </select>
+                        ) : (
+                          <textarea
+                            ref={(element) => {
+                              if (element) {
+                                autoResizeCell(element);
+                              }
+                            }}
+                            data-cell={`${rowIndex}:${columnIndex}`}
+                            value={cellValue}
+                            maxLength={1000}
+                            rows={1}
+                            disabled={!canEdit}
+                            onChange={(event) => {
+                              updateCell(rowIndex, columnIndex, event.target.value);
+                              autoResizeCell(event.target);
+                            }}
+                            aria-label={`${rowIndex + 1}행 ${columnIndex + 1}열`}
+                            className="block min-h-9 w-full resize-none overflow-hidden rounded-none! border-0! bg-transparent! px-2 py-1.5 text-sm leading-6 shadow-none! outline-none focus:shadow-none! disabled:cursor-not-allowed disabled:text-slate-400"
+                          />
+                        )}
                       </td>
                     ))}
                     <td className="border border-slate-200 px-1 py-1 text-center">

@@ -18,7 +18,7 @@ import {
   type DepartmentCollectionEntry,
   type DepartmentCollectionItem
 } from "@/components/data-collections/DepartmentCollectionWorkspace";
-import { normalizeCollectionColumns, normalizeCollectionWidths, normalizeEntryRows } from "@/lib/data-collections/template";
+import { normalizeCollectionColumns, normalizeCollectionOptions, normalizeCollectionWidths, normalizeEntryRows } from "@/lib/data-collections/template";
 import type { Json } from "@/types/database";
 import { ClientReviewTable } from "@/components/reports/ClientReviewTable";
 import { pickDefaultDepartmentId } from "@/lib/auth/default-scope";
@@ -703,6 +703,7 @@ export default async function DepartmentReportsPage({
       imageUrl: row.image_url,
       columns: normalizeCollectionColumns(row.template),
       widths: normalizeCollectionWidths(row.template, normalizeCollectionColumns(row.template).length),
+      options: normalizeCollectionOptions(row.template, normalizeCollectionColumns(row.template).length),
       entryMode: row.entry_mode === "link" ? ("link" as const) : ("grid" as const),
       linkUrl: row.link_url,
       createdAt: row.created_at

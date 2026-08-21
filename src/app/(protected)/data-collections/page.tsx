@@ -1,5 +1,5 @@
 import { DataCollectionBoard, type BoardDepartment, type DataCollectionView } from "@/components/data-collections/DataCollectionBoard";
-import { normalizeCollectionColumns, normalizeCollectionWidths, normalizeEntryRows } from "@/lib/data-collections/template";
+import { normalizeCollectionColumns, normalizeCollectionOptions, normalizeCollectionWidths, normalizeEntryRows } from "@/lib/data-collections/template";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { canViewMeetingMaterials, isAdmin } from "@/lib/auth/permissions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -86,6 +86,7 @@ export default async function DataCollectionsPage() {
     const toView = (row: CollectionQueryRow, entries: EntryQueryRow[]) => {
       const columns = normalizeCollectionColumns(row.template);
       const widths = normalizeCollectionWidths(row.template, columns.length);
+      const options = normalizeCollectionOptions(row.template, columns.length);
       return {
         id: row.id,
         title: row.title,
@@ -94,6 +95,7 @@ export default async function DataCollectionsPage() {
         imageUrl: row.image_url,
         columns,
         widths,
+        options,
         collectionType: row.collection_type === "regular" ? ("regular" as const) : ("adhoc" as const),
         entryMode: row.entry_mode === "link" ? ("link" as const) : ("grid" as const),
         linkUrl: row.link_url,
