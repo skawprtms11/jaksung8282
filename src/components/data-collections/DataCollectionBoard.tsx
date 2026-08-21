@@ -45,6 +45,7 @@ export type DataCollectionView = {
 
 const VISIBLE_COLLECTION_LIMIT = 5;
 const MAX_COLUMNS = 30;
+const OPTIONS_PANEL_WIDTH = 288;
 
 function reorderList<T>(list: T[], from: number, to: number) {
   const next = [...list];
@@ -443,6 +444,12 @@ function DataCollectionEditorDialog({
   const [dragColumnIndex, setDragColumnIndex] = useState<number | null>(null);
   const [dragOverColumnIndex, setDragOverColumnIndex] = useState<number | null>(null);
   const [dragArmedColumnIndex, setDragArmedColumnIndex] = useState<number | null>(null);
+  // px 문구 클릭 → 수기 입력 상태
+  const [widthEditIndex, setWidthEditIndex] = useState<number | null>(null);
+  const [widthEditValue, setWidthEditValue] = useState("");
+  // 목록 편집창을 가로 스크롤 상태와 무관하게 해당 컬럼 바로 아래에 붙이기 위한 좌측 오프셋
+  const [optionsPanelOffset, setOptionsPanelOffset] = useState(0);
+  const columnScrollRef = useRef<HTMLDivElement>(null);
   const [message, setMessage] = useState<{ ok: boolean; message: string } | null>(null);
   const [isSaving, startSaving] = useTransition();
   const [isUploading, startUploading] = useTransition();
@@ -477,6 +484,7 @@ function DataCollectionEditorDialog({
     const onUp = () => {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
+      syncOptionsPanelOffset(optionsEditorIndex);
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
@@ -495,6 +503,17 @@ function DataCollectionEditorDialog({
     setColumns((current) => reorderList(current, from, to));
     setWidths((current) => reorderList(current, from, to));
     setOptionsText((current) => reorderList(current, from, to));
+    if (optionsEditorIndex !== null) {
+      const movedEditorIndex =
+        optionsEditorIndex === from
+          ? to
+          : from < optionsEditorIndex && optionsEditorIndex <= to
+            ? optionsEditorIndex - 1
+            : to <= optionsEditorIndex && optionsEditorIndex < from
+              ? optionsEditorIndex + 1
+              : optionsEditorIndex;
+      syncOptionsPanelOffset(movedEditorIndex);
+    }
     // 열려 있는 목록 편집창이 이동한 컬럼을 계속 가리키게 인덱스를 보정한다.
     setOptionsEditorIndex((current) => {
       if (current === null) {
@@ -511,6 +530,36 @@ function DataCollectionEditorDialog({
       }
       return current;
     });
+  }
+
+  // 목록 편집창을 대상 컬럼의 화면상 위치(가로 스크롤 반영)에 맞춘다.
+  function computeOptionsPanelOffset(index: number | null) {
+    const container = columnScrollRef.current;
+    const row = columnRowRef.current;
+    if (index === null || !container || !row) {
+      return 0;
+    }
+    const columnBox = row.children[index] as HTMLElement | undefined;
+    if (!columnBox) {
+      return 0;
+    }
+    // 패널은 스크롤되는 컨텐츠 안에 있으므로 컨텐츠 좌표(scrollLeft 반영)로 맞춘다.
+    // 이렇게 하면 가로 스크롤 중에도 패널이 대상 컬럼 아래에 그대로 붙어 다닌다.
+    const raw =
+      columnBox.getBoundingClientRect().left - container.getBoundingClientRect().left - 12 + container.scrollLeft;
+    const max = Math.max(0, container.scrollWidth - 24 - OPTIONS_PANEL_WIDTH);
+    return Math.round(Math.min(Math.max(0, raw), max));
+  }
+
+  function syncOptionsPanelOffset(index: number | null) {
+    requestAnimationFrame(() => setOptionsPanelOffset(computeOptionsPanelOffset(index)));
+  }
+
+  function commitWidthEdit(index: number) {
+    const nextWidth = Math.min(2000, Math.max(60, Number(widthEditValue) || DEFAULT_COLUMN_WIDTH));
+    setWidths((current) => current.map((value, currentIndex) => (currentIndex === index ? nextWidth : value)));
+    setWidthEditIndex(null);
+    syncOptionsPanelOffset(optionsEditorIndex);
   }
 
   function loadRegularTemplate(templateId: string) {
@@ -602,7 +651,7 @@ function DataCollectionEditorDialog({
   return (
     <ModalPortal>
       <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#012241]/60 p-4 backdrop-blur" role="dialog" aria-modal="true" aria-labelledby="data-collection-editor-title">
-        <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-[1.75rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(1,34,65,0.22)]">
+        <div className="flex max-h-[90vh] w-full max-w-[70rem] flex-col overflow-hidden rounded-[1.75rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(1,34,65,0.22)]">
           <div className="flex items-start justify-between gap-4 border-b border-[#eee6d8] px-6 py-5">
             <div className="min-w-0">
               <h2 id="data-collection-editor-title" className="text-lg font-black text-[#012241]">
@@ -759,7 +808,7 @@ function DataCollectionEditorDialog({
             {entryMode === "grid" ? (
             <div>
               <p className="mb-1 text-xs font-black text-slate-600">취합 컬럼 설정</p>
-              <div className="overflow-x-auto rounded-[1.1rem] border border-[#e7ddcd] bg-[#faf6ef] p-3">
+              <div ref={columnScrollRef} className="overflow-x-auto rounded-[1.1rem] border border-[#e7ddcd] bg-[#faf6ef] p-3">
                 <div ref={columnRowRef} onKeyDown={handleColumnKeyDown} className="flex items-start">
                   {columns.map((column, index) => {
                     const optionCount = parseOptionLines(optionsText[index] ?? "").length;
@@ -805,11 +854,11 @@ function DataCollectionEditorDialog({
                             };
                             document.addEventListener("mouseup", clearArmed);
                           }}
-                          className="inline-flex h-9 w-5 shrink-0 cursor-grab items-center justify-center text-slate-300 hover:text-[#007050] active:cursor-grabbing"
+                          className="inline-flex h-8 w-4 shrink-0 cursor-grab items-center justify-center text-slate-300 hover:text-[#007050] active:cursor-grabbing"
                           aria-label={`컬럼 ${index + 1} 순서 이동`}
                           title="드래그해서 좌우 순서 변경"
                         >
-                          <GripVertical className="h-3.5 w-3.5" aria-hidden="true" />
+                          <GripVertical className="h-3 w-3" aria-hidden="true" />
                         </span>
                         <input
                           data-column={index}
@@ -820,7 +869,7 @@ function DataCollectionEditorDialog({
                           }
                           placeholder={`컬럼${index + 1}`}
                           aria-label={`컬럼 ${index + 1} 이름`}
-                          className="h-9 w-full min-w-0 bg-transparent pr-1 text-sm font-bold text-[#012241] outline-none"
+                          className="h-8 w-full min-w-0 bg-transparent pr-1 text-[13px] font-bold text-[#012241] outline-none"
                         />
                         <button
                           type="button"
@@ -837,21 +886,57 @@ function DataCollectionEditorDialog({
                           }}
                           disabled={columns.length <= 1}
                           tabIndex={-1}
-                          className="inline-flex h-9 w-6 shrink-0 items-center justify-center text-slate-400 hover:bg-rose-50 hover:text-rose-500 disabled:opacity-30"
+                          className="inline-flex h-8 w-5 shrink-0 items-center justify-center text-slate-400 hover:bg-rose-50 hover:text-rose-500 disabled:opacity-30"
                           aria-label={`컬럼 ${index + 1} 삭제`}
                           title="컬럼 삭제"
                         >
-                          <X className="h-3.5 w-3.5" aria-hidden="true" />
+                          <X className="h-3 w-3" aria-hidden="true" />
                         </button>
                       </div>
-                      <div className="mt-1 flex h-5 items-center justify-center gap-1 text-[10px] font-bold text-slate-400">
-                        <span className="tabular-nums">{widths[index] || DEFAULT_COLUMN_WIDTH}px</span>
+                      <div className="mt-0.5 flex h-4 items-center justify-center gap-1 text-[9px] font-bold text-slate-400">
+                        {widthEditIndex === index ? (
+                          <input
+                            autoFocus
+                            inputMode="numeric"
+                            value={widthEditValue}
+                            onChange={(event) => setWidthEditValue(event.target.value.replace(/[^0-9]/g, ""))}
+                            onBlur={() => commitWidthEdit(index)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                commitWidthEdit(index);
+                              }
+                              if (event.key === "Escape") {
+                                event.preventDefault();
+                                setWidthEditIndex(null);
+                              }
+                            }}
+                            aria-label={`컬럼 ${index + 1} 너비(px) 직접 입력`}
+                            className="h-4 w-11 rounded border border-[#8fc7ae] bg-white px-1 text-center text-[9px] font-bold tabular-nums text-[#012241] outline-none"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setWidthEditIndex(index);
+                              setWidthEditValue(String(widths[index] || DEFAULT_COLUMN_WIDTH));
+                            }}
+                            className="tabular-nums hover:text-[#007050] hover:underline"
+                            title="클릭해서 너비(px) 직접 입력 (60~2000)"
+                          >
+                            {widths[index] || DEFAULT_COLUMN_WIDTH}px
+                          </button>
+                        )}
                         <span aria-hidden="true" className="text-slate-300">·</span>
                         <button
                           type="button"
-                          onClick={() => setOptionsEditorIndex((current) => (current === index ? null : index))}
+                          onClick={() => {
+                            const nextIndex = optionsEditorIndex === index ? null : index;
+                            setOptionsEditorIndex(nextIndex);
+                            syncOptionsPanelOffset(nextIndex);
+                          }}
                           className={cn(
-                            "inline-flex h-5 items-center gap-1 rounded-full px-2 text-[10px] font-black transition-colors",
+                            "inline-flex h-4 items-center gap-0.5 rounded-full px-1.5 text-[9px] font-black transition-colors",
                             optionCount > 0
                               ? "bg-[#007050] text-white hover:bg-[#005c42]"
                               : "text-slate-400 hover:bg-[#e6f1ec] hover:text-[#007050]",
@@ -860,7 +945,7 @@ function DataCollectionEditorDialog({
                           aria-label={`컬럼 ${index + 1} 목록박스 설정`}
                           title="목록박스 설정 — 선택지를 등록하면 부서는 목록에서 골라 입력합니다"
                         >
-                          <List className="h-3 w-3" aria-hidden="true" />
+                          <List className="h-2.5 w-2.5" aria-hidden="true" />
                           {optionCount > 0 ? `목록 ${optionCount}` : "목록"}
                         </button>
                       </div>
@@ -869,7 +954,7 @@ function DataCollectionEditorDialog({
                         aria-label={`컬럼 ${index + 1} 너비 조정`}
                         data-resize={index}
                         onMouseDown={(event) => startColumnResize(index, event)}
-                        className="absolute right-0 top-0 h-9 w-2 cursor-col-resize rounded bg-transparent hover:bg-[#007050]/30"
+                        className="absolute right-0 top-0 h-8 w-2 cursor-col-resize rounded bg-transparent hover:bg-[#007050]/30"
                         title="드래그해서 열너비 조정"
                       />
                     </div>
@@ -886,45 +971,47 @@ function DataCollectionEditorDialog({
                       setOptionsText((current) => [...current, ""]);
                     }}
                     disabled={columns.length >= MAX_COLUMNS}
-                    className="ml-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[#007050] hover:bg-[#e6f1ec] disabled:opacity-30"
+                    className="ml-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#007050] hover:bg-[#e6f1ec] disabled:opacity-30"
                     aria-label="컬럼 추가"
                     title="컬럼 추가"
                   >
-                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
                 </div>
                 {optionsEditorIndex !== null && optionsEditorIndex < columns.length ? (
-                  <div className="mt-3 rounded-md border border-[#cfe4da] bg-white p-3">
+                  // 가로 스크롤 위치를 반영한 오프셋으로 대상 컬럼 바로 아래에 붙인다.
+                  <div
+                    className="mt-2 rounded-md border border-[#cfe4da] bg-white p-2.5 shadow-[0_8px_18px_rgba(16,34,61,0.08)]"
+                    style={{ width: `${OPTIONS_PANEL_WIDTH}px`, marginLeft: `${optionsPanelOffset}px` }}
+                  >
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-black text-[#012241]">
-                        &ldquo;{columns[optionsEditorIndex] || `컬럼${optionsEditorIndex + 1}`}&rdquo; 목록박스 선택지
+                      <p className="truncate text-[11px] font-black text-[#012241]">
+                        &ldquo;{columns[optionsEditorIndex] || `컬럼${optionsEditorIndex + 1}`}&rdquo; 목록 선택지
                       </p>
                       <button
                         type="button"
                         onClick={() => setOptionsEditorIndex(null)}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100"
+                        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100"
                         aria-label="목록 설정 닫기"
                       >
-                        <X className="h-3.5 w-3.5" aria-hidden="true" />
+                        <X className="h-3 w-3" aria-hidden="true" />
                       </button>
                     </div>
                     <textarea
                       value={optionsText[optionsEditorIndex] ?? ""}
-                      rows={5}
+                      rows={3}
                       onChange={(event) =>
                         setOptionsText((current) =>
                           current.map((value, currentIndex) => (currentIndex === optionsEditorIndex ? event.target.value : value))
                         )
                       }
-                      placeholder={"한 줄에 선택지 하나씩 입력하세요.\n예)\n진행중\n완료\n해당없음"}
-                      className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-normal outline-none focus:border-[#007050]"
+                      placeholder={"한 줄에 선택지 하나씩\n예) 진행중 / 완료 / 해당없음"}
+                      className="mt-1.5 w-full rounded-md border border-slate-300 px-2 py-1.5 text-[13px] font-normal outline-none focus:border-[#007050]"
                     />
-                    <p className="mt-1 text-[11px] font-bold text-slate-400">
-                      선택지를 등록하면 부서 작성 화면에서 이 컬럼은 목록에서 선택합니다. 비워두면 일반 텍스트 입력으로 돌아갑니다.
-                    </p>
+                    <p className="mt-0.5 text-[10px] font-bold text-slate-400">비워두면 일반 텍스트 입력으로 돌아갑니다.</p>
                   </div>
                 ) : null}
-                <p className="mt-1 text-[11px] font-bold text-slate-400">왼쪽 손잡이를 드래그하면 컬럼 순서가 바뀝니다 · 오른쪽 가장자리 드래그로 열너비 조정 · Enter로 다음/새 컬럼 · 목록 버튼으로 선택지 설정</p>
+                <p className="mt-1 text-[10px] font-bold text-slate-400">왼쪽 손잡이 드래그로 순서 변경 · 오른쪽 가장자리 드래그 또는 px 문구 클릭으로 열너비 조정 · Enter로 다음/새 컬럼 · 목록 버튼으로 선택지 설정</p>
               </div>
             </div>
             ) : null}
