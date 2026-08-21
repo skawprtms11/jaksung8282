@@ -62,12 +62,16 @@ type ReportRow = {
   clients: { client_name: string } | null;
   profiles: { full_name: string } | null;
   weekly_client_report_items: {
+    id: string;
     item_period: "current" | "next";
     importance: "very_high" | "high" | "medium" | "low";
     work_category_id: string;
     title: string;
     content: string;
     sort_order: number;
+    original_title: string | null;
+    original_content: string | null;
+    admin_edited_at: string | null;
     work_categories: { category_name: string; icon_key: string } | null;
   }[];
   weekly_volumes: {
@@ -82,7 +86,7 @@ type ReportRow = {
 
 const REPORT_LIST_LIMIT = 300;
 const CLIENT_REPORT_SELECT =
-  "id,created_by,department_id,client_id,report_year,report_month,week_of_month,week_start_date,week_end_date,status,submitted_at,updated_at,departments(department_name),clients(client_name),weekly_client_report_items(item_period,importance,work_category_id,title,content,sort_order,work_categories(category_name,icon_key)),weekly_volumes(volume_type,quantity,unit,custom_unit,note,sort_order)";
+  "id,created_by,department_id,client_id,report_year,report_month,week_of_month,week_start_date,week_end_date,status,submitted_at,updated_at,departments(department_name),clients(client_name),weekly_client_report_items(id,item_period,importance,work_category_id,title,content,sort_order,original_title,original_content,admin_edited_at,work_categories(category_name,icon_key)),weekly_volumes(volume_type,quantity,unit,custom_unit,note,sort_order)";
 const ClientReportsWorkspace = dynamic(
   () => import("@/components/reports/ClientReportsWorkspace").then((mod) => mod.ClientReportsWorkspace),
   {
@@ -141,7 +145,10 @@ function toClientReportTableRow(report: ReportRow, editSource: ReportRow = repor
         importance: item.importance,
         title: item.title,
         content: item.content,
-        categoryName: item.work_categories?.category_name ?? "기타"
+        categoryName: item.work_categories?.category_name ?? "기타",
+        originalTitle: item.original_title ?? null,
+        originalContent: item.original_content ?? null,
+        adminEditedAt: item.admin_edited_at ?? null
       })),
     nextItems: report.weekly_client_report_items
       .filter((item) => item.item_period === "next")
@@ -150,7 +157,10 @@ function toClientReportTableRow(report: ReportRow, editSource: ReportRow = repor
         importance: item.importance,
         title: item.title,
         content: item.content,
-        categoryName: item.work_categories?.category_name ?? "기타"
+        categoryName: item.work_categories?.category_name ?? "기타",
+        originalTitle: item.original_title ?? null,
+        originalContent: item.original_content ?? null,
+        adminEditedAt: item.admin_edited_at ?? null
       })),
     volumes: report.weekly_volumes
       .slice()
@@ -172,6 +182,7 @@ function toClientReportTableRow(report: ReportRow, editSource: ReportRow = repor
         .slice()
         .sort((left, right) => left.sort_order - right.sort_order)
         .map((item) => ({
+          id: item.id,
           item_period: item.item_period,
           importance: item.importance,
           work_category_id: item.work_category_id,

@@ -103,12 +103,16 @@ type SavedClientReportDbRow = {
   submitted_at: string | null;
   clients: { client_name: string } | null;
   weekly_client_report_items: {
+    id: string;
     item_period: "current" | "next";
     importance: "very_high" | "high" | "medium" | "low";
     work_category_id: string;
     title: string;
     content: string;
     sort_order: number;
+    original_title: string | null;
+    original_content: string | null;
+    admin_edited_at: string | null;
     work_categories: { category_name: string } | null;
   }[];
   weekly_volumes: {
@@ -199,12 +203,18 @@ export type SavedClientReportRow = {
     title: string;
     content: string;
     categoryName: string;
+    originalTitle?: string | null;
+    originalContent?: string | null;
+    adminEditedAt?: string | null;
   }[];
   nextItems: {
     importance: "very_high" | "high" | "medium" | "low";
     title: string;
     content: string;
     categoryName: string;
+    originalTitle?: string | null;
+    originalContent?: string | null;
+    adminEditedAt?: string | null;
   }[];
   volumes: {
     volumeType: VolumeType;
@@ -220,6 +230,7 @@ export type SavedClientReportRow = {
     client_id: string;
     week_start_date: string;
     items: {
+      id?: string;
       item_period: "current" | "next";
       importance: "very_high" | "high" | "medium" | "low";
       work_category_id: string;
@@ -239,7 +250,7 @@ export type SavedClientReportRow = {
 };
 
 const SAVED_CLIENT_REPORT_SELECT =
-  "id,created_by,department_id,client_id,report_year,report_month,week_of_month,week_start_date,status,submitted_at,clients(client_name),weekly_client_report_items(item_period,importance,work_category_id,title,content,sort_order,work_categories(category_name)),weekly_volumes(volume_type,quantity,unit,custom_unit,note,sort_order)";
+  "id,created_by,department_id,client_id,report_year,report_month,week_of_month,week_start_date,status,submitted_at,clients(client_name),weekly_client_report_items(id,item_period,importance,work_category_id,title,content,sort_order,original_title,original_content,admin_edited_at,work_categories(category_name)),weekly_volumes(volume_type,quantity,unit,custom_unit,note,sort_order)";
 
 const REPORT_ITEM_REQUEST_SELECT =
   "id,target_type,target_key,report_item_id,department_submission_id,section_type,item_period,item_sort_order,request_content,request_author_name,request_author_department_name,result_content,result_author_name,result_author_department_name,result_created_by,result_created_at,result_updated_at,closed_by,closed_author_name,closed_author_department_name,closed_at,created_by,created_at,updated_at";
@@ -473,7 +484,10 @@ export async function saveClientReportAction(_: ActionResult<SavedClientReportRo
         importance: item.importance,
         title: item.title,
         content: item.content,
-        categoryName: item.work_categories?.category_name ?? "기타"
+        categoryName: item.work_categories?.category_name ?? "기타",
+        originalTitle: item.original_title ?? null,
+        originalContent: item.original_content ?? null,
+        adminEditedAt: item.admin_edited_at ?? null
       })),
     nextItems: sortedItems
       .filter((item) => item.item_period === "next")
@@ -481,7 +495,10 @@ export async function saveClientReportAction(_: ActionResult<SavedClientReportRo
         importance: item.importance,
         title: item.title,
         content: item.content,
-        categoryName: item.work_categories?.category_name ?? "기타"
+        categoryName: item.work_categories?.category_name ?? "기타",
+        originalTitle: item.original_title ?? null,
+        originalContent: item.original_content ?? null,
+        adminEditedAt: item.admin_edited_at ?? null
       })),
     volumes: sortedVolumes.map((volume) => ({
       volumeType: volume.volume_type,
@@ -497,6 +514,7 @@ export async function saveClientReportAction(_: ActionResult<SavedClientReportRo
       client_id: report.client_id,
       week_start_date: report.week_start_date,
       items: sortedItems.map((item) => ({
+        id: item.id,
         item_period: item.item_period,
         importance: item.importance,
         work_category_id: item.work_category_id,
@@ -573,6 +591,7 @@ export type LoadedClientReportForEdit = {
   client_id: string;
   week_start_date: string;
   items: {
+    id: string;
     item_period: "current" | "next";
     importance: "very_high" | "high" | "medium" | "low";
     work_category_id: string;
@@ -620,7 +639,7 @@ export async function loadClientReportForEditAction({
   const { data, error } = await supabase
     .from("weekly_client_reports")
     .select(
-      "id,department_id,client_id,week_start_date,status,weekly_client_report_items(item_period,importance,work_category_id,title,content,sort_order),weekly_volumes(volume_type,quantity,unit,custom_unit,note,sort_order)"
+      "id,department_id,client_id,week_start_date,status,weekly_client_report_items(id,item_period,importance,work_category_id,title,content,sort_order),weekly_volumes(volume_type,quantity,unit,custom_unit,note,sort_order)"
     )
     .eq("department_id", parsed.data.department_id)
     .eq("client_id", parsed.data.client_id)
@@ -715,6 +734,76 @@ export async function cancelSubmittedClientReportsAction(_: ActionResult | null,
 export async function deleteSelectedClientReportsAction(_: ActionResult | null, formData: FormData): Promise<ActionResult> {
   const reportIds = getSelectedReportIds(formData);
   return softDeleteClientReports(reportIds);
+}
+
+export type AdminEditedClientReportItem = {
+  id: string;
+  title: string;
+  content: string;
+  original_title: string | null;
+  original_content: string | null;
+  admin_edited_at: string | null;
+};
+
+// 화주자료 업무 항목의 관리자 수정. 권한(관리자·부서장·매니저)과 부서 범위는 RPC가 강제한다.
+export async function adminEditClientReportItemAction({
+  item_id,
+  title,
+  content
+}: {
+  item_id: string;
+  title: string;
+  content: string;
+}): Promise<{ ok: boolean; message: string; item?: AdminEditedClientReportItem }> {
+  const parsed = z
+    .object({
+      item_id: idSchema,
+      title: z.string().trim().min(1, "제목을 입력하세요.").max(120, "제목은 120자 이하로 입력하세요."),
+      content: z.string().trim().max(4000, "내용은 4000자 이하로 입력하세요.").default("")
+    })
+    .safeParse({ item_id, title, content });
+  if (!parsed.success) {
+    return { ok: false, message: parsed.error.issues[0]?.message ?? "입력값을 확인하세요." };
+  }
+
+  // RPC가 최종 권한을 강제하지만, 다른 액션과 같은 패턴으로 서버에서도 역할을 사전 확인한다.
+  const { profile } = await getCurrentUserProfile();
+  if (!canReviewClientReport(profile)) {
+    return { ok: false, message: "관리자 수정 권한이 없습니다. (관리자·부서장·매니저 전용)" };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요." };
+  }
+
+  const { data, error } = await supabase.rpc("admin_edit_client_report_item", {
+    p_item_id: parsed.data.item_id,
+    p_title: parsed.data.title,
+    p_content: parsed.data.content
+  });
+  if (error) {
+    return { ok: false, message: safeErrorMessage(error.message) };
+  }
+
+  const row =
+    data && typeof data === "object" && !Array.isArray(data) ? (data as Record<string, unknown>) : null;
+  if (!row || !row.id) {
+    return { ok: false, message: "관리자 수정 결과를 확인할 수 없습니다." };
+  }
+
+  return {
+    ok: true,
+    message: "관리자 수정을 저장했습니다.",
+    item: {
+      id: String(row.id),
+      title: String(row.title ?? parsed.data.title),
+      content: String(row.content ?? parsed.data.content),
+      original_title: row.original_title == null ? null : String(row.original_title),
+      original_content: row.original_content == null ? null : String(row.original_content),
+      admin_edited_at: row.admin_edited_at == null ? null : String(row.admin_edited_at)
+    }
+  };
 }
 
 export async function saveDepartmentSubmissionAction(
