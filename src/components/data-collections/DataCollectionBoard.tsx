@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Check, CheckCircle2, Download, ImagePlus, List, Pencil, Plus, Save, Table2, Trash2, X } from "lucide-react";
+import { Check, CheckCircle2, Download, GripVertical, ImagePlus, List, Pencil, Plus, Save, Table2, Trash2, X } from "lucide-react";
 import {
   closeDataCollectionAction,
   deleteDataCollectionAction,
@@ -45,6 +45,13 @@ export type DataCollectionView = {
 
 const VISIBLE_COLLECTION_LIMIT = 5;
 const MAX_COLUMNS = 30;
+
+function reorderList<T>(list: T[], from: number, to: number) {
+  const next = [...list];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
 
 // 목록박스 편집 원문(줄 단위)을 선택지 배열로 변환한다.
 function parseOptionLines(text: string) {
@@ -432,6 +439,10 @@ function DataCollectionEditorDialog({
     initialRow ? initialRow.columns.map((_, index) => (initialRow.options[index] ?? []).join("\n")) : ["", "", ""]
   );
   const [optionsEditorIndex, setOptionsEditorIndex] = useState<number | null>(null);
+  // 컬럼 좌우 드래그 정렬: 핸들을 누른 컬럼만 draggable로 만들어 입력칸 텍스트 선택을 방해하지 않는다.
+  const [dragColumnIndex, setDragColumnIndex] = useState<number | null>(null);
+  const [dragOverColumnIndex, setDragOverColumnIndex] = useState<number | null>(null);
+  const [dragArmedColumnIndex, setDragArmedColumnIndex] = useState<number | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; message: string } | null>(null);
   const [isSaving, startSaving] = useTransition();
   const [isUploading, startUploading] = useTransition();
@@ -469,6 +480,37 @@ function DataCollectionEditorDialog({
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
+  }
+
+  function endColumnDrag() {
+    setDragColumnIndex(null);
+    setDragOverColumnIndex(null);
+    setDragArmedColumnIndex(null);
+  }
+
+  function moveColumn(from: number, to: number) {
+    if (from === to) {
+      return;
+    }
+    setColumns((current) => reorderList(current, from, to));
+    setWidths((current) => reorderList(current, from, to));
+    setOptionsText((current) => reorderList(current, from, to));
+    // 열려 있는 목록 편집창이 이동한 컬럼을 계속 가리키게 인덱스를 보정한다.
+    setOptionsEditorIndex((current) => {
+      if (current === null) {
+        return null;
+      }
+      if (current === from) {
+        return to;
+      }
+      if (from < current && current <= to) {
+        return current - 1;
+      }
+      if (to <= current && current < from) {
+        return current + 1;
+      }
+      return current;
+    });
   }
 
   function loadRegularTemplate(templateId: string) {
@@ -719,9 +761,56 @@ function DataCollectionEditorDialog({
               <p className="mb-1 text-xs font-black text-slate-600">취합 컬럼 설정</p>
               <div className="overflow-x-auto rounded-[1.1rem] border border-[#e7ddcd] bg-[#faf6ef] p-3">
                 <div ref={columnRowRef} onKeyDown={handleColumnKeyDown} className="flex items-start">
-                  {columns.map((column, index) => (
-                    <div key={index} className="relative shrink-0 pr-1" style={{ width: `${widths[index] || DEFAULT_COLUMN_WIDTH}px` }}>
-                      <div className="flex items-center overflow-hidden rounded-md border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-[#007050]/60">
+                  {columns.map((column, index) => {
+                    const optionCount = parseOptionLines(optionsText[index] ?? "").length;
+                    const isDropTarget = dragOverColumnIndex === index && dragColumnIndex !== null && dragColumnIndex !== index;
+                    return (
+                    <div
+                      key={index}
+                      draggable={dragArmedColumnIndex === index}
+                      onDragStart={(event) => {
+                        setDragColumnIndex(index);
+                        event.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragEnd={endColumnDrag}
+                      onDragOver={(event) => {
+                        if (dragColumnIndex !== null) {
+                          event.preventDefault();
+                          setDragOverColumnIndex(index);
+                        }
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        if (dragColumnIndex !== null) {
+                          moveColumn(dragColumnIndex, index);
+                        }
+                        endColumnDrag();
+                      }}
+                      className={cn("relative shrink-0 pr-1 transition-opacity", dragColumnIndex === index && "opacity-40")}
+                      style={{ width: `${widths[index] || DEFAULT_COLUMN_WIDTH}px` }}
+                    >
+                      <div
+                        className={cn(
+                          "flex items-center overflow-hidden rounded-md border bg-white focus-within:ring-2 focus-within:ring-[#007050]/60",
+                          isDropTarget ? "border-[#007050] ring-2 ring-[#007050]/40" : "border-slate-300"
+                        )}
+                      >
+                        <span
+                          onMouseDown={() => {
+                            setDragArmedColumnIndex(index);
+                            // 어디에서 마우스를 떼든 armed를 해제해 입력칸의 텍스트 선택 드래그를 막지 않는다.
+                            const clearArmed = () => {
+                              setDragArmedColumnIndex(null);
+                              document.removeEventListener("mouseup", clearArmed);
+                            };
+                            document.addEventListener("mouseup", clearArmed);
+                          }}
+                          className="inline-flex h-9 w-5 shrink-0 cursor-grab items-center justify-center text-slate-300 hover:text-[#007050] active:cursor-grabbing"
+                          aria-label={`컬럼 ${index + 1} 순서 이동`}
+                          title="드래그해서 좌우 순서 변경"
+                        >
+                          <GripVertical className="h-3.5 w-3.5" aria-hidden="true" />
+                        </span>
                         <input
                           data-column={index}
                           value={column}
@@ -731,7 +820,7 @@ function DataCollectionEditorDialog({
                           }
                           placeholder={`컬럼${index + 1}`}
                           aria-label={`컬럼 ${index + 1} 이름`}
-                          className="h-9 w-full min-w-0 bg-transparent px-2 text-sm font-bold text-[#012241] outline-none"
+                          className="h-9 w-full min-w-0 bg-transparent pr-1 text-sm font-bold text-[#012241] outline-none"
                         />
                         <button
                           type="button"
@@ -748,30 +837,31 @@ function DataCollectionEditorDialog({
                           }}
                           disabled={columns.length <= 1}
                           tabIndex={-1}
-                          className="inline-flex h-9 w-7 shrink-0 items-center justify-center text-slate-400 hover:bg-rose-50 hover:text-rose-500 disabled:opacity-30"
+                          className="inline-flex h-9 w-6 shrink-0 items-center justify-center text-slate-400 hover:bg-rose-50 hover:text-rose-500 disabled:opacity-30"
                           aria-label={`컬럼 ${index + 1} 삭제`}
                           title="컬럼 삭제"
                         >
                           <X className="h-3.5 w-3.5" aria-hidden="true" />
                         </button>
                       </div>
-                      <div className="mt-1 flex items-center justify-center gap-1.5">
-                        <span className="text-[10px] font-bold tabular-nums text-slate-400">{widths[index] || DEFAULT_COLUMN_WIDTH}px</span>
+                      <div className="mt-1 flex h-5 items-center justify-center gap-1 text-[10px] font-bold text-slate-400">
+                        <span className="tabular-nums">{widths[index] || DEFAULT_COLUMN_WIDTH}px</span>
+                        <span aria-hidden="true" className="text-slate-300">·</span>
                         <button
                           type="button"
                           onClick={() => setOptionsEditorIndex((current) => (current === index ? null : index))}
                           className={cn(
-                            "inline-flex h-5 items-center gap-0.5 rounded-md border px-1 text-[10px] font-black",
-                            parseOptionLines(optionsText[index] ?? "").length > 0
-                              ? "border-[#8fc7ae] bg-[#e6f1ec] text-[#007050]"
-                              : "border-slate-200 bg-white text-slate-400 hover:text-[#007050]",
-                            optionsEditorIndex === index && "ring-2 ring-[#007050]/40"
+                            "inline-flex h-5 items-center gap-1 rounded-full px-2 text-[10px] font-black transition-colors",
+                            optionCount > 0
+                              ? "bg-[#007050] text-white hover:bg-[#005c42]"
+                              : "text-slate-400 hover:bg-[#e6f1ec] hover:text-[#007050]",
+                            optionsEditorIndex === index && "ring-2 ring-[#007050]/35"
                           )}
                           aria-label={`컬럼 ${index + 1} 목록박스 설정`}
                           title="목록박스 설정 — 선택지를 등록하면 부서는 목록에서 골라 입력합니다"
                         >
                           <List className="h-3 w-3" aria-hidden="true" />
-                          {parseOptionLines(optionsText[index] ?? "").length > 0 ? `목록 ${parseOptionLines(optionsText[index] ?? "").length}` : "목록"}
+                          {optionCount > 0 ? `목록 ${optionCount}` : "목록"}
                         </button>
                       </div>
                       <div
@@ -783,7 +873,8 @@ function DataCollectionEditorDialog({
                         title="드래그해서 열너비 조정"
                       />
                     </div>
-                  ))}
+                    );
+                  })}
                   <button
                     type="button"
                     onClick={() => {
@@ -833,7 +924,7 @@ function DataCollectionEditorDialog({
                     </p>
                   </div>
                 ) : null}
-                <p className="mt-1 text-[11px] font-bold text-slate-400">칸 오른쪽 가장자리를 좌우로 드래그하면 열너비가 조정됩니다(값은 각 칸 아래 표시) · Enter로 다음/새 컬럼 · 목록 버튼으로 선택지 설정</p>
+                <p className="mt-1 text-[11px] font-bold text-slate-400">왼쪽 손잡이를 드래그하면 컬럼 순서가 바뀝니다 · 오른쪽 가장자리 드래그로 열너비 조정 · Enter로 다음/새 컬럼 · 목록 버튼으로 선택지 설정</p>
               </div>
             </div>
             ) : null}
