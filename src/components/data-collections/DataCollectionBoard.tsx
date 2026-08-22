@@ -8,7 +8,9 @@ import {
   closeDataCollectionAction,
   deleteDataCollectionAction,
   saveDataCollectionAction,
-  uploadCollectionImageAction
+  setDataCollectionStatusAction,
+  uploadCollectionImageAction,
+  type DataCollectionStatus
 } from "@/actions/data-collections";
 import { ActionMessage } from "@/components/common/ActionMessage";
 import { TableShell } from "@/components/common/TableShell";
@@ -36,6 +38,7 @@ export type DataCollectionView = {
   // 컬럼별 목록박스 선택지. 빈 배열 = 일반 텍스트 컬럼.
   options: string[][];
   collectionType: "regular" | "adhoc";
+  status: DataCollectionStatus;
   entryMode: "grid" | "link";
   linkUrl: string | null;
   authorName: string;
@@ -78,6 +81,22 @@ function completionRate(collection: DataCollectionView, totalDepartments: number
   return Math.min(100, Math.round((completed / totalDepartments) * 100));
 }
 
+const COLLECTION_STATUS_META: Record<DataCollectionStatus, { label: string; className: string }> = {
+  in_progress: { label: "진행", className: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  on_hold: { label: "보류", className: "border-amber-200 bg-amber-50 text-amber-700" },
+  completed: { label: "완료", className: "border-blue-200 bg-blue-50 text-blue-700" },
+  cancelled: { label: "취소", className: "border-rose-200 bg-rose-50 text-rose-600" }
+};
+
+// 진행 상태인데 전 부서 완료(100%)면 화면상 완료로 자동 전환한다.
+// 수동 완료는 진행률과 무관하게 completed로 저장되며, 보류·취소는 100%여도 그대로 둔다.
+function effectiveCollectionStatus(collection: DataCollectionView, totalDepartments: number): DataCollectionStatus {
+  if (collection.status === "in_progress" && totalDepartments > 0 && completionRate(collection, totalDepartments) >= 100) {
+    return "completed";
+  }
+  return collection.status;
+}
+
 function CompletionBar({ percent, className }: { percent: number; className?: string }) {
   return (
     <div className={cn("flex items-center gap-2", className)}>
@@ -110,9 +129,46 @@ export function DataCollectionBoard({
   const [showAll, setShowAll] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; message: string } | null>(null);
   const [isMutating, startMutating] = useTransition();
+  const [statusFilter, setStatusFilter] = useState<Record<DataCollectionStatus, boolean>>({
+    in_progress: true,
+    on_hold: true,
+    completed: true,
+    cancelled: true
+  });
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const selected = collections.find((collection) => collection.id === selectedId) ?? collections[0] ?? null;
-  const visibleCollections = showAll ? collections : collections.slice(0, VISIBLE_COLLECTION_LIMIT);
+  const filteredCollections = useMemo(() => {
+    const term = searchQuery.trim().toLocaleLowerCase("ko");
+    return collections.filter((collection) => {
+      if (!statusFilter[effectiveCollectionStatus(collection, totalDepartments)]) {
+        return false;
+      }
+      if (!term) {
+        return true;
+      }
+      return (
+        collection.title.toLocaleLowerCase("ko").includes(term) ||
+        collection.description.toLocaleLowerCase("ko").includes(term) ||
+        collection.example.toLocaleLowerCase("ko").includes(term)
+      );
+    });
+  }, [collections, searchQuery, statusFilter, totalDepartments]);
+
+  const selected = filteredCollections.find((collection) => collection.id === selectedId) ?? filteredCollections[0] ?? null;
+  const visibleCollections = showAll ? filteredCollections : filteredCollections.slice(0, VISIBLE_COLLECTION_LIMIT);
+
+  function changeCollectionStatus(collection: DataCollectionView, nextStatus: DataCollectionStatus) {
+    startMutating(async () => {
+      const formData = new FormData();
+      formData.set("id", collection.id);
+      formData.set("status", nextStatus);
+      const result = await setDataCollectionStatusAction(formData);
+      setMessage(result);
+      if (result.ok) {
+        router.refresh();
+      }
+    });
+  }
   const overallPercent = useMemo(() => {
     if (collections.length === 0 || totalDepartments === 0) {
       return 0;
@@ -149,8 +205,30 @@ export function DataCollectionBoard({
             </div>
             <CompletionBar percent={overallPercent} className="w-full max-w-sm" />
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-3">
             <ActionMessage state={message} />
+            <div className="flex items-center gap-2.5 rounded-xl border border-[#e7ddcd] bg-[#faf6ef] px-3 py-2">
+              {(Object.keys(COLLECTION_STATUS_META) as DataCollectionStatus[]).map((status) => (
+                <label key={status} className="flex cursor-pointer items-center gap-1 text-xs font-black text-[#012241]">
+                  <input
+                    type="checkbox"
+                    checked={statusFilter[status]}
+                    onChange={(event) =>
+                      setStatusFilter((current) => ({ ...current, [status]: event.target.checked }))
+                    }
+                    className="h-3.5 w-3.5 accent-[#007050]"
+                  />
+                  {COLLECTION_STATUS_META[status].label}
+                </label>
+              ))}
+            </div>
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="제목·내용 검색"
+              aria-label="취합건 제목·내용 검색"
+              className="h-9 w-44 rounded-xl border border-[#e7ddcd] bg-white px-3 text-sm font-bold text-[#012241] outline-none focus:border-[#007050]"
+            />
             {canCreate ? (
               <button type="button" onClick={() => setEditorState({ mode: "create" })} className="tool-button tool-button-primary">
                 <Plus className="h-4 w-4" aria-hidden="true" />
@@ -160,9 +238,9 @@ export function DataCollectionBoard({
           </div>
         </div>
 
-        {collections.length === 0 ? (
+        {filteredCollections.length === 0 ? (
           <p className="mt-4 rounded-2xl border border-dashed border-[#d3c6b0] px-4 py-6 text-center text-sm font-bold text-slate-500">
-            진행 중인 취합건이 없습니다.
+            {collections.length === 0 ? "진행 중인 취합건이 없습니다." : "선택한 상태·검색 조건에 맞는 취합건이 없습니다."}
           </p>
         ) : (
           <div className="mt-3">
@@ -170,6 +248,7 @@ export function DataCollectionBoard({
               <table className="table-sticky w-full min-w-[860px] table-fixed text-left text-sm">
                 <colgroup>
                   <col />
+                  <col className="w-[96px]" />
                   <col className="w-[110px]" />
                   <col className="w-[150px]" />
                   <col className="w-[220px]" />
@@ -178,6 +257,7 @@ export function DataCollectionBoard({
                 <thead>
                   <tr>
                     <th className="px-3 py-2.5 text-xs font-black tracking-[0.02em] text-slate-500!">제목</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-black tracking-[0.02em] text-slate-500!">상태</th>
                     <th className="px-3 py-2.5 text-center text-xs font-black tracking-[0.02em] text-slate-500!">등록자</th>
                     <th className="px-3 py-2.5 text-center text-xs font-black tracking-[0.02em] text-slate-500!">등록일</th>
                     <th className="px-3 py-2.5 text-xs font-black tracking-[0.02em] text-slate-500!">완료율</th>
@@ -187,6 +267,7 @@ export function DataCollectionBoard({
                 <tbody>
                   {visibleCollections.map((collection) => {
                     const percent = completionRate(collection, totalDepartments);
+                    const displayStatus = effectiveCollectionStatus(collection, totalDepartments);
                     const isSelected = selected?.id === collection.id;
                     return (
                       <tr
@@ -201,6 +282,35 @@ export function DataCollectionBoard({
                               <span className="inline-flex shrink-0 rounded-full border border-[#cfe3da] bg-[#e6f1ec] px-1.5 py-0.5 text-[10px] font-black text-[#007050]">정기</span>
                             ) : null}
                           </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-center" onClick={(event) => event.stopPropagation()}>
+                          {canCreate ? (
+                            <select
+                              value={displayStatus}
+                              disabled={isMutating}
+                              onChange={(event) => changeCollectionStatus(collection, event.target.value as DataCollectionStatus)}
+                              aria-label={`${collection.title} 상태 변경`}
+                              className={cn(
+                                "h-7 w-full cursor-pointer rounded-md border px-1 text-center text-xs font-black outline-none disabled:opacity-50",
+                                COLLECTION_STATUS_META[displayStatus].className
+                              )}
+                            >
+                              {(Object.keys(COLLECTION_STATUS_META) as DataCollectionStatus[]).map((status) => (
+                                <option key={status} value={status}>
+                                  {COLLECTION_STATUS_META[status].label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span
+                              className={cn(
+                                "inline-flex rounded-full border px-2 py-0.5 text-[11px] font-black",
+                                COLLECTION_STATUS_META[displayStatus].className
+                              )}
+                            >
+                              {COLLECTION_STATUS_META[displayStatus].label}
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-2.5 text-center text-xs font-bold text-slate-600">{collection.authorName}</td>
                         <td className="px-3 py-2.5 text-center text-xs font-bold text-slate-500">{formatDateTime(collection.createdAt)}</td>
@@ -244,9 +354,9 @@ export function DataCollectionBoard({
                 </tbody>
               </table>
             </TableShell>
-            {collections.length > VISIBLE_COLLECTION_LIMIT ? (
+            {filteredCollections.length > VISIBLE_COLLECTION_LIMIT ? (
               <button type="button" onClick={() => setShowAll((current) => !current)} className="tool-button mt-2 h-8 px-3 text-xs">
-                {showAll ? "접기" : `더보기 (${collections.length - VISIBLE_COLLECTION_LIMIT}건)`}
+                {showAll ? "접기" : `더보기 (${filteredCollections.length - VISIBLE_COLLECTION_LIMIT}건)`}
               </button>
             ) : null}
           </div>
@@ -283,7 +393,12 @@ function collectionEntryStatus(entry: CollectionEntryView | undefined) {
 
 function downloadCollectionCsv(collection: DataCollectionView, departments: BoardDepartment[]) {
   const statusLabel = (entry: CollectionEntryView | undefined) => (!entry ? "작성중" : entry.isCompleted ? "확정" : "검토중");
-  const escapeCell = (value: string) => `"${value.replace(/"/g, '""')}"`;
+  // CSV 수식 인젝션 방지: =, +, -, @, 탭/캐리지리턴으로 시작하는 셀은 앞에 작은따옴표를 붙여
+  // Excel이 수식/DDE로 실행하지 못하게 무력화한 뒤 인용한다.
+  const escapeCell = (value: string) => {
+    const neutralized = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+    return `"${neutralized.replace(/"/g, '""')}"`;
+  };
   const lines: string[] = [["부서", ...collection.columns.map((column, index) => column || `컬럼${index + 1}`), "상태"].map(escapeCell).join(",")];
   departments.forEach((department) => {
     const entry = collection.entries.find((row) => row.departmentId === department.id);

@@ -40,11 +40,19 @@ export async function updateSession(request: NextRequest) {
   }
 
   const isProtected = startsWithAny(pathname, protectedRoutes);
-  const {
-    data: { session }
-  } = await supabase.auth.getSession();
-  const hasSession = Boolean(session);
-  const expiresAtMs = session?.expires_at ? session.expires_at * 1000 : 0;
+  // getSession()은 쿠키를 서명 검증 없이 신뢰한다. getClaims()는 JWT 서명을 로컬에서 검증하며
+  // (캐시된 서명키 사용) Auth 서버 왕복이 없어 게이트 판정 속도는 그대로 유지된다.
+  let claimsExp = 0;
+  let hasSession = false;
+  try {
+    const { data: claimsData } = await supabase.auth.getClaims();
+    const claims = claimsData?.claims ?? null;
+    hasSession = Boolean(claims);
+    claimsExp = typeof claims?.exp === "number" ? claims.exp : 0;
+  } catch {
+    hasSession = false;
+  }
+  const expiresAtMs = claimsExp > 0 ? claimsExp * 1000 : 0;
   const shouldRefreshSoon = hasSession && expiresAtMs > 0 && expiresAtMs - Date.now() < 60_000;
 
   if (shouldRefreshSoon) {

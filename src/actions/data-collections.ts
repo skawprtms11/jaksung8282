@@ -119,11 +119,31 @@ export async function uploadCollectionImageAction(formData: FormData): Promise<A
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, message: "업로드할 사진을 선택하세요." };
   }
-  if (!file.type.startsWith("image/")) {
-    return { ok: false, message: "이미지 파일만 업로드할 수 있습니다." };
-  }
   if (file.size > MAX_IMAGE_BYTES) {
     return { ok: false, message: "사진은 5MB 이하로 업로드하세요." };
+  }
+  // 저장형 XSS 방지: 스크립트를 품을 수 있는 SVG를 차단하고, 클라이언트가 보낸 MIME 대신
+  // 매직바이트로 실제 래스터 이미지인지 검증한 뒤 contentType을 서버가 결정한다.
+  const RASTER_IMAGE_TYPES: Record<string, string> = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    webp: "image/webp",
+    gif: "image/gif"
+  };
+  const extension = file.name.split(".").pop()?.toLowerCase() || "";
+  const resolvedContentType = RASTER_IMAGE_TYPES[extension];
+  if (!resolvedContentType) {
+    return { ok: false, message: "PNG·JPG·WEBP·GIF 이미지만 업로드할 수 있습니다. (SVG 불가)" };
+  }
+  const header = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const startsWith = (bytes: number[], offset = 0) => bytes.every((byte, index) => header[offset + index] === byte);
+  const isPng = startsWith([0x89, 0x50, 0x4e, 0x47]);
+  const isJpeg = startsWith([0xff, 0xd8, 0xff]);
+  const isGif = startsWith([0x47, 0x49, 0x46, 0x38]);
+  const isWebp = startsWith([0x52, 0x49, 0x46, 0x46]) && startsWith([0x57, 0x45, 0x42, 0x50], 8);
+  if (!isPng && !isJpeg && !isGif && !isWebp) {
+    return { ok: false, message: "이미지 파일 형식을 확인하세요. (PNG·JPG·WEBP·GIF)" };
   }
 
   let adminClient;
@@ -132,10 +152,9 @@ export async function uploadCollectionImageAction(formData: FormData): Promise<A
   } catch {
     return { ok: false, message: "Supabase 관리자 환경변수를 확인하세요." };
   }
-  const extension = file.name.split(".").pop()?.toLowerCase() || "png";
   const path = `guides/${Date.now()}-${Math.random().toString(16).slice(2)}.${extension}`;
   const { error } = await adminClient.storage.from("data-collections").upload(path, file, {
-    contentType: file.type,
+    contentType: resolvedContentType,
     upsert: false
   });
   if (error) {
@@ -170,6 +189,37 @@ export async function closeDataCollectionAction(formData: FormData): Promise<Act
   revalidatePath("/data-collections");
   revalidatePath("/department-reports");
   return { ok: true, message: "취합건을 종결했습니다." };
+}
+
+const COLLECTION_STATUSES = ["in_progress", "on_hold", "completed", "cancelled"] as const;
+export type DataCollectionStatus = (typeof COLLECTION_STATUSES)[number];
+
+// 취합건 상태 변경(진행/보류/완료/취소). 수동 완료는 진행률과 무관하게 허용한다.
+export async function setDataCollectionStatusAction(formData: FormData): Promise<ActionResult> {
+  const { profile } = await getCurrentUserProfile();
+  if (!profile?.is_active || !isAdmin(profile)) {
+    return { ok: false, message: "취합 상태 변경은 관리자만 가능합니다." };
+  }
+  const collectionId = String(formData.get("id") ?? "");
+  const status = String(formData.get("status") ?? "") as DataCollectionStatus;
+  if (!collectionId || !COLLECTION_STATUSES.includes(status)) {
+    return { ok: false, message: "변경할 상태를 확인하세요." };
+  }
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요." };
+  }
+  const { error } = await supabase
+    .from("data_collections")
+    .update({ status, updated_by: profile.id, updated_at: new Date().toISOString() })
+    .eq("id", collectionId)
+    .is("deleted_at", null);
+  if (error) {
+    return { ok: false, message: safeErrorMessage(error.message) };
+  }
+  revalidatePath("/data-collections");
+  revalidatePath("/department-reports");
+  return { ok: true, message: "취합 상태를 변경했습니다." };
 }
 
 export async function deleteDataCollectionAction(formData: FormData): Promise<ActionResult> {

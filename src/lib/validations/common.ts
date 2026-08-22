@@ -118,6 +118,12 @@ export const userSchema = z.object({
   notes: z.string().trim().optional().nullable(),
   is_active: formBooleanSchema.default(true),
   invite: formBooleanSchema.default(false)
+}).superRefine((value, ctx) => {
+  // 부서 스코프로 데이터 접근이 결정되는 역할은 부서 없이 만들면 스코프가 무효화된다.
+  // (관리자만 전 부서 접근이 정상) — 비관리자 계정은 부서를 필수로 강제한다.
+  if (value.app_role !== "admin" && !value.department_id) {
+    ctx.addIssue({ code: "custom", path: ["department_id"], message: "관리자 외 계정은 소속 부서를 지정해야 합니다." });
+  }
 });
 
 export const reportItemSchema = z.object({

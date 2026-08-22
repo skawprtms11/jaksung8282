@@ -188,6 +188,16 @@ export type Tables = {
     };
     Update: Partial<Tables["user_registration_requests"]["Row"]>;
   };
+  registration_attempts: {
+    Row: {
+      id: string;
+      ip_hash: string | null;
+      email: string | null;
+      created_at: string;
+    };
+    Insert: Partial<Tables["registration_attempts"]["Row"]>;
+    Update: Partial<Tables["registration_attempts"]["Row"]>;
+  };
   data_collections: {
     Row: {
       id: string;
@@ -197,6 +207,7 @@ export type Tables = {
       image_url: string | null;
       collection_type: string;
       entry_mode: string;
+      status: string;
       link_url: string | null;
       template: Json;
       closed_at: string | null;

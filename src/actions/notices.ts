@@ -190,6 +190,9 @@ export async function saveNoticeCollectionStatusAction(formData: FormData): Prom
   if (!profile) {
     return { ok: false, message: "로그인이 필요합니다." };
   }
+  if (!profile.is_active) {
+    return { ok: false, message: "비활성 사용자는 완료여부를 입력할 수 없습니다." };
+  }
   if (!profile.department_id || !profile.department_name) {
     return { ok: false, message: "소속 부서가 지정된 사용자만 완료여부를 입력할 수 있습니다." };
   }
