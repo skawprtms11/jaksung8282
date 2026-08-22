@@ -40,7 +40,25 @@ describe("master validation schemas", () => {
     }
   });
 
-  it("allows user creation without department_id", () => {
+  it("allows admin creation without department_id", () => {
+    const parsed = userSchema.safeParse({
+      email: "user@example.com",
+      employee_no: "EMP001",
+      full_name: "테스트관리자",
+      department_id: "",
+      app_role: "admin",
+      notes: "",
+      is_active: "true",
+      invite: "false"
+    });
+
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.department_id).toBeUndefined();
+    }
+  });
+
+  it("rejects non-admin creation without department_id", () => {
     const parsed = userSchema.safeParse({
       email: "user@example.com",
       employee_no: "EMP001",
@@ -52,10 +70,7 @@ describe("master validation schemas", () => {
       invite: "false"
     });
 
-    expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      expect(parsed.data.department_id).toBeUndefined();
-    }
+    expect(parsed.success).toBe(false);
   });
 
   it("validates report item request content", () => {

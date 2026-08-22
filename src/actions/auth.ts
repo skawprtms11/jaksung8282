@@ -1,5 +1,7 @@
 "use server";
 
+import { createHash } from "crypto";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { normalizeAuthRedirect } from "@/lib/auth/redirect";
@@ -7,6 +9,22 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { employeeNoSchema, idSchema } from "@/lib/validations/common";
 import type { ActionResult } from "@/lib/utils/form";
+
+// 가입 요청 레이트리밋 임계값(공유 저장소 = Supabase). 가입 화면에서만 동작하므로 주요 흐름 속도와 무관하다.
+const REGISTRATION_IP_LIMIT = 10; // 10분당 IP별
+const REGISTRATION_EMAIL_LIMIT = 5; // 1시간당 이메일별
+const REGISTRATION_IP_WINDOW_MS = 10 * 60 * 1000;
+const REGISTRATION_EMAIL_WINDOW_MS = 60 * 60 * 1000;
+
+async function getClientIpHash() {
+  const headerStore = await headers();
+  const raw =
+    headerStore.get("x-nf-client-connection-ip") ||
+    headerStore.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    headerStore.get("x-real-ip") ||
+    "";
+  return raw ? createHash("sha256").update(raw).digest("hex") : null;
+}
 
 const updatePasswordSchema = z
   .object({
@@ -82,6 +100,44 @@ export async function requestUserRegistrationAction(_: ActionResult | null, form
     return { ok: false, message: "사용자 가입 요청을 위해 서버에 SUPABASE_SERVICE_ROLE_KEY를 설정하세요." };
   }
 
+  // 계정 열거(enumeration) 방지: 이메일·사번의 존재 여부가 응답으로 드러나지 않도록
+  // 부서 불일치·기존 계정·대기 요청 등 모든 사후 분기를 동일한 접수 메시지로 통일한다.
+  // 내부적으로는 중복 계정을 만들지 않고 조용히 종료한다.
+  const REGISTRATION_ACK = {
+    ok: true as const,
+    message: "가입 요청이 접수되었습니다. 관리자 또는 부서 승인 후 로그인할 수 있습니다."
+  };
+
+  // 레이트리밋: 같은 IP/이메일의 최근 시도 횟수를 확인해 자동화 남용·대량 선점을 차단한다.
+  // 존재 여부와 무관하게 시도량 기준이라 열거 오라클을 만들지 않는다.
+  const ipHash = await getClientIpHash();
+  const nowMs = Date.now();
+  const ipWindowStart = new Date(nowMs - REGISTRATION_IP_WINDOW_MS).toISOString();
+  const emailWindowStart = new Date(nowMs - REGISTRATION_EMAIL_WINDOW_MS).toISOString();
+  const [{ count: ipAttemptCount }, { count: emailAttemptCount }] = await Promise.all([
+    ipHash
+      ? admin
+          .from("registration_attempts")
+          .select("id", { count: "exact", head: true })
+          .eq("ip_hash", ipHash)
+          .gte("created_at", ipWindowStart)
+      : Promise.resolve({ count: 0 }),
+    admin
+      .from("registration_attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("email", parsed.data.email)
+      .gte("created_at", emailWindowStart)
+  ]);
+  if ((ipAttemptCount ?? 0) >= REGISTRATION_IP_LIMIT || (emailAttemptCount ?? 0) >= REGISTRATION_EMAIL_LIMIT) {
+    return { ok: false, message: "가입 요청이 너무 많습니다. 잠시 후 다시 시도하세요." };
+  }
+  await admin.from("registration_attempts").insert({ ip_hash: ipHash, email: parsed.data.email });
+  // 오래된 기록은 정리해 테이블이 무한정 커지지 않게 한다(실패는 무시).
+  await admin
+    .from("registration_attempts")
+    .delete()
+    .lt("created_at", new Date(nowMs - REGISTRATION_EMAIL_WINDOW_MS).toISOString());
+
   const { data: department } = await admin
     .from("departments")
     .select("id")
@@ -89,7 +145,7 @@ export async function requestUserRegistrationAction(_: ActionResult | null, form
     .eq("is_active", true)
     .maybeSingle();
   if (!department) {
-    return { ok: false, message: "소속 부서를 확인하세요." };
+    return REGISTRATION_ACK;
   }
 
   const [
@@ -113,11 +169,14 @@ export async function requestUserRegistrationAction(_: ActionResult | null, form
       .eq("status", "pending")
       .limit(1)
   ]);
-  if ((activeEmailProfiles?.length ?? 0) > 0 || (activeEmployeeNoProfiles?.length ?? 0) > 0) {
-    return { ok: false, message: "이미 사용 중인 이메일 또는 사번입니다." };
-  }
-  if ((pendingEmailRequests?.length ?? 0) > 0 || (pendingEmployeeNoRequests?.length ?? 0) > 0) {
-    return { ok: false, message: "이미 승인 대기 중인 가입 요청이 있습니다." };
+  if (
+    (activeEmailProfiles?.length ?? 0) > 0 ||
+    (activeEmployeeNoProfiles?.length ?? 0) > 0 ||
+    (pendingEmailRequests?.length ?? 0) > 0 ||
+    (pendingEmployeeNoRequests?.length ?? 0) > 0
+  ) {
+    // 이미 존재하는 계정/요청은 새로 만들지 않고 동일한 접수 메시지를 반환한다.
+    return REGISTRATION_ACK;
   }
 
   const { data: authData, error: authError } = await admin.auth.admin.createUser({
@@ -130,7 +189,9 @@ export async function requestUserRegistrationAction(_: ActionResult | null, form
     }
   });
   if (authError || !authData.user) {
-    return { ok: false, message: "가입 요청 계정 생성에 실패했습니다. 이메일이 이미 등록되어 있는지 확인하세요." };
+    // 계정 생성 실패(대개 이미 등록된 이메일)도 존재 여부를 노출하지 않도록 동일 메시지로 응답한다.
+    console.error("requestUserRegistrationAction: createUser failed", authError?.message);
+    return REGISTRATION_ACK;
   }
 
   const { error: profileError } = await admin.from("profiles").upsert({
@@ -161,7 +222,7 @@ export async function requestUserRegistrationAction(_: ActionResult | null, form
     return { ok: false, message: "Supabase SQL 014번을 실행한 뒤 다시 가입 요청하세요." };
   }
 
-  return { ok: true, message: "사용자 등록 요청이 접수되었습니다. 관리자 또는 부서 승인 후 로그인할 수 있습니다." };
+  return REGISTRATION_ACK;
 }
 
 export async function signOutAction(formData: FormData) {

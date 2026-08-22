@@ -829,7 +829,8 @@ async function MeetingMaterialsContent({
       let openRequestRows = rpcData.openRequests;
       if ((activeTab === "collection" || activeTab === "materials") && compatibilityRequestData) {
         const departmentFilter = requestDepartmentFilter;
-        openRequestRows = compatibilityRequestData.filter((request) => {
+        // fail-closed: 전체부서 열람이 아닌데 부서 스코프가 없으면(부서 미지정 계정) 전 부서 노출을 막는다.
+        openRequestRows = !isMaterialsAllDept && !departmentFilter ? [] : compatibilityRequestData.filter((request) => {
           if (request.target_type === "client_item") {
             const report = request.weekly_client_report_items?.weekly_client_reports;
             return Boolean(

@@ -78,7 +78,17 @@ async function fetchCompatibilityRequestRows(tab: MeetingTab) {
   }
 }
 
-function filterCompatibilityRequests(rows: OpenRequestQueryRow[], params: MeetingSearchParams, resolvedDepartmentId: string | null) {
+function filterCompatibilityRequests(
+  rows: OpenRequestQueryRow[],
+  params: MeetingSearchParams,
+  resolvedDepartmentId: string | null,
+  allowAllDepartments: boolean
+) {
+  // fail-closed: 전체부서 열람이 허용되지 않았는데 부서 스코프가 없으면(부서 미지정 계정 등)
+  // 전 부서 요청이 새어나가지 않도록 아무것도 반환하지 않는다.
+  if (!allowAllDepartments && !resolvedDepartmentId) {
+    return [];
+  }
   return rows.filter((request) => {
     if (request.target_type === "client_item") {
       const report = request.weekly_client_report_items?.weekly_client_reports;
@@ -125,7 +135,12 @@ export async function GET(request: NextRequest) {
   // 전체부서(admin·부서/화주 미선택 materials): 확인요청을 모든 부서 기준으로 조회한다. 비관리자는 RPC가 자기 부서로 스코프.
   const isMaterialsAllDept = tab === "materials" && isAdmin(profile) && !params.department_id && !params.client_id;
   const compatibilityRequests = compatibilityRows
-    ? filterCompatibilityRequests(compatibilityRows, params, isMaterialsAllDept ? null : data.resolvedDepartmentId)
+    ? filterCompatibilityRequests(
+        compatibilityRows,
+        params,
+        isMaterialsAllDept ? null : data.resolvedDepartmentId,
+        isMaterialsAllDept
+      )
     : undefined;
   const tabData = buildMeetingTabData({
     tab,
