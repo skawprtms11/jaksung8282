@@ -1,14 +1,3 @@
-import {
-  BadgeCheck,
-  Boxes,
-  Building2,
-  ClipboardList,
-  Handshake,
-  MonitorCog,
-  MoreHorizontal,
-  ShieldCheck,
-  Users
-} from "lucide-react";
 import type { NoticeType, VolumeType, VolumeUnit } from "@/types/enums";
 
 export const noticeTypeLabels: Record<NoticeType, string> = {
@@ -36,18 +25,6 @@ export const volumeUnitLabels: Record<VolumeUnit, string> = {
   TON: "TON",
   CBM: "CBM",
   etc: "기타"
-};
-
-export const workCategoryIcons = {
-  ClipboardList,
-  Boxes,
-  BadgeCheck,
-  ShieldCheck,
-  Users,
-  Building2,
-  Handshake,
-  MonitorCog,
-  MoreHorizontal
 };
 
 export function formatDateTime(value?: string | null) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
+import { PASSWORD_CHANGE_REQUIRED_MESSAGE } from "@/lib/auth/password-change";
 import { canViewMeetingMaterials, isAdmin } from "@/lib/auth/permissions";
 import {
   getCurrentWeekOption,
@@ -19,6 +20,7 @@ import {
 import { loadMeetingReportAuthorNames } from "@/lib/reports/meeting-report-authors";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { idSchema } from "@/lib/validations/common";
 
 const REPORT_LIMIT = 500;
 const OPEN_REQUEST_SELECT =
@@ -101,16 +103,32 @@ function filterCompatibilityRequests(
 
 export async function GET(request: NextRequest) {
   const params = paramsFromRequest(request);
+  if (
+    (params.department_id && !idSchema.safeParse(params.department_id).success) ||
+    (params.client_id && !idSchema.safeParse(params.client_id).success)
+  ) {
+    return NextResponse.json({ error: "조회 조건을 확인하세요." }, { status: 400 });
+  }
   const tab = validTabs.has(params.tab as MeetingTab) ? (params.tab as MeetingTab) : "collection";
   const selectedWeek = getSelectedWeek(params);
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
     return NextResponse.json({ error: "데이터 연결을 확인할 수 없습니다." }, { status: 503 });
   }
-  // 권한 확인(auth→profile)·RPC·호환요청·작성자명 조회를 순차로 기다리면 왕복이 4번 쌓여 탭 전환이 느려진다.
-  // RPC는 호출자 권한으로 실행되고 RLS가 범위를 강제하므로 전부 병렬로 시작한 뒤 권한 미달이면 결과를 버린다.
-  const [{ profile }, { data, error }, compatibilityRows, reportAuthorNames] = await Promise.all([
-    getCurrentUserProfile(),
+  // 비로그인 요청은 JWT 서명만 로컬 검증하고 DB 를 한 번도 조회하지 않고 끊는다.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  if (!claimsData?.claims?.sub) {
+    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  }
+  // 권한 확인(auth→profile)·RPC·작성자명 조회를 순차로 기다리면 왕복이 쌓여 탭 전환이 느려진다.
+  // RPC는 호출자 권한으로 실행되고 RLS가 범위를 강제하므로 병렬로 시작한 뒤 권한 미달이면 결과를 버린다.
+  // 서비스 키로 RLS 를 우회하는 호환요청 조회만은 프로필·권한 확인이 끝난 뒤에 시작한다(RPC 와는 계속 겹쳐 실행).
+  const profilePromise = getCurrentUserProfile();
+  const compatibilityRowsPromise = profilePromise.then(({ profile }) =>
+    profile && canViewMeetingMaterials(profile) ? fetchCompatibilityRequestRows(tab) : undefined
+  );
+  const [{ profile, mustChangePassword }, { data, error }, compatibilityRows, reportAuthorNames] = await Promise.all([
+    profilePromise,
     supabase.rpc("get_meeting_materials_payload", {
       p_tab: tab,
       p_week_start_date: selectedWeek.weekStartDate,
@@ -120,16 +138,22 @@ export async function GET(request: NextRequest) {
       p_department_id: params.department_id ?? null,
       p_client_id: params.client_id ?? null
     }),
-    fetchCompatibilityRequestRows(tab),
+    compatibilityRowsPromise,
     tab === "materials"
       ? loadMeetingReportAuthorNames(supabase, selectedWeek.weekStartDate, params.department_id ?? null)
       : Promise.resolve<Record<string, string>>({})
   ]);
+  if (mustChangePassword) {
+    return NextResponse.json({ error: PASSWORD_CHANGE_REQUIRED_MESSAGE }, { status: 403 });
+  }
   if (!profile || !canViewMeetingMaterials(profile)) {
     return NextResponse.json({ error: "회의자료 접근 권한이 없습니다." }, { status: 403 });
   }
   if (error || !isMeetingMaterialsPayload(data)) {
-    return NextResponse.json({ error: error?.message ?? "회의자료 응답 형식이 올바르지 않습니다.", fallback: true }, { status: 503 });
+    if (error) {
+      console.error("get_meeting_materials_payload 실패", error.code);
+    }
+    return NextResponse.json({ error: "회의자료를 불러오지 못했습니다.", fallback: true }, { status: 503 });
   }
 
   // 전체부서(admin·부서/화주 미선택 materials): 확인요청을 모든 부서 기준으로 조회한다. 비관리자는 RPC가 자기 부서로 스코프.

@@ -49,7 +49,7 @@ export const noticeSchema = z.object({
   id: optionalIdSchema,
   notice_type: z.enum(noticeTypes),
   title: z.string().trim().min(1, "제목을 입력하세요.").max(200),
-  content: z.string().trim().min(1, "내용을 입력하세요."),
+  content: z.string().trim().min(1, "내용을 입력하세요.").max(20000, "내용은 20,000자 이하로 입력하세요."),
   is_pinned: formBooleanSchema.default(false),
   publish_start_date: z.string().optional().nullable(),
   publish_end_date: z.string().optional().nullable(),
@@ -89,7 +89,7 @@ export const departmentSchema = z.object({
   id: optionalIdSchema,
   department_code: z.string().trim().min(1, "부서코드를 입력하세요.").max(30),
   department_name: z.string().trim().min(1, "부서명을 입력하세요.").max(100),
-  notes: z.string().trim().optional().nullable(),
+  notes: z.string().trim().max(2000, "비고는 2,000자 이하로 입력하세요.").optional().nullable(),
   is_active: formBooleanSchema.default(true),
   sort_order: z.coerce.number().int().min(0).default(0)
 });
@@ -98,7 +98,7 @@ export const clientSchema = z.object({
   id: optionalIdSchema,
   client_code: z.string().trim().min(1, "화주코드를 입력하세요.").max(30),
   client_name: z.string().trim().min(1, "화주명을 입력하세요.").max(100),
-  notes: z.string().trim().optional().nullable(),
+  notes: z.string().trim().max(2000, "비고는 2,000자 이하로 입력하세요.").optional().nullable(),
   department_id: nullableIdSchema,
   is_active: formBooleanSchema.default(true),
   sort_order: z.coerce.number().int().min(0).default(0)
@@ -115,7 +115,7 @@ export const userSchema = z.object({
   full_name: z.string().trim().min(1, "성함을 입력하세요.").max(100),
   department_id: optionalIdSchema,
   app_role: z.enum(appRoles),
-  notes: z.string().trim().optional().nullable(),
+  notes: z.string().trim().max(2000, "비고는 2,000자 이하로 입력하세요.").optional().nullable(),
   is_active: formBooleanSchema.default(true),
   invite: formBooleanSchema.default(false)
 }).superRefine((value, ctx) => {
@@ -133,7 +133,7 @@ export const reportItemSchema = z.object({
   work_category_id: idSchema,
   title: z.string().trim().min(1, "제목을 입력하세요.").max(120, "제목은 120자 이하로 입력하세요."),
   // 제목만 작성한 항목도 저장을 허용한다.
-  content: z.string().trim().default(""),
+  content: z.string().trim().max(10000, "내용은 10,000자 이하로 입력하세요.").default(""),
   sort_order: z.coerce.number().int().min(0)
 });
 
@@ -142,8 +142,8 @@ export const volumeSchema = z.object({
   volume_type: z.enum(volumeTypes),
   quantity: z.coerce.number().min(0, "수량은 0 이상이어야 합니다."),
   unit: z.literal(VOLUME_UNIT),
-  custom_unit: z.string().trim().optional().nullable(),
-  note: z.string().trim().optional().nullable(),
+  custom_unit: z.string().trim().max(30).optional().nullable(),
+  note: z.string().trim().max(500, "비고는 500자 이하로 입력하세요.").optional().nullable(),
   sort_order: z.coerce.number().int().min(0)
 });
 
@@ -153,8 +153,8 @@ export const clientReportSchema = weekSelectionSchema.extend({
   client_id: idSchema,
   status: z.enum(clientReportStatuses).default("draft"),
   no_special_issue: formBooleanSchema.default(false),
-  items: z.array(reportItemSchema),
-  volumes: z.array(volumeSchema)
+  items: z.array(reportItemSchema).max(200, "항목은 200개 이하로 입력하세요."),
+  volumes: z.array(volumeSchema).max(50)
 }).superRefine((value, ctx) => {
   if (value.status !== "draft" && !value.no_special_issue && value.items.length === 0) {
     ctx.addIssue({ code: "custom", path: ["items"], message: "특이사항 없음이 아니면 최소 1개 항목이 필요합니다." });
@@ -165,16 +165,16 @@ export const departmentContentSchema = z.object({
   section_type: z.enum(["common", "facility", "vacancy", "holiday_work"]),
   current_importance: z.enum(importanceValues).default("medium"),
   current_work_category_id: idSchema,
-  current_week_content: z.string().trim().optional().default(""),
+  current_week_content: z.string().trim().max(20000, "내용은 20,000자 이하로 입력하세요.").optional().default(""),
   next_importance: z.enum(importanceValues).default("medium"),
   next_work_category_id: idSchema,
-  next_week_content: z.string().trim().optional().default("")
+  next_week_content: z.string().trim().max(20000, "내용은 20,000자 이하로 입력하세요.").optional().default("")
 });
 
 export const departmentSubmissionSchema = weekSelectionSchema.extend({
   id: optionalIdSchema,
   department_id: idSchema,
   status: z.enum(departmentSubmissionStatuses).default("draft"),
-  exception_reason: z.string().trim().optional().nullable(),
-  contents: z.array(departmentContentSchema).min(4, "4개 공통자료 탭을 모두 저장하세요.")
+  exception_reason: z.string().trim().max(2000, "사유는 2,000자 이하로 입력하세요.").optional().nullable(),
+  contents: z.array(departmentContentSchema).min(4, "4개 공통자료 탭을 모두 저장하세요.").max(10)
 });

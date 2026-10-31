@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getCurrentUserProfile } from "@/lib/auth/current-user";
+import { getCurrentUserProfile, requireActiveProfile } from "@/lib/auth/current-user";
 import { isAdmin } from "@/lib/auth/permissions";
 import { parseNoticeContent, serializeNoticeContent, type NoticeCollectionStatus } from "@/lib/notices/content";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -44,7 +44,7 @@ export async function saveNoticeAction(_: ActionResult | null, formData: FormDat
   if (id) {
     const { data: target, error: targetError } = await supabase
       .from("notices")
-      .select("id,created_by")
+      .select("id,created_by,notice_type,content")
       .eq("id", id)
       .is("deleted_at", null)
       .maybeSingle();
@@ -57,13 +57,23 @@ export async function saveNoticeAction(_: ActionResult | null, formData: FormDat
     if (!isAdmin(profile) && target.created_by !== profile.id) {
       return { ok: false, message: "본인이 작성한 게시글만 수정할 수 있습니다." };
     }
+    // 긴급 공지의 부서별 완료현황은 각 부서가 별도 RPC 로 기록한다. 수정 화면이 들고 있던(오래됐을 수 있는)
+    // 완료현황으로 덮어쓰지 않도록 본문·비고만 새 값으로 받고 완료현황은 DB 값을 유지한다.
+    if (target.notice_type === "urgent") {
+      const submitted = parseNoticeContent(payload.content);
+      payload.content = serializeNoticeContent({
+        ...submitted,
+        collectionStatuses: parseNoticeContent(String(target.content ?? "")).collectionStatuses
+      });
+    }
   }
   let request;
   if (id && !isAdmin(profile)) {
+    // 비관리자 작성자는 제목·본문만 고칠 수 있다. 고정·유형·노출·게시기간은 관리자 권한이다.
     try {
       request = createSupabaseAdminClient()
         .from("notices")
-        .update({ ...payload, updated_by: profile.id })
+        .update({ title: payload.title, content: payload.content, updated_by: profile.id })
         .eq("id", id)
         .is("deleted_at", null);
     } catch {
@@ -149,6 +159,13 @@ export async function deleteNoticeAction(_: ActionResult | null, formData: FormD
 }
 
 export async function incrementNoticeView(id: string) {
+  if (!idSchema.safeParse(id).success) {
+    return;
+  }
+  const { profile } = await requireActiveProfile();
+  if (!profile) {
+    return;
+  }
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
     return;
@@ -167,9 +184,9 @@ export async function loadNoticeCommentsAction(noticeId: string): Promise<Action
     return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요." };
   }
 
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  if (claimsError || !claimsData?.claims?.sub) {
-    return { ok: false, message: "로그인이 필요합니다." };
+  const { profile, error: profileError } = await requireActiveProfile();
+  if (!profile) {
+    return { ok: false, message: profileError };
   }
 
   const { data, error } = await supabase
@@ -197,9 +214,9 @@ export async function saveNoticeCollectionStatusAction(formData: FormData): Prom
     return { ok: false, message: "소속 부서가 지정된 사용자만 완료여부를 입력할 수 있습니다." };
   }
 
-  const noticeId = String(formData.get("notice_id") ?? "");
+  const parsedNoticeId = idSchema.safeParse(String(formData.get("notice_id") ?? ""));
   const isCompleted = formData.get("is_completed") === "true";
-  if (!noticeId) {
+  if (!parsedNoticeId.success) {
     return { ok: false, message: "공지사항을 확인할 수 없습니다." };
   }
 
@@ -208,46 +225,27 @@ export async function saveNoticeCollectionStatusAction(formData: FormData): Prom
     return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요." };
   }
 
-  const { data: notice, error: noticeError } = await serverClient
-    .from("notices")
-    .select("id,notice_type,content")
-    .eq("id", noticeId)
-    .eq("notice_type", "urgent")
-    .is("deleted_at", null)
-    .maybeSingle();
-
-  if (noticeError || !notice) {
-    return { ok: false, message: "자료취합 공지사항을 찾을 수 없습니다." };
-  }
-
-  const parsedContent = parseNoticeContent(String(notice.content ?? ""));
-  const nextStatuses = parsedContent.collectionStatuses.filter((row) => row.department_id !== profile.department_id);
-  const nextRow: NoticeCollectionStatus = {
-    department_id: profile.department_id,
-    department_name: profile.department_name,
-    is_completed: isCompleted,
-    confirmer_name: isCompleted ? profile.full_name : "",
-    updated_at: isCompleted ? new Date().toISOString() : undefined
-  };
-  nextStatuses.push(nextRow);
-
-  try {
-    const adminClient = createSupabaseAdminClient();
-    const { error } = await adminClient
-      .from("notices")
-      .update({
-        content: serializeNoticeContent({ ...parsedContent, collectionStatuses: nextStatuses }),
-        updated_by: profile.id
-      })
-      .eq("id", noticeId)
-      .eq("notice_type", "urgent");
-
-    if (error) {
-      return { ok: false, message: safeErrorMessage(error.message) };
+  // 여러 부서가 동시에 입력해도 서로의 완료여부를 덮어쓰지 않도록 DB 에서 행 잠금 후 자기 부서 항목만 바꾼다.
+  const { data, error } = await serverClient.rpc("set_notice_collection_status", {
+    p_notice_id: parsedNoticeId.data,
+    p_is_completed: isCompleted
+  });
+  if (error) {
+    if (error.message.includes("set_notice_collection_status") || error.message.includes("schema cache")) {
+      console.error("set_notice_collection_status RPC 없음", error.code);
+      return { ok: false, message: "Supabase migration 20261031100100을 먼저 적용하세요." };
     }
-  } catch {
-    return { ok: false, message: "Supabase 관리자 환경변수를 확인하세요." };
+    return { ok: false, message: safeErrorMessage(error.message) };
   }
+
+  const savedRow = (data ?? {}) as Partial<NoticeCollectionStatus>;
+  const nextRow: NoticeCollectionStatus = {
+    department_id: savedRow.department_id ?? profile.department_id,
+    department_name: savedRow.department_name ?? profile.department_name,
+    is_completed: savedRow.is_completed ?? isCompleted,
+    confirmer_name: savedRow.confirmer_name ?? "",
+    updated_at: savedRow.updated_at
+  };
 
   revalidatePath("/notices");
   return { ok: true, message: "자료취합 완료여부를 저장했습니다.", data: nextRow };
@@ -346,9 +344,9 @@ export async function saveNoticeCommentAction(formData: FormData): Promise<Actio
 }
 
 export async function deleteNoticeCommentAction(formData: FormData): Promise<ActionResult<{ id: string }>> {
-  const { profile } = await getCurrentUserProfile();
+  const { profile, error: profileError } = await requireActiveProfile();
   if (!profile) {
-    return { ok: false, message: "로그인이 필요합니다." };
+    return { ok: false, message: profileError };
   }
 
   const parsed = idSchema.safeParse(String(formData.get("id") ?? ""));

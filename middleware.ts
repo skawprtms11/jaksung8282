@@ -15,6 +15,7 @@ export const config = {
     "/client-reports/:path*",
     "/mobile/:path*",
     "/admin/:path*",
-    "/mini-game/:path*"
+    "/mini-game/:path*",
+    "/data-collections/:path*"
   ]
 };

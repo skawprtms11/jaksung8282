@@ -5,13 +5,16 @@ export type ProfileSummary = {
   full_name: string;
   email: string;
   employee_no?: string;
-  app_role: AppRole;
+  app_role: AppRole | null;
   department_id: string | null;
   department_name?: string | null;
   is_active: boolean;
 };
 
-export function roleLabel(role: AppRole) {
+export function roleLabel(role: AppRole | null) {
+  if (!role) {
+    return "권한 미지정";
+  }
   const labels: Record<AppRole, string> = {
     admin: "관리자",
     department_head: "부서장",

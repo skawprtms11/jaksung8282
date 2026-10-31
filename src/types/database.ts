@@ -97,7 +97,7 @@ export type Tables = {
       employee_no: string;
       full_name: string;
       department_id: string | null;
-      app_role: AppRole;
+      app_role: AppRole | null;
       notes: string | null;
       is_active: boolean;
       created_at: string;
@@ -197,6 +197,27 @@ export type Tables = {
     };
     Insert: Partial<Tables["registration_attempts"]["Row"]>;
     Update: Partial<Tables["registration_attempts"]["Row"]>;
+  };
+  login_attempts: {
+    Row: {
+      id: string;
+      email_hash: string;
+      ip_hash: string | null;
+      succeeded: boolean;
+      created_at: string;
+    };
+    Insert: Partial<Tables["login_attempts"]["Row"]> & { email_hash: string };
+    Update: Partial<Tables["login_attempts"]["Row"]>;
+  };
+  password_reset_attempts: {
+    Row: {
+      id: string;
+      email_hash: string;
+      ip_hash: string;
+      created_at: string;
+    };
+    Insert: Partial<Tables["password_reset_attempts"]["Row"]> & { email_hash: string; ip_hash: string };
+    Update: Partial<Tables["password_reset_attempts"]["Row"]>;
   };
   data_collections: {
     Row: {
@@ -563,6 +584,40 @@ export type Database = {
       };
     };
     Functions: {
+      reserve_login_attempt: {
+        Args: {
+          p_email_hash: string;
+          p_ip_hash: string;
+        };
+        Returns: {
+          blocked: boolean;
+          reason: string;
+          trusted_ip: boolean;
+        }[];
+      };
+      reserve_password_reset: {
+        Args: {
+          p_email_hash: string;
+          p_ip_hash: string;
+        };
+        Returns: {
+          blocked: boolean;
+          reason: string;
+        }[];
+      };
+      record_login_success: {
+        Args: {
+          p_email_hash: string;
+          p_ip_hash: string;
+        };
+        Returns: undefined;
+      };
+      revoke_user_sessions: {
+        Args: {
+          p_user_id: string;
+        };
+        Returns: number;
+      };
       bulk_import_clients_atomic: {
         Args: {
           p_rows: Json;
@@ -639,6 +694,10 @@ export type Database = {
       };
       transition_department_submission_status: {
         Args: { submission_id: string; next_status: string; comment?: string | null };
+        Returns: Json;
+      };
+      set_notice_collection_status: {
+        Args: { p_notice_id: string; p_is_completed: boolean };
         Returns: Json;
       };
       increment_notice_view: {

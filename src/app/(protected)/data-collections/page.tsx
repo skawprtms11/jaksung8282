@@ -1,5 +1,6 @@
 import { DataCollectionBoard, type BoardDepartment, type DataCollectionView } from "@/components/data-collections/DataCollectionBoard";
 import type { DataCollectionStatus } from "@/actions/data-collections";
+import { createCollectionImageUrlResolver } from "@/lib/data-collections/image";
 import { normalizeCollectionColumns, normalizeCollectionOptions, normalizeCollectionWidths, normalizeEntryRows } from "@/lib/data-collections/template";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { canViewMeetingMaterials, isAdmin } from "@/lib/auth/permissions";
@@ -65,6 +66,7 @@ export default async function DataCollectionsPage() {
         .limit(30)
     ]);
     const collectionRows = (collectionData ?? []) as CollectionQueryRow[];
+    const regularRows = (regularData ?? []) as CollectionQueryRow[];
     departments = (departmentData ?? []) as BoardDepartment[];
 
     const collectionIds = collectionRows.map((row) => row.id);
@@ -85,6 +87,11 @@ export default async function DataCollectionsPage() {
       nameById = new Map(((profileRows ?? []) as { id: string; full_name: string }[]).map((row) => [row.id, row.full_name]));
     }
 
+    // 비공개 버킷 사진은 서버에서 만료 1시간 서명 주소로 바꿔 내려준다.
+    const resolveImageUrl = await createCollectionImageUrlResolver(
+      [...collectionRows, ...regularRows].map((row) => row.image_url)
+    );
+
     const toView = (row: CollectionQueryRow, entries: EntryQueryRow[]) => {
       const columns = normalizeCollectionColumns(row.template);
       const widths = normalizeCollectionWidths(row.template, columns.length);
@@ -94,7 +101,7 @@ export default async function DataCollectionsPage() {
         title: row.title,
         description: row.description,
         example: row.example,
-        imageUrl: row.image_url,
+        imageUrl: resolveImageUrl(row.image_url),
         columns,
         widths,
         options,
@@ -119,7 +126,7 @@ export default async function DataCollectionsPage() {
       };
     };
     collections = collectionRows.map((row) => toView(row, entryRows));
-    regularTemplates = ((regularData ?? []) as CollectionQueryRow[]).map((row) => toView(row, []));
+    regularTemplates = regularRows.map((row) => toView(row, []));
   }
 
   return <DataCollectionBoard collections={collections} departments={departments} regularTemplates={regularTemplates} canCreate={isAdmin(profile)} />;

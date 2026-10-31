@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { getCurrentUserProfile } from "@/lib/auth/current-user";
+import { getCurrentUserProfile, requireActiveProfile } from "@/lib/auth/current-user";
 import {
   canSubmitDepartment,
   canReviewClientReport,
@@ -20,6 +20,7 @@ import {
 } from "@/lib/validations/common";
 import { formDataToObject, safeErrorMessage, type ActionResult } from "@/lib/utils/form";
 import type { Json } from "@/types/database";
+import { clientReportStatuses, departmentSubmissionStatuses } from "@/types/enums";
 import type { ClientReportStatus, DepartmentSubmissionStatus, VolumeType, VolumeUnit } from "@/types/enums";
 
 type DepartmentVacancyRecord = {
@@ -271,6 +272,16 @@ function getSelectedReportIds(formData: FormData) {
   return Array.from(new Set(formData.getAll("report_ids").map((value) => String(value)).filter(Boolean)));
 }
 
+const MAX_SELECTED_REPORTS = 200;
+const selectedReportIdsSchema = z.array(idSchema).max(MAX_SELECTED_REPORTS);
+
+// 선택 ID 는 화면에서 오지만 위조될 수 있어 uuid 형식과 개수 상한(200건)을 서버에서 다시 확인한다.
+function isValidSelectedReportIds(reportIds: string[]) {
+  return selectedReportIdsSchema.safeParse(reportIds).success;
+}
+
+const MAX_TRANSITION_COMMENT_LENGTH = 2000;
+
 const CONFIRMATION_CANCEL_WINDOW_DAYS = 3;
 const CONFIRMATION_CANCEL_WINDOW_MS = CONFIRMATION_CANCEL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
@@ -293,12 +304,9 @@ function makeReportItemRequestTargetKey(target: ReportItemRequestTarget) {
 }
 
 async function canAccessReportItemRequestTarget(target: ReportItemRequestTarget) {
-  const { profile } = await getCurrentUserProfile();
+  const { profile, error: profileError } = await requireActiveProfile();
   if (!profile) {
-    return { ok: false as const, message: "로그인이 필요합니다.", profile: null };
-  }
-  if (!profile.is_active) {
-    return { ok: false as const, message: "비활성 사용자는 요청사항을 처리할 수 없습니다.", profile: null };
+    return { ok: false as const, message: profileError, profile: null };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -358,6 +366,13 @@ async function canAccessReportItemRequestTarget(target: ReportItemRequestTarget)
 async function softDeleteClientReports(reportIds: string[]) {
   if (reportIds.length === 0) {
     return { ok: false, message: "삭제할 화주별 자료를 선택하세요." };
+  }
+  if (!isValidSelectedReportIds(reportIds)) {
+    return { ok: false, message: "선택한 화주별 자료를 확인하세요. 한 번에 200건까지 처리할 수 있습니다." };
+  }
+  const { error: profileError } = await requireActiveProfile();
+  if (profileError) {
+    return { ok: false, message: profileError };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -422,7 +437,10 @@ export async function saveClientReportAction(_: ActionResult<SavedClientReportRo
     return { ok: false, message: "화주자료 작성 화면에서는 저장 또는 확정만 처리할 수 있습니다." };
   }
   const reportId = id ?? "";
-  const profilePromise = getCurrentUserProfile();
+  const { profile, error: profileError } = await requireActiveProfile();
+  if (!profile) {
+    return { ok: false, message: profileError };
+  }
 
   const { data: savedResult, error } = await supabase.rpc("save_client_report_atomic", {
     p_report_id: reportId || null,
@@ -454,15 +472,12 @@ export async function saveClientReportAction(_: ActionResult<SavedClientReportRo
     return { ok: true, message: nextStatus === "submitted" ? "검토요청을 완료했습니다." : "화주별 자료를 저장했습니다." };
   }
 
-  const [{ data: savedReport }, { profile }] = await Promise.all([
-    supabase
-      .from("weekly_client_reports")
-      .select(SAVED_CLIENT_REPORT_SELECT)
-      .eq("id", savedId)
-      .is("deleted_at", null)
-      .maybeSingle(),
-    profilePromise
-  ]);
+  const { data: savedReport } = await supabase
+    .from("weekly_client_reports")
+    .select(SAVED_CLIENT_REPORT_SELECT)
+    .eq("id", savedId)
+    .is("deleted_at", null)
+    .maybeSingle();
   if (!savedReport) {
     return { ok: true, message: nextStatus === "submitted" ? "검토요청을 완료했습니다." : "화주별 자료를 저장했습니다." };
   }
@@ -474,7 +489,7 @@ export async function saveClientReportAction(_: ActionResult<SavedClientReportRo
     id: report.id,
     clientId: report.client_id,
     clientName: report.clients?.client_name ?? "-",
-    authorName: profile?.id === report.created_by ? profile.full_name : "-",
+    authorName: profile.id === report.created_by ? profile.full_name : "-",
     weekStartDate: report.week_start_date,
     weekLabel: `${report.report_year}.${String(report.report_month).padStart(2, "0")} ${report.week_of_month}주차`,
     submittedAt: report.submitted_at,
@@ -544,10 +559,19 @@ export async function transitionClientReportAction(_: ActionResult | null, formD
   const reportId = String(formData.get("report_id") ?? "");
   const nextStatus = String(formData.get("next_status") ?? "") as ClientReportStatus;
   const comment = String(formData.get("comment") ?? "").trim();
+  if (!idSchema.safeParse(reportId).success || !clientReportStatuses.includes(nextStatus)) {
+    return { ok: false, message: "변경할 자료와 상태를 확인하세요." };
+  }
+  if (comment.length > MAX_TRANSITION_COMMENT_LENGTH) {
+    return { ok: false, message: "사유는 2,000자 이하로 입력하세요." };
+  }
   if (nextStatus === "rejected" && !comment) {
     return { ok: false, message: "반려사유를 입력하세요." };
   }
-  const { profile } = await getCurrentUserProfile();
+  const { profile, error: profileError } = await requireActiveProfile();
+  if (!profile) {
+    return { ok: false, message: profileError };
+  }
   if (!canReviewClientReport(profile)) {
     return { ok: false, message: "화주자료 승인·반려 권한이 없습니다." };
   }
@@ -566,7 +590,7 @@ export async function transitionClientReportAction(_: ActionResult | null, formD
   if (!isAllowedClientTransition(report.status, nextStatus)) {
     return { ok: false, message: "허용되지 않은 상태 변경입니다." };
   }
-  if (!isAdmin(profile) && profile?.department_id !== report.department_id) {
+  if (!isAdmin(profile) && profile.department_id !== report.department_id) {
     return { ok: false, message: "소속 부서 자료만 검토할 수 있습니다." };
   }
   const { error } = await supabase.rpc("transition_client_report_status", {
@@ -609,8 +633,8 @@ export type LoadedClientReportForEdit = {
   }[];
 };
 
-// 작성 팝업의 화주 전환용 단건 조회. RLS(부서 접근 범위)가 열람 권한을 강제하므로
-// 프로필 조회 없이 쿼리 1회로 끝낸다 — 전환 반응 속도가 요구사항이다.
+// 작성 팝업의 화주 전환용 단건 조회. RLS(부서 접근 범위)가 열람 권한을 강제하고,
+// 활성 계정 확인은 조회와 병렬로 수행해 전환 반응 속도(요구사항)를 유지한다.
 export async function loadClientReportForEditAction({
   department_id,
   client_id,
@@ -636,18 +660,24 @@ export async function loadClientReportForEditAction({
     return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요.", status: null, report: null };
   }
 
-  const { data, error } = await supabase
-    .from("weekly_client_reports")
-    .select(
-      "id,department_id,client_id,week_start_date,status,weekly_client_report_items(id,item_period,importance,work_category_id,title,content,sort_order),weekly_volumes(volume_type,quantity,unit,custom_unit,note,sort_order)"
-    )
-    .eq("department_id", parsed.data.department_id)
-    .eq("client_id", parsed.data.client_id)
-    .eq("week_start_date", parsed.data.week_start_date)
-    .is("deleted_at", null)
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const [{ error: profileError }, { data, error }] = await Promise.all([
+    requireActiveProfile(),
+    supabase
+      .from("weekly_client_reports")
+      .select(
+        "id,department_id,client_id,week_start_date,status,weekly_client_report_items(id,item_period,importance,work_category_id,title,content,sort_order),weekly_volumes(volume_type,quantity,unit,custom_unit,note,sort_order)"
+      )
+      .eq("department_id", parsed.data.department_id)
+      .eq("client_id", parsed.data.client_id)
+      .eq("week_start_date", parsed.data.week_start_date)
+      .is("deleted_at", null)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+  ]);
+  if (profileError) {
+    return { ok: false, message: profileError, status: null, report: null };
+  }
   if (error) {
     return { ok: false, message: safeErrorMessage(error.message), status: null, report: null };
   }
@@ -683,6 +713,13 @@ export async function submitSelectedClientReportsAction(_: ActionResult | null, 
   if (reportIds.length === 0) {
     return { ok: false, message: "확정할 화주별 자료를 선택하세요." };
   }
+  if (!isValidSelectedReportIds(reportIds)) {
+    return { ok: false, message: "선택한 화주별 자료를 확인하세요. 한 번에 200건까지 처리할 수 있습니다." };
+  }
+  const { error: profileError } = await requireActiveProfile();
+  if (profileError) {
+    return { ok: false, message: profileError };
+  }
 
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
@@ -702,6 +739,13 @@ export async function cancelSubmittedClientReportsAction(_: ActionResult | null,
   const reportIds = getSelectedReportIds(formData);
   if (reportIds.length === 0) {
     return { ok: false, message: "확정취소할 화주별 자료를 선택하세요." };
+  }
+  if (!isValidSelectedReportIds(reportIds)) {
+    return { ok: false, message: "선택한 화주별 자료를 확인하세요. 한 번에 200건까지 처리할 수 있습니다." };
+  }
+  const { error: profileError } = await requireActiveProfile();
+  if (profileError) {
+    return { ok: false, message: profileError };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -767,7 +811,10 @@ export async function adminEditClientReportItemAction({
   }
 
   // RPC가 최종 권한을 강제하지만, 다른 액션과 같은 패턴으로 서버에서도 역할을 사전 확인한다.
-  const { profile } = await getCurrentUserProfile();
+  const { profile, error: profileError } = await requireActiveProfile();
+  if (!profile) {
+    return { ok: false, message: profileError };
+  }
   if (!canReviewClientReport(profile)) {
     return { ok: false, message: "관리자 수정 권한이 없습니다. (관리자·부서장·매니저 전용)" };
   }
@@ -817,6 +864,10 @@ export async function saveDepartmentSubmissionAction(
   const parsed = departmentSubmissionSchema.safeParse(object);
   if (!parsed.success) {
     return { ok: false, message: "입력값을 확인하세요.", fieldErrors: parsed.error.flatten().fieldErrors };
+  }
+  const { error: profileError } = await requireActiveProfile();
+  if (profileError) {
+    return { ok: false, message: profileError };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -942,7 +993,7 @@ export async function cancelDepartmentSubmissionAction(
   formData: FormData
 ): Promise<ActionResult<SavedDepartmentSubmissionResult>> {
   const submissionId = String(formData.get("id") ?? "");
-  if (!submissionId) {
+  if (!idSchema.safeParse(submissionId).success) {
     return { ok: false, message: "확정취소할 부서자료를 찾을 수 없습니다." };
   }
 
@@ -1625,10 +1676,19 @@ export async function transitionDepartmentSubmissionAction(_: ActionResult | nul
   const submissionId = String(formData.get("submission_id") ?? "");
   const nextStatus = String(formData.get("next_status") ?? "") as DepartmentSubmissionStatus;
   const comment = String(formData.get("comment") ?? "").trim();
+  if (!idSchema.safeParse(submissionId).success || !departmentSubmissionStatuses.includes(nextStatus)) {
+    return { ok: false, message: "변경할 자료와 상태를 확인하세요." };
+  }
+  if (comment.length > MAX_TRANSITION_COMMENT_LENGTH) {
+    return { ok: false, message: "사유는 2,000자 이하로 입력하세요." };
+  }
   if (nextStatus === "division_rejected" && !comment) {
     return { ok: false, message: "반려사유를 입력하세요." };
   }
-  const { profile } = await getCurrentUserProfile();
+  const { profile, error: profileError } = await requireActiveProfile();
+  if (!profile) {
+    return { ok: false, message: profileError };
+  }
   if (!isAdmin(profile)) {
     return { ok: false, message: "사업부 최종 승인·반려는 관리자만 가능합니다." };
   }
@@ -1747,9 +1807,9 @@ export async function deleteReportItemRequestAction(formData: FormData): Promise
     return { ok: false, message: "삭제할 요청사항을 확인하세요." };
   }
 
-  const { profile } = await getCurrentUserProfile();
+  const { profile, error: profileError } = await requireActiveProfile();
   if (!profile) {
-    return { ok: false, message: "로그인이 필요합니다." };
+    return { ok: false, message: profileError };
   }
 
   let adminClient: ReturnType<typeof createSupabaseAdminClient>;

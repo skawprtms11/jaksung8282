@@ -20,7 +20,7 @@ function isPreferredAdminScopeName(value: string) {
   return normalizeScopeName(value) === ADMIN_DEFAULT_SCOPE_NAME;
 }
 
-export function pickDefaultDepartmentId(departments: DepartmentLike[], role: AppRole) {
+export function pickDefaultDepartmentId(departments: DepartmentLike[], role: AppRole | null) {
   if (departments.length === 0) {
     return "";
   }
@@ -32,7 +32,7 @@ export function pickDefaultDepartmentId(departments: DepartmentLike[], role: App
   return departments[0]?.id ?? "";
 }
 
-export function pickDefaultClientId(clients: ClientLike[], role: AppRole) {
+export function pickDefaultClientId(clients: ClientLike[], role: AppRole | null) {
   if (clients.length === 0) {
     return "";
   }

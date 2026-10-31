@@ -1,18 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { getInitialPassword, isInitialPasswordAdjusted } from "@/lib/auth/initial-password";
+import { generateTemporaryPassword, TEMPORARY_PASSWORD_LENGTH } from "@/lib/auth/initial-password";
 
-describe("getInitialPassword", () => {
-  it("keeps employee numbers with at least six characters unchanged", () => {
-    expect(getInitialPassword("Y7215039")).toBe("Y7215039");
-    expect(isInitialPasswordAdjusted("Y7215039")).toBe(false);
+describe("generateTemporaryPassword", () => {
+  it("creates a password of at least 12 characters with upper, lower and digit", () => {
+    for (let index = 0; index < 200; index += 1) {
+      const password = generateTemporaryPassword();
+      expect(password).toHaveLength(TEMPORARY_PASSWORD_LENGTH);
+      expect(TEMPORARY_PASSWORD_LENGTH).toBeGreaterThanOrEqual(12);
+      expect(password).toMatch(/[A-Z]/);
+      expect(password).toMatch(/[a-z]/);
+      expect(password).toMatch(/[0-9]/);
+      expect(password).toMatch(/^[A-Za-z0-9]+$/);
+    }
   });
 
-  it("pads short employee numbers to the Supabase minimum length", () => {
-    expect(getInitialPassword("test1")).toBe("test10");
-    expect(isInitialPasswordAdjusted("test1")).toBe(true);
+  it("excludes visually confusing characters", () => {
+    const joined = Array.from({ length: 300 }, () => generateTemporaryPassword()).join("");
+    expect(joined).not.toMatch(/[IlOo01]/);
   });
 
-  it("trims surrounding whitespace before deriving the password", () => {
-    expect(getInitialPassword("  test1  ")).toBe("test10");
+  it("does not repeat between calls and is not derived from the employee number", () => {
+    const passwords = new Set(Array.from({ length: 100 }, () => generateTemporaryPassword()));
+    expect(passwords.size).toBe(100);
+  });
+
+  it("rejects lengths shorter than 12", () => {
+    expect(() => generateTemporaryPassword(8)).toThrow();
+    expect(generateTemporaryPassword(16)).toHaveLength(16);
   });
 });
