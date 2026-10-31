@@ -23,10 +23,13 @@ describe("security headers", () => {
     expect(CONTENT_SECURITY_POLICY).not.toContain("unsafe-eval");
   });
 
-  it("sends CSP as Report-Only in production and never enforces it from next.config", () => {
+  it("enforces CSP in production without a Report-Only header", () => {
     const production = headerMap(true);
-    expect(production.get("Content-Security-Policy-Report-Only")).toBe(CONTENT_SECURITY_POLICY);
-    expect(production.has("Content-Security-Policy")).toBe(false);
+    const csp = production.get("Content-Security-Policy");
+    expect(csp).toBe(CONTENT_SECURITY_POLICY);
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).not.toContain("unsafe-eval");
+    expect(production.has("Content-Security-Policy-Report-Only")).toBe(false);
     expect(production.get("X-Frame-Options")).toBe("DENY");
     expect(production.get("X-Content-Type-Options")).toBe("nosniff");
     expect(production.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
@@ -35,6 +38,7 @@ describe("security headers", () => {
 
   it("omits CSP in development because HMR uses eval", () => {
     const development = headerMap(false);
+    expect(development.has("Content-Security-Policy")).toBe(false);
     expect(development.has("Content-Security-Policy-Report-Only")).toBe(false);
     expect(development.get("X-Frame-Options")).toBe("DENY");
   });

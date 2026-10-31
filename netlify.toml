@@ -7,7 +7,7 @@
   NEXT_TELEMETRY_DISABLED = "1"
 
 # 이 [[headers]] 는 Netlify 가 직접 내보내는 정적 파일 응답에만 붙고 Next.js SSR 응답에는 붙지 않는다.
-# SSR 응답의 보안 헤더는 next.config.ts headers() 가 담당하며, CSP 는 그쪽에서 Report-Only 단계다.
+# SSR 응답의 보안 헤더는 next.config.ts headers() 가 담당하며, CSP 는 그쪽도 강제 적용이다(운영 모드 한정).
 # 값은 next.config.ts 상수와 같아야 한다(tests/security-headers.test.ts 가 비교).
 [[headers]]
   for = "/*"
@@ -17,7 +17,7 @@
     Referrer-Policy = "strict-origin-when-cross-origin"
     Strict-Transport-Security = "max-age=31536000; includeSubDomains"
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=()"
-    # 정적 파일용 강제 CSP. SSR 응답은 next.config.ts 가 같은 값을 Report-Only 로 붙인다.
+    # 정적 파일용 강제 CSP. SSR 응답은 next.config.ts 가 같은 값을 강제 CSP 로 붙인다.
     # script-src의 unsafe-inline은 Next.js가 하이드레이션·RSC 페이로드를 인라인 <script>로 내보내므로 유지한다
     # (nonce 기반 CSP로 바꾸려면 모든 페이지가 동적 렌더링이 되어야 해 보류). unsafe-eval은 운영 번들에 불필요해 제거했다.
     # 데이터 유출·클릭재킹 방어에 핵심인 connect-src(백엔드 화이트리스트)·img-src·frame-ancestors·object-src·base-uri를 조인다.

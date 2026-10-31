@@ -50,3 +50,12 @@ describe("login attempt HMAC", () => {
     error.mockRestore();
   });
 });
+
+describe("login attempt IP key", () => {
+  it("hashes IPv6 addresses in the same /64 to the same value", () => {
+    const key = deriveLoginHashKey("service-key-a");
+    expect(hashLoginIp(key, "2001:db8:0:1::1")).toBe(hashLoginIp(key, "2001:db8:0:1:ffff::2"));
+    expect(hashLoginIp(key, "2001:db8:0:1::1")).not.toBe(hashLoginIp(key, "2001:db8:0:2::1"));
+    expect(hashLoginIp(key, "::ffff:203.0.113.10")).toBe(hashLoginIp(key, "203.0.113.10"));
+  });
+});
