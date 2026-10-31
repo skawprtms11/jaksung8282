@@ -36,3 +36,41 @@ insert into public.profiles (
 ```
 
 업무구분 seed는 `006_seed_data.sql`에 포함되어 있다.
+
+## 배포 후 점검
+
+마이그레이션 적용 후(특히 표·함수를 새로 만든 뒤) SQL Editor에서 아래를 확인한다.
+
+1. public 스키마에 `anon` 권한이 붙은 표·뷰가 없어야 한다. 결과가 0행이어야 정상이다.
+
+```sql
+select table_name, privilege_type
+from information_schema.role_table_grants
+where table_schema = 'public'
+  and grantee = 'anon'
+order by table_name, privilege_type;
+```
+
+2. 함수 실행권도 같은 방식으로 확인한다(`anon` 이 실행할 수 있는 public 함수가 의도한 것뿐인지).
+
+```sql
+select routine_name
+from information_schema.role_routine_grants
+where routine_schema = 'public'
+  and grantee = 'anon'
+order by routine_name;
+```
+
+- 왜 다시 붙을 수 있나: Supabase 플랫폼 역할 `supabase_admin` 의 기본 권한(default privileges)에 `anon` 이 남아 있어,
+  플랫폼(대시보드·확장·플랫폼 작업)이 만든 객체에는 `anon` 권한이 자동으로 붙을 수 있다.
+  이 기본 권한은 우리 계정(`postgres`) 권한으로 바꿀 수 없다
+  (`alter default privileges for role supabase_admin ...` 실행 시 permission denied 확인).
+  그래서 마이그레이션으로 막지 못하고 배포 후 점검으로 잡는다.
+- 붙어 있으면 새 migration 파일로 회수한다(대상 표·함수 이름만 바꿔서).
+
+```sql
+revoke all on table public.<table_name> from anon;
+revoke execute on function public.<function_name>(<arg types>) from public, anon;
+```
+
+- 회수 후 1번·2번 쿼리를 다시 실행해 0행(또는 의도한 함수만)인지 확인한다.

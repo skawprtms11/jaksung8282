@@ -5,12 +5,17 @@ import {
   PASSWORD_RESET_ACK_MESSAGE,
   PASSWORD_RESET_EMAIL_LIMIT,
   PASSWORD_RESET_IP_LIMIT,
+  PASSWORD_RESET_PAIR_LIMIT,
   PASSWORD_RESET_WINDOW_MS,
   shouldSendPasswordReset
 } from "@/lib/auth/password-reset-limit";
 
 const MINUTE = 60 * 1000;
 const RPC_MIGRATION = path.resolve(__dirname, "../supabase/migrations/20261031130000_login_attempt_rpc.sql");
+const PAIR_MIGRATION = path.resolve(
+  __dirname,
+  "../supabase/migrations/20261031140000_password_reset_pair_limit.sql"
+);
 
 function functionBody(sql: string, functionName: string) {
   const start = sql.indexOf(`create or replace function public.${functionName}(`);
@@ -18,19 +23,30 @@ function functionBody(sql: string, functionName: string) {
 }
 
 describe("password reset limit thresholds match the SQL function", () => {
-  const sql = readFileSync(RPC_MIGRATION, "utf-8");
+  const tableSql = readFileSync(RPC_MIGRATION, "utf-8");
+  const sql = readFileSync(PAIR_MIGRATION, "utf-8");
   const body = functionBody(sql, "reserve_password_reset");
 
-  it("uses 3 per email and 10 per IP within 1 hour", () => {
-    expect(PASSWORD_RESET_EMAIL_LIMIT).toBe(3);
+  it("uses 3 per email+IP pair, 10 per email and 10 per IP within 1 hour", () => {
+    expect(PASSWORD_RESET_PAIR_LIMIT).toBe(3);
+    expect(PASSWORD_RESET_EMAIL_LIMIT).toBe(10);
     expect(PASSWORD_RESET_IP_LIMIT).toBe(10);
     expect(PASSWORD_RESET_WINDOW_MS).toBe(60 * MINUTE);
   });
 
   it("keeps reserve_password_reset constants equal to the TS constants", () => {
+    expect(body).toContain(`c_pair_limit constant integer := ${PASSWORD_RESET_PAIR_LIMIT};`);
     expect(body).toContain(`c_email_limit constant integer := ${PASSWORD_RESET_EMAIL_LIMIT};`);
     expect(body).toContain(`c_ip_limit constant integer := ${PASSWORD_RESET_IP_LIMIT};`);
     expect(body).toContain(`c_window constant interval := interval '${PASSWORD_RESET_WINDOW_MS / MINUTE} minutes';`);
+  });
+
+  it("keeps the signature and return type of the previous function", () => {
+    const signature = "public.reserve_password_reset(p_email_hash text, p_ip_hash text)\n" +
+      "returns table (blocked boolean, reason text)";
+    expect(tableSql).toContain(signature);
+    expect(sql).toContain(signature);
+    expect(body).toContain("security definer");
   });
 
   it("restricts the function and table to service_role", () => {
@@ -39,12 +55,21 @@ describe("password reset limit thresholds match the SQL function", () => {
       "revoke execute on function public.reserve_password_reset(text, text) from public, anon, authenticated;"
     );
     expect(sql).toContain("grant execute on function public.reserve_password_reset(text, text) to service_role;");
-    expect(sql).toContain("alter table public.password_reset_attempts enable row level security;");
-    expect(sql).toContain("revoke all on table public.password_reset_attempts from public, anon, authenticated;");
+    expect(tableSql).toContain("alter table public.password_reset_attempts enable row level security;");
+    expect(tableSql).toContain("revoke all on table public.password_reset_attempts from public, anon, authenticated;");
   });
 
-  it("applies only the email limit to the unknown IP bucket", () => {
+  it("skips the IP limit for the unknown bucket but keeps the email+IP pair limit", () => {
     expect(body).toMatch(/if v_ip_hash <> 'unknown' and \(/);
+    expect(body).toContain("and pra.ip_hash = v_ip_hash");
+    expect(body).toContain("'pair'::text");
+  });
+
+  it("locks email before IP", () => {
+    const emailLock = body.indexOf("pg_advisory_xact_lock(1,");
+    const ipLock = body.indexOf("pg_advisory_xact_lock(2,");
+    expect(emailLock).toBeGreaterThan(-1);
+    expect(ipLock).toBeGreaterThan(emailLock);
   });
 });
 
@@ -102,10 +127,12 @@ describe("resetPasswordAction response", () => {
     resetPasswordForEmail.mockResolvedValue({ error: null });
     expect(await resetPasswordAction(null, resetForm("user@example.com"))).toEqual(expected);
 
-    rpc.mockResolvedValue({ data: [{ blocked: true, reason: "email" }], error: null });
-    resetPasswordForEmail.mockClear();
-    expect(await resetPasswordAction(null, resetForm("user@example.com"))).toEqual(expected);
-    expect(resetPasswordForEmail).not.toHaveBeenCalled();
+    for (const reason of ["pair", "email", "ip"]) {
+      rpc.mockResolvedValue({ data: [{ blocked: true, reason }], error: null });
+      resetPasswordForEmail.mockClear();
+      expect(await resetPasswordAction(null, resetForm("user@example.com"))).toEqual(expected);
+      expect(resetPasswordForEmail).not.toHaveBeenCalled();
+    }
 
     rpc.mockResolvedValue({ data: [{ blocked: false, reason: "none" }], error: null });
     resetPasswordForEmail.mockResolvedValue({ error: { code: "over_email_send_rate_limit" } });
