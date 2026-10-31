@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { DeleteNoticeButton } from "@/components/notices/DeleteNoticeButton";
 import { NoticeForm } from "@/components/notices/NoticeForm";
 import { PageHeader } from "@/components/common/PageHeader";
+import { ScopedLink } from "@/components/layout/ScopedLink";
 import { incrementNoticeView } from "@/actions/notices";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { isAdmin } from "@/lib/auth/permissions";
@@ -58,9 +59,15 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
         <div className="glass-fieldset mt-6 whitespace-pre-wrap p-4 text-sm leading-7 text-slate-800">{notice.content}</div>
       </article>
       <div className="mt-4 flex gap-2">
-        <Link href="/notices" className="tool-button">
-          목록
-        </Link>
+        {profile ? (
+          <ScopedLink href="/notices" profileId={profile.id} className="tool-button">
+            목록
+          </ScopedLink>
+        ) : (
+          <Link href="/notices" className="tool-button">
+            목록
+          </Link>
+        )}
       </div>
       {isAdmin(profile) ? (
         <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_auto]">

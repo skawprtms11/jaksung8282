@@ -146,6 +146,8 @@ export default async function MobilePage({ searchParams }: { searchParams: Promi
 
   return (
     <MobileAppShell
+      profileId={profile.id}
+      role={profile.app_role}
       initialView={initialView}
       departments={departmentOptions}
       clients={clients}

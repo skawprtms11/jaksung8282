@@ -1,5 +1,6 @@
 import { NoticeBoard } from "@/components/notices/NoticeBoard";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
+import { resolveServerDepartmentScope } from "@/lib/auth/header-scope";
 import { isAdmin } from "@/lib/auth/permissions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { toContainsPattern } from "@/lib/utils/search";
@@ -34,7 +35,7 @@ function toNoticeRow(row: NoticeQueryRow): NoticeRow {
 export default async function NoticesPage({
   searchParams
 }: {
-  searchParams: Promise<{ q?: string; type?: NoticeType; page?: string }>;
+  searchParams: Promise<{ q?: string; type?: NoticeType; page?: string; department_id?: string; client_id?: string }>;
 }) {
   const params = await searchParams;
   const { profile } = await getCurrentUserProfile();
@@ -45,6 +46,10 @@ export default async function NoticesPage({
   let notices: NoticeRow[] = [];
   let importantNotices: NoticeRow[] = [];
   let departments: DepartmentRow[] = [];
+  // 공지에는 화주 연결 데이터가 없어 헤더의 부서 조건만 자료취합 공지의 부서별 완료현황에 적용한다.
+  const departmentScope = profile
+    ? resolveServerDepartmentScope(profile, params.department_id)
+    : ({ kind: "blocked" } as const);
 
   if (supabase) {
     let query = supabase
@@ -86,6 +91,12 @@ export default async function NoticesPage({
     importantNotices = ((importantNoticeData ?? []) as unknown as NoticeQueryRow[]).map(toNoticeRow);
     departments = (departmentData ?? []) as DepartmentRow[];
   }
+  const collectionDepartments =
+    departmentScope.kind === "all"
+      ? departments
+      : departmentScope.kind === "department"
+        ? departments.filter((department) => department.id === departmentScope.departmentId)
+        : [];
 
   return (
     <NoticeBoard
@@ -93,6 +104,7 @@ export default async function NoticesPage({
       importantNotices={importantNotices}
       comments={[]}
       departments={departments}
+      collectionDepartments={collectionDepartments}
       canCreate={isAdmin(profile)}
       currentUser={
         profile
@@ -107,6 +119,8 @@ export default async function NoticesPage({
       }
       defaultQuery={params.q ?? ""}
       defaultType={params.type ?? ""}
+      headerDepartmentId={params.department_id}
+      headerClientId={params.client_id}
     />
   );
 }

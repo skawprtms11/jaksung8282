@@ -23,6 +23,8 @@ UI 노출 권한과 `src/actions/notices.ts`의 서버 검사를 함께 유지�
 - `type`: `general | important | urgent | system`
 - `page`: 1부터 시작하는 페이지 번호, 페이지당 10건
 
+- `department_id`, `client_id`: 상단 헤더 조건(`docs/menus/README.md` 상단 헤더 조건 절). 공지는 부서 조건만 쓴다. 관리자는 선택 부서(없으면 전체), 그 외는 소속 부서의 자료취합 완료현황 행만 상세·완료현황 팝업에 표시한다. 검색 폼은 두 값을 hidden 으로 유지한다.
+
 목록은 `deleted_at is null`, `is_active = true`만 조회하고 고정 여부, 최신 등록일 순으로 정렬한다. 고정 공지는 일반 목록과 별도로 최신 5건을 조회해 상단에 표시한다. 댓글 수는 삭제되지 않은 댓글 count로 계산한다.
 
 ## 4. 화면 구조와 상호작용

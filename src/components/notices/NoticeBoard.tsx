@@ -157,19 +157,26 @@ export function NoticeBoard({
   importantNotices,
   comments,
   departments,
+  collectionDepartments = departments,
   canCreate,
   currentUser,
   defaultQuery,
-  defaultType
+  defaultType,
+  headerDepartmentId,
+  headerClientId
 }: {
   notices: NoticeBoardRow[];
   importantNotices: NoticeBoardRow[];
   comments: NoticeCommentRow[];
   departments: DepartmentRow[];
+  // 부서별 완료현황 표시 대상(헤더 부서 조건 반영). 새 자료취합 공지의 대상 부서는 계속 departments 전체다.
+  collectionDepartments?: DepartmentRow[];
   canCreate: boolean;
   currentUser: CurrentUser | null;
   defaultQuery?: string;
   defaultType?: NoticeType | "";
+  headerDepartmentId?: string;
+  headerClientId?: string;
 }) {
   const router = useRouter();
   const [writeOpen, setWriteOpen] = useState(false);
@@ -323,6 +330,8 @@ export function NoticeBoard({
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <form method="get" action="/notices" className="flex flex-wrap items-center justify-end gap-2">
+            {headerDepartmentId ? <input type="hidden" name="department_id" value={headerDepartmentId} /> : null}
+            {headerClientId ? <input type="hidden" name="client_id" value={headerClientId} /> : null}
             <select
               name="type"
               defaultValue={defaultType ?? ""}
@@ -495,7 +504,7 @@ export function NoticeBoard({
           isCommentsLoading={loadingCommentNoticeId === detailNotice.id}
           commentsError={commentLoadError?.noticeId === detailNotice.id ? commentLoadError.message : null}
           currentUser={currentUser}
-          departments={departments}
+          departments={collectionDepartments}
           onClose={() => setDetailNotice(null)}
           onOpenCollection={() => setCollectionNotice(detailNotice)}
           onCommentSaved={upsertVisibleComment}
@@ -505,7 +514,7 @@ export function NoticeBoard({
       {collectionNotice ? (
         <NoticeCollectionDialog
           notice={collectionNotice}
-          departments={departments}
+          departments={collectionDepartments}
           currentUser={currentUser}
           onClose={() => {
             setCollectionNotice(null);
