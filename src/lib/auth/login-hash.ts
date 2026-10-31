@@ -1,6 +1,6 @@
 import "server-only";
 import { createHmac } from "node:crypto";
-import { UNKNOWN_IP_BUCKET } from "@/lib/auth/client-ip";
+import { toRateLimitIpKey, UNKNOWN_IP_BUCKET } from "@/lib/auth/client-ip";
 import { getServiceRoleKey } from "@/lib/supabase/config";
 
 // login_attempts 의 email_hash·ip_hash 전용 HMAC-SHA256. 평문 sha256 은 이메일·IP 처럼 후보가 좁은 값을
@@ -24,8 +24,9 @@ export function hashLoginEmail(key: Buffer, email: string) {
 }
 
 // IP 헤더가 없으면(빈 문자열) 해시하지 않고 'unknown' 버킷으로 묶는다(DB 함수가 이 값으로 신뢰 IP 를 제외).
+// IPv6 는 /64 대역 단위로 묶은 키를 해시한다(toRateLimitIpKey). 로그인 잠금·재설정 메일 제한 공용.
 export function hashLoginIp(key: Buffer, rawIp: string) {
-  return rawIp ? hmacHex(key, rawIp) : UNKNOWN_IP_BUCKET;
+  return rawIp ? hmacHex(key, toRateLimitIpKey(rawIp)) : UNKNOWN_IP_BUCKET;
 }
 
 // 서비스 키가 없으면 null. 호출부는 기존 정책대로 제한 없이 진행한다(fail-open, 원인은 서버 로그).

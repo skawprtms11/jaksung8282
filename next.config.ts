@@ -19,7 +19,8 @@ export const CONTENT_SECURITY_POLICY = [
 
 export const PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=(), payment=()";
 
-// 로그인 후 화면에서 위반이 없는지 확인하기 전이라 CSP 는 보고 전용(Report-Only)으로 먼저 배포한다.
+// Report-Only 단계에서 운영 화면 위반 0건을 확인해 강제 CSP 로 전환했다.
+// 되돌리기: 아래 헤더 이름을 "Content-Security-Policy-Report-Only" 로 바꾸면 보고 전용으로 돌아간다.
 // next dev 는 HMR 이 eval 을 쓰므로 개발 모드에서는 CSP 헤더를 생략한다.
 export function buildSecurityHeaders(isProduction: boolean) {
   const headers = [
@@ -29,7 +30,7 @@ export function buildSecurityHeaders(isProduction: boolean) {
     { key: "Permissions-Policy", value: PERMISSIONS_POLICY }
   ];
   if (isProduction) {
-    headers.push({ key: "Content-Security-Policy-Report-Only", value: CONTENT_SECURITY_POLICY });
+    headers.push({ key: "Content-Security-Policy", value: CONTENT_SECURITY_POLICY });
   }
   return headers;
 }

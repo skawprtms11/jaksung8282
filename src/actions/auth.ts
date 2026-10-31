@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { resolveClientIp, UNKNOWN_IP_BUCKET } from "@/lib/auth/client-ip";
+import { resolveClientIp, toRateLimitIpKey, UNKNOWN_IP_BUCKET } from "@/lib/auth/client-ip";
 import { getLoginHashKey, hashLoginEmail, hashLoginIp } from "@/lib/auth/login-hash";
 import { loginLockMessage } from "@/lib/auth/login-lock";
 import { isRecoverySession, mustChangePassword } from "@/lib/auth/password-change";
@@ -26,10 +26,10 @@ const REGISTRATION_IP_WINDOW_MS = 10 * 60 * 1000;
 const REGISTRATION_EMAIL_WINDOW_MS = 60 * 60 * 1000;
 
 // 가입 요청 제한 전용 IP 해시(평문 sha256). 운영 registration_attempts 기록과 호환되도록 방식을 유지한다.
-// 헤더 우선순위와 사유는 resolveClientIp(src/lib/auth/client-ip.ts) 참고.
+// 헤더 우선순위와 사유는 resolveClientIp(src/lib/auth/client-ip.ts) 참고. IPv6 는 /64 대역 단위로 묶는다.
 async function getClientIpHash() {
   const raw = resolveClientIp(await headers());
-  return raw ? createHash("sha256").update(raw).digest("hex") : UNKNOWN_IP_BUCKET;
+  return raw ? createHash("sha256").update(toRateLimitIpKey(raw)).digest("hex") : UNKNOWN_IP_BUCKET;
 }
 
 type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
