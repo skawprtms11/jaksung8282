@@ -44,6 +44,8 @@ export type DataCollectionView = {
   authorName: string;
   createdAt: string;
   entries: CollectionEntryView[];
+  // 활성 부서 전체 기준 확정 부서 수. entries 가 헤더 부서 조건으로 좁혀져도 전체 진행률은 이 값으로 계산한다.
+  completedDepartmentCount: number;
 };
 
 const VISIBLE_COLLECTION_LIMIT = 5;
@@ -77,8 +79,7 @@ function completionRate(collection: DataCollectionView, totalDepartments: number
   if (totalDepartments === 0) {
     return 0;
   }
-  const completed = collection.entries.filter((entry) => entry.isCompleted).length;
-  return Math.min(100, Math.round((completed / totalDepartments) * 100));
+  return Math.min(100, Math.round((collection.completedDepartmentCount / totalDepartments) * 100));
 }
 
 const COLLECTION_STATUS_META: Record<DataCollectionStatus, { label: string; className: string }> = {
@@ -114,15 +115,21 @@ function CompletionBar({ percent, className }: { percent: number; className?: st
 export function DataCollectionBoard({
   collections,
   departments,
+  totalDepartmentCount,
+  scopedDepartmentName,
   regularTemplates,
   canCreate
 }: {
   collections: DataCollectionView[];
   departments: BoardDepartment[];
+  // 진행률·자동 완료 상태·상태 필터는 표시 부서와 무관하게 활성 부서 전체 수로 계산한다.
+  totalDepartmentCount: number;
+  // 헤더 부서 조건으로 한 부서만 보는 중이면 그 부서명. 전체 진행률과 선택 부서 확정 여부를 문구로 구분한다.
+  scopedDepartmentName: string | null;
   regularTemplates: DataCollectionView[];
   canCreate: boolean;
 }) {
-  const totalDepartments = departments.length;
+  const totalDepartments = totalDepartmentCount;
   const router = useRouter();
   const [editorState, setEditorState] = useState<{ mode: "create" } | { mode: "edit"; row: DataCollectionView } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(collections[0]?.id ?? null);
@@ -173,7 +180,7 @@ export function DataCollectionBoard({
     if (collections.length === 0 || totalDepartments === 0) {
       return 0;
     }
-    const completed = collections.reduce((sum, collection) => sum + collection.entries.filter((entry) => entry.isCompleted).length, 0);
+    const completed = collections.reduce((sum, collection) => sum + collection.completedDepartmentCount, 0);
     return Math.min(100, Math.round((completed / (collections.length * totalDepartments)) * 100));
   }, [collections, totalDepartments]);
 
@@ -202,6 +209,9 @@ export function DataCollectionBoard({
                 <Table2 className="h-5 w-5" aria-hidden="true" />
               </span>
               <h2 className="text-base font-black text-[#012241]">취합등록 현황</h2>
+              {scopedDepartmentName ? (
+                <span className="text-xs font-bold text-slate-500">전체 부서 진행률</span>
+              ) : null}
             </div>
             <CompletionBar percent={overallPercent} className="w-full max-w-sm" />
           </div>
@@ -260,7 +270,7 @@ export function DataCollectionBoard({
                     <th className="px-3 py-2.5 text-center text-xs font-black tracking-[0.02em] text-slate-500!">상태</th>
                     <th className="px-3 py-2.5 text-center text-xs font-black tracking-[0.02em] text-slate-500!">등록자</th>
                     <th className="px-3 py-2.5 text-center text-xs font-black tracking-[0.02em] text-slate-500!">등록일</th>
-                    <th className="px-3 py-2.5 text-xs font-black tracking-[0.02em] text-slate-500!">완료율</th>
+                    <th className="px-3 py-2.5 text-xs font-black tracking-[0.02em] text-slate-500!">{scopedDepartmentName ? "완료율(전체 부서)" : "완료율"}</th>
                     <th className="px-3 py-2.5 text-center text-xs font-black tracking-[0.02em] text-slate-500!">관리</th>
                   </tr>
                 </thead>
@@ -363,7 +373,7 @@ export function DataCollectionBoard({
         )}
       </section>
 
-      {selected ? <CollectionEntriesPanel collection={selected} departments={departments} /> : null}
+      {selected ? <CollectionEntriesPanel collection={selected} departments={departments} scopedDepartmentName={scopedDepartmentName} /> : null}
 
       {editorState ? (
         <DataCollectionEditorDialog
@@ -417,7 +427,15 @@ function downloadCollectionCsv(collection: DataCollectionView, departments: Boar
   URL.revokeObjectURL(url);
 }
 
-function CollectionEntriesPanel({ collection, departments }: { collection: DataCollectionView; departments: BoardDepartment[] }) {
+function CollectionEntriesPanel({
+  collection,
+  departments,
+  scopedDepartmentName
+}: {
+  collection: DataCollectionView;
+  departments: BoardDepartment[];
+  scopedDepartmentName: string | null;
+}) {
   const confirmedNames = collection.entries.filter((entry) => entry.isCompleted).map((entry) => entry.departmentName);
   // 부서마스터의 활성 부서 전체를 기본 표시한다. 작성 전 부서는 빈 행 1개로 표만 그린다.
   const departmentGroups = departments.map((department) => {
@@ -432,7 +450,9 @@ function CollectionEntriesPanel({ collection, departments }: { collection: DataC
         <div className="min-w-0">
           <h2 className="text-base font-black text-[#012241]">{collection.title} · 부서별 작성 내용</h2>
           <p className="mt-0.5 text-xs font-bold text-slate-500">
-            확정 {confirmedNames.length}/{departments.length}개 부서{confirmedNames.length > 0 ? ` · ${confirmedNames.join(", ")}` : ""}
+            {scopedDepartmentName
+              ? `선택 부서 ${scopedDepartmentName}: ${confirmedNames.length > 0 ? "확정" : "미확정"}`
+              : `확정 ${confirmedNames.length}/${departments.length}개 부서${confirmedNames.length > 0 ? ` · ${confirmedNames.join(", ")}` : ""}`}
           </p>
         </div>
         <button type="button" onClick={() => downloadCollectionCsv(collection, departments)} className="tool-button h-9">

@@ -1,10 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import { Building2, LogOut, PackageSearch, PanelLeftOpen } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Building2, LogOut, PackageSearch, PanelLeftOpen, UserRound } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { signOutAction } from "@/actions/auth";
 import { pickDefaultClientId, pickDefaultDepartmentId } from "@/lib/auth/default-scope";
+import {
+  getHeaderScopeMode,
+  resolveEffectiveDepartmentId,
+  resolveScopeRestore,
+  shouldRestoreHeaderScope,
+  toPersistedHeaderScope,
+  type HeaderScopeMode
+} from "@/lib/auth/header-scope";
+import { useStoredHeaderScope, writeStoredHeaderScope } from "@/lib/auth/header-scope-store";
+import { SignOutForm } from "./SignOutForm";
 import type { ProfileSummary } from "@/lib/auth/permissions";
 import { canViewMeetingMaterials, roleLabel } from "@/lib/auth/permissions";
 
@@ -55,7 +64,6 @@ const routeMeta: Record<string, { title: string; description: string }> = {
   }
 };
 
-const filteredRoutes = new Set(["/meeting-materials", "/department-reports", "/client-reports"]);
 const emptyFilterOptions: HeaderFilterOptions = { departments: [], clients: [], assignedClientIds: [] };
 const filterCacheTtlMs = 10 * 60 * 1000;
 
@@ -142,14 +150,22 @@ function getRouteMeta(pathname: string) {
   };
 }
 
+const scopeModeNotices: Record<HeaderScopeMode, string> = {
+  full: "",
+  department: "이 화면은 부서 조건만 적용",
+  none: "이 화면은 헤더 조건 미적용"
+};
+
 function HeaderScopeFilter({
   pathname,
   profile,
-  options
+  options,
+  scopeMode
 }: {
   pathname: string;
   profile: ProfileSummary;
   options: HeaderFilterOptions;
+  scopeMode: HeaderScopeMode;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -161,10 +177,18 @@ function HeaderScopeFilter({
     return emptyFilterOptions;
   });
   const [isLoadingOptions, setIsLoadingOptions] = useState(() => !hasFilterOptions(options));
+  const storedScope = useStoredHeaderScope(profile.id);
+  const fallbackScopeKeyRef = useRef("");
   const hasLoadedOptions = hasFilterOptions(loadedOptions);
   const activeOptions = hasLoadedOptions ? loadedOptions : emptyFilterOptions;
-  const selectedDepartmentId = searchParams.get("department_id") ?? "";
-  const selectedClientId = searchParams.get("client_id") ?? "";
+  const isScopeApplied = scopeMode !== "none";
+  const isClientScopeApplied = scopeMode === "full";
+  const urlDepartmentId = searchParams.get("department_id") ?? "";
+  const urlClientId = searchParams.get("client_id") ?? "";
+  // 조건 미적용 화면(관리 화면 등)의 department_id 는 그 화면 자체 필터라 헤더에는 저장된 조건을 보여준다.
+  const selectedDepartmentId = isScopeApplied ? urlDepartmentId : storedScope.departmentId;
+  const selectedClientId = isScopeApplied ? urlClientId : storedScope.clientId;
+  const isAdminUser = profile.app_role === "admin";
   const isClientWritePage = pathname === "/client-reports";
   const isDepartmentReportPage = pathname === "/department-reports";
   const requiresDepartmentSelection = isDepartmentReportPage || isClientWritePage;
@@ -175,12 +199,24 @@ function HeaderScopeFilter({
     activeMeetingTab === "materials" &&
     !selectedClientId &&
     profile.app_role !== "admin";
-  const restrictClientReportsAll = isClientWritePage && !selectedDepartmentId;
-  const restrictDepartmentReportsAll = isDepartmentReportPage && !selectedDepartmentId;
   const preferredDepartmentId = pickDefaultDepartmentId(activeOptions.departments, profile.app_role);
-  const fallbackDepartmentId =
-    restrictMeetingMaterialsAll || restrictClientReportsAll || restrictDepartmentReportsAll ? preferredDepartmentId : "";
-  const effectiveDepartmentId = selectedDepartmentId || fallbackDepartmentId;
+  const departmentIds = useMemo(() => activeOptions.departments.map((department) => department.id), [activeOptions.departments]);
+  const effectiveDepartmentId = resolveEffectiveDepartmentId({
+    role: profile.app_role,
+    selectedDepartmentId,
+    preferredDepartmentId,
+    departmentIds,
+    requiresDepartment: restrictMeetingMaterialsAll || requiresDepartmentSelection
+  });
+  const pendingRestore = isScopeApplied && shouldRestoreHeaderScope(pathname)
+    ? resolveScopeRestore({
+        urlScope: { departmentId: urlDepartmentId, clientId: urlClientId },
+        storedScope
+      })
+    : null;
+  const hasPendingRestore = pendingRestore !== null;
+  const restoreDepartmentId = pendingRestore?.departmentId ?? "";
+  const restoreClientId = pendingRestore?.clientId ?? "";
   const effectiveDepartmentIndex = activeOptions.departments.findIndex((department) => department.id === effectiveDepartmentId);
   const previousDepartment = isMeetingMaterialsTab && effectiveDepartmentIndex > 0 ? activeOptions.departments[effectiveDepartmentIndex - 1] : null;
   const nextDepartment =
@@ -275,7 +311,7 @@ function HeaderScopeFilter({
     return () => controller.abort();
   }, [hasLoadedOptions, profile.id]);
 
-  const updateFilter = useCallback((nextDepartmentId: string, nextClientId: string) => {
+  const replaceFilterInUrl = useCallback((nextDepartmentId: string, nextClientId: string) => {
     const nextParams = new URLSearchParams(searchParams.toString());
     if (nextDepartmentId) {
       nextParams.set("department_id", nextDepartmentId);
@@ -296,6 +332,21 @@ function HeaderScopeFilter({
     });
   }, [pathname, router, searchParams]);
 
+  // 사용자가 직접 바꾼 조건은 URL 반영 전에 저장해, 이동 중에도 저장값이 새 조건을 가리키게 한다.
+  const updateFilter = useCallback((nextDepartmentId: string, nextClientId: string) => {
+    writeStoredHeaderScope(
+      profile.id,
+      toPersistedHeaderScope({
+        role: profile.app_role,
+        scope: { departmentId: nextDepartmentId, clientId: nextClientId },
+        departmentIds,
+        clients: activeOptions.clients,
+        assignedClientIds: activeOptions.assignedClientIds
+      })
+    );
+    replaceFilterInUrl(nextDepartmentId, nextClientId);
+  }, [activeOptions.assignedClientIds, activeOptions.clients, departmentIds, profile.app_role, profile.id, replaceFilterInUrl]);
+
   const replaceDefaultFilterInHistory = useCallback((nextDepartmentId: string, nextClientId: string) => {
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.set("department_id", nextDepartmentId);
@@ -306,12 +357,50 @@ function HeaderScopeFilter({
     }
     const query = nextParams.toString();
     if (query !== searchParams.toString()) {
+      // 화면이 자동으로 채운 기본값은 사용자가 고른 조건이 아니므로 다음 화면으로 넘기지 않는다.
+      fallbackScopeKeyRef.current = `${nextDepartmentId}|${nextClientId}`;
       window.history.replaceState(null, "", query ? `${pathname}?${query}` : pathname);
     }
   }, [pathname, searchParams]);
 
   useEffect(() => {
-    if (!hasLoadedOptions || isLoadingOptions || isPending) {
+    if (!hasPendingRestore || isPending) {
+      return;
+    }
+    replaceFilterInUrl(restoreDepartmentId, restoreClientId);
+  }, [hasPendingRestore, isPending, replaceFilterInUrl, restoreClientId, restoreDepartmentId]);
+
+  useEffect(() => {
+    if (!isScopeApplied || !hasLoadedOptions || (!urlDepartmentId && !urlClientId)) {
+      return;
+    }
+    if (fallbackScopeKeyRef.current === `${urlDepartmentId}|${urlClientId}`) {
+      return;
+    }
+    writeStoredHeaderScope(
+      profile.id,
+      toPersistedHeaderScope({
+        role: profile.app_role,
+        scope: { departmentId: urlDepartmentId, clientId: urlClientId },
+        departmentIds,
+        clients: activeOptions.clients,
+        assignedClientIds: activeOptions.assignedClientIds
+      })
+    );
+  }, [
+    activeOptions.assignedClientIds,
+    activeOptions.clients,
+    departmentIds,
+    hasLoadedOptions,
+    isScopeApplied,
+    profile.app_role,
+    profile.id,
+    urlClientId,
+    urlDepartmentId
+  ]);
+
+  useEffect(() => {
+    if (!hasLoadedOptions || isLoadingOptions || isPending || hasPendingRestore) {
       return;
     }
     if (!requiresDepartmentSelection && !restrictMeetingMaterialsAll) {
@@ -331,6 +420,7 @@ function HeaderScopeFilter({
     effectiveDepartmentId,
     fallbackClientId,
     hasLoadedOptions,
+    hasPendingRestore,
     isLoadingOptions,
     isPending,
     requiresClientSelection,
@@ -355,21 +445,23 @@ function HeaderScopeFilter({
     updateFilter(nextDepartmentId, "");
   }
 
+  const scopeNotice = scopeModeNotices[scopeMode];
+
   return (
-    <div className="hidden items-center gap-2.5 xl:flex">
-      <label className="filter-pill cursor-pointer">
-        <Building2 className="h-4 w-4 text-[#007050]" aria-hidden="true" />
-        <span className="cap">부서</span>
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <label className={`filter-pill min-w-0 ${isScopeApplied ? "cursor-pointer" : "opacity-60"}`}>
+        <Building2 className="h-4 w-4 shrink-0 text-[#007050]" aria-hidden="true" />
+        <span className="cap whitespace-nowrap">소속부서</span>
         <span className="sr-only">부서 필터</span>
         <select
           value={effectiveDepartmentId}
           onChange={(event) => handleDepartmentChange(event.target.value)}
-          disabled={isPending || isLoadingOptions}
-          className="h-6 w-32 cursor-pointer appearance-none bg-transparent text-sm font-black text-[#012241] outline-none"
+          disabled={!isScopeApplied || isPending || isLoadingOptions}
+          className="h-6 w-28 min-w-0 cursor-pointer appearance-none bg-transparent text-sm font-black text-[#012241] outline-none disabled:cursor-not-allowed sm:w-32"
           aria-label="부서 필터"
         >
           {isLoadingOptions ? <option value="">부서 불러오는 중</option> : null}
-          <option value="" disabled={restrictMeetingMaterialsAll || requiresDepartmentSelection}>
+          <option value="" disabled={restrictMeetingMaterialsAll || requiresDepartmentSelection || !isAdminUser}>
             {requiresDepartmentSelection ? "부서 선택" : "전체 부서"}
           </option>
           {activeOptions.departments.map((department) => (
@@ -379,15 +471,15 @@ function HeaderScopeFilter({
           ))}
         </select>
       </label>
-      <label className="filter-pill cursor-pointer">
-        <PackageSearch className="h-4 w-4 text-[#007050]" aria-hidden="true" />
-        <span className="cap">화주</span>
+      <label className={`filter-pill min-w-0 ${isClientScopeApplied ? "cursor-pointer" : "opacity-60"}`}>
+        <PackageSearch className="h-4 w-4 shrink-0 text-[#007050]" aria-hidden="true" />
+        <span className="cap whitespace-nowrap">화주</span>
         <span className="sr-only">화주 필터</span>
         <select
           value={effectiveClientId}
           onChange={(event) => updateFilter(effectiveDepartmentId, event.target.value)}
-          disabled={isPending || isLoadingOptions}
-          className="h-6 w-32 cursor-pointer appearance-none bg-transparent text-sm font-black text-[#012241] outline-none"
+          disabled={!isClientScopeApplied || isPending || isLoadingOptions}
+          className="h-6 w-28 min-w-0 cursor-pointer appearance-none bg-transparent text-sm font-black text-[#012241] outline-none disabled:cursor-not-allowed sm:w-32"
           aria-label="화주 필터"
         >
           {isLoadingOptions ? <option value="">화주 불러오는 중</option> : null}
@@ -435,8 +527,20 @@ function HeaderScopeFilter({
           </button>
         </div>
       ) : null}
+      {scopeNotice ? <p className="text-[11px] font-bold text-[#5b6b7c]">{scopeNotice}</p> : null}
     </div>
   );
+}
+
+// 회의자료·자료취합은 관리자·부서장·매니저 전용 화면이라, 권한이 없으면 조건도 적용하지 않는다.
+function resolveScopeModeForProfile(pathname: string, profile: ProfileSummary): HeaderScopeMode {
+  const scopeMode = getHeaderScopeMode(pathname);
+  const isMeetingOnlyRoute =
+    pathname.startsWith("/meeting-materials") || pathname.startsWith("/data-collections");
+  if (scopeMode !== "none" && isMeetingOnlyRoute && !canViewMeetingMaterials(profile)) {
+    return "none";
+  }
+  return scopeMode;
 }
 
 export function Header({
@@ -452,11 +556,11 @@ export function Header({
 }) {
   const pathname = usePathname();
   const meta = getRouteMeta(pathname);
-  const shouldShowFilters = filteredRoutes.has(pathname) && (pathname !== "/meeting-materials" || canViewMeetingMaterials(profile));
+  const scopeMode = resolveScopeModeForProfile(pathname, profile);
 
   return (
     <header className="sticky top-0 z-10 bg-[#f3ece1]/85 px-4 pb-3 pt-5 backdrop-blur-xl lg:px-10 lg:pt-7">
-      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
         <div className="flex min-w-0 items-start gap-3">
           <button
             type="button"
@@ -473,23 +577,27 @@ export function Header({
             <p className="mt-1 truncate text-xs font-semibold text-[#5b6b7c]">{meta.description}</p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-2.5 md:justify-end">
-          {shouldShowFilters ? <HeaderScopeFilter pathname={pathname} profile={profile} options={filterOptions} /> : null}
-          <div className="min-w-0 rounded-full bg-white px-4 py-2 text-right shadow-[0_8px_20px_rgba(1,34,65,0.06)]">
-            <p className="truncate text-sm font-black text-[#012241]">{profile.full_name}</p>
-            <p className="truncate text-xs font-semibold text-[#5b6b7c]">
-              {roleLabel(profile.app_role)} · {profile.department_name ?? "부서 미지정"}
-            </p>
-          </div>
-        <form action={signOutAction}>
-          <button
-            type="submit"
-            className="focus-ring tool-button tool-button-primary whitespace-nowrap"
+        <div className="flex min-w-0 flex-wrap items-center gap-2 xl:justify-end">
+          <HeaderScopeFilter pathname={pathname} profile={profile} options={filterOptions} scopeMode={scopeMode} />
+          <div
+            className="filter-pill min-w-0"
+            title={`소속부서: ${profile.department_name ?? "부서 미지정"}`}
           >
-            <LogOut className="h-4 w-4" aria-hidden="true" />
-            로그아웃
-          </button>
-        </form>
+            <UserRound className="h-4 w-4 shrink-0 text-[#007050]" aria-hidden="true" />
+            <span className="cap whitespace-nowrap">담당자</span>
+            <span className="truncate text-sm font-black text-[#012241]">{profile.full_name}</span>
+            <span className="whitespace-nowrap text-xs font-semibold text-[#5b6b7c]">{roleLabel(profile.app_role)}</span>
+          </div>
+          {/* 제출 직전에 헤더 조건 저장값을 지운다(성공 후엔 페이지가 바뀌어 정리 기회가 없음). */}
+          <SignOutForm>
+            <button
+              type="submit"
+              className="focus-ring tool-button tool-button-primary whitespace-nowrap"
+            >
+              <LogOut className="h-4 w-4" aria-hidden="true" />
+              로그아웃
+            </button>
+          </SignOutForm>
         </div>
       </div>
     </header>

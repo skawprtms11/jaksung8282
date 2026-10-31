@@ -1,8 +1,8 @@
 "use client";
 
-import Link, { useLinkStatus } from "next/link";
+import { useLinkStatus } from "next/link";
 import { useEffect, useMemo } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   Building2,
   ChartNoAxesCombined,
@@ -17,6 +17,7 @@ import {
   UsersRound,
   Warehouse
 } from "lucide-react";
+import { ScopedLink } from "./ScopedLink";
 import type { ProfileSummary } from "@/lib/auth/permissions";
 import { canManageMasters, canViewDepartmentMaster, canViewMeetingMaterials } from "@/lib/auth/permissions";
 
@@ -59,9 +60,9 @@ function prewarmPrimaryMenuModules() {
   ]);
 }
 
-function MenuIcon({ icon: Icon }: { icon: typeof Home }) {
+function MenuIcon({ icon: Icon, isNavigating }: { icon: typeof Home; isNavigating: boolean }) {
   const { pending } = useLinkStatus();
-  return pending ? (
+  return pending || isNavigating ? (
     <LoaderCircle className="h-[18px] w-[18px] animate-spin" aria-hidden="true" />
   ) : (
     <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
@@ -77,7 +78,6 @@ export function Sidebar({
   isHidden: boolean;
   onToggleHidden: () => void;
 }) {
-  const router = useRouter();
   const pathname = usePathname();
   const menus = useMemo(
     () => [
@@ -127,7 +127,7 @@ export function Sidebar({
     >
       <div className="flex h-full flex-col bg-[#012241] px-5 pb-6 pt-7 text-white shadow-[0_24px_70px_rgba(1,34,65,0.28)]">
         <div className="flex items-start justify-between gap-2">
-          <Link href="/notices" className="focus-ring block min-w-0 rounded-2xl px-1 py-1">
+          <ScopedLink href="/notices" profileId={profile.id} className="focus-ring block min-w-0 rounded-2xl px-1 py-1">
             <div className="flex items-center gap-3">
               <span
                 className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[11px] bg-gradient-to-br from-[#007050] to-[#00a978] shadow-[0_10px_22px_rgba(0,112,80,0.45)]"
@@ -143,7 +143,7 @@ export function Sidebar({
               </div>
             </div>
             <p className="mt-2.5 text-xs font-semibold text-[#8496a8]">Weekly Operations Hub</p>
-          </Link>
+          </ScopedLink>
           <button
             type="button"
             onClick={onToggleHidden}
@@ -167,11 +167,11 @@ export function Sidebar({
                   const Icon = menu.icon;
                   const isActive = pathname === menu.href || pathname.startsWith(`${menu.href}/`);
                   return (
-                    <Link
+                    <ScopedLink
                       key={menu.href}
                       href={menu.href}
+                      profileId={profile.id}
                       prefetch={fullPrefetchMenuHrefs.has(menu.href) ? true : "auto"}
-                      onFocus={() => router.prefetch(menu.href)}
                       aria-current={isActive ? "page" : undefined}
                       className={`focus-ring group flex min-w-0 items-center gap-3 rounded-[14px] px-3.5 py-3 text-sm font-bold transition ${
                         isActive
@@ -179,15 +179,19 @@ export function Sidebar({
                           : "text-[#c3d0dc] hover:bg-white/8 hover:text-white"
                       }`}
                     >
-                      <span
-                        className={`flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[8px] transition ${
-                          isActive ? "bg-white/20 text-white" : "text-[#8fa3b5] group-hover:text-white"
-                        }`}
-                      >
-                        <MenuIcon icon={Icon} />
-                      </span>
-                      <span className="min-w-0 flex-1 truncate">{menu.label}</span>
-                    </Link>
+                      {(isNavigating) => (
+                        <>
+                          <span
+                            className={`flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[8px] transition ${
+                              isActive ? "bg-white/20 text-white" : "text-[#8fa3b5] group-hover:text-white"
+                            }`}
+                          >
+                            <MenuIcon icon={Icon} isNavigating={isNavigating} />
+                          </span>
+                          <span className="min-w-0 flex-1 truncate">{menu.label}</span>
+                        </>
+                      )}
+                    </ScopedLink>
                   );
                 })}
               </div>

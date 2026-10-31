@@ -3,6 +3,7 @@ import type { DataCollectionStatus } from "@/actions/data-collections";
 import { createCollectionImageUrlResolver } from "@/lib/data-collections/image";
 import { normalizeCollectionColumns, normalizeCollectionOptions, normalizeCollectionWidths, normalizeEntryRows } from "@/lib/data-collections/template";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
+import { resolveServerDepartmentScope } from "@/lib/auth/header-scope";
 import { canViewMeetingMaterials, isAdmin } from "@/lib/auth/permissions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database";
@@ -33,7 +34,12 @@ type EntryQueryRow = {
   departments: { department_name: string } | null;
 };
 
-export default async function DataCollectionsPage() {
+export default async function DataCollectionsPage({
+  searchParams
+}: {
+  searchParams: Promise<{ department_id?: string; client_id?: string }>;
+}) {
+  const params = await searchParams;
   const { profile } = await getCurrentUserProfile();
   if (!canViewMeetingMaterials(profile)) {
     return (
@@ -46,8 +52,19 @@ export default async function DataCollectionsPage() {
   let collections: DataCollectionView[] = [];
   let regularTemplates: DataCollectionView[] = [];
   let departments: BoardDepartment[] = [];
+  let totalDepartmentCount = 0;
 
-  if (supabase && profile) {
+  // 자료취합 입력은 부서 단위라 헤더의 부서 조건만 적용한다(화주 연결 데이터 없음).
+  const departmentScope = profile ? resolveServerDepartmentScope(profile, params.department_id) : ({ kind: "blocked" } as const);
+  const scopedDepartmentId = departmentScope.kind === "department" ? departmentScope.departmentId : null;
+
+  if (supabase && profile && departmentScope.kind !== "blocked") {
+    const departmentQuery = supabase
+      .from("departments")
+      .select("id,department_name")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true })
+      .order("department_name", { ascending: true });
     const [{ data: collectionData }, { data: departmentData }, { data: regularData }] = await Promise.all([
       supabase
         .from("data_collections")
@@ -56,7 +73,7 @@ export default async function DataCollectionsPage() {
         .is("closed_at", null)
         .order("created_at", { ascending: false })
         .limit(COLLECTION_LIST_LIMIT),
-      supabase.from("departments").select("id,department_name").eq("is_active", true).order("sort_order", { ascending: true }).order("department_name", { ascending: true }),
+      scopedDepartmentId ? departmentQuery.eq("id", scopedDepartmentId) : departmentQuery,
       supabase
         .from("data_collections")
         .select("id,title,description,example,image_url,collection_type,entry_mode,status,link_url,template,created_by,created_at")
@@ -71,13 +88,36 @@ export default async function DataCollectionsPage() {
 
     const collectionIds = collectionRows.map((row) => row.id);
     let entryRows: EntryQueryRow[] = [];
+    const completedCountByCollection = new Map<string, number>();
+    totalDepartmentCount = departments.length;
     if (collectionIds.length > 0) {
-      const { data: entryData } = await supabase
+      let entryQuery = supabase
         .from("data_collection_entries")
         .select("collection_id,department_id,rows,is_completed,updated_at,departments(department_name)")
-        .in("collection_id", collectionIds)
-        .order("updated_at", { ascending: false });
+        .in("collection_id", collectionIds);
+      if (scopedDepartmentId) {
+        entryQuery = entryQuery.eq("department_id", scopedDepartmentId);
+      }
+      // 한 부서로 좁혀 보더라도 진행률·자동 완료 상태는 활성 부서 전체 기준이어야 하므로 확정 행 수와 활성 부서 수를 따로 센다.
+      const [{ data: entryData }, completedResult, departmentCountResult] = await Promise.all([
+        entryQuery.order("updated_at", { ascending: false }),
+        scopedDepartmentId
+          ? supabase.from("data_collection_entries").select("collection_id").in("collection_id", collectionIds).eq("is_completed", true)
+          : Promise.resolve({ data: null }),
+        scopedDepartmentId
+          ? supabase.from("departments").select("id", { count: "exact", head: true }).eq("is_active", true)
+          : Promise.resolve({ count: null })
+      ]);
       entryRows = (entryData ?? []) as unknown as EntryQueryRow[];
+      const completedRows = scopedDepartmentId
+        ? ((completedResult.data ?? []) as { collection_id: string }[])
+        : entryRows.filter((entry) => entry.is_completed);
+      completedRows.forEach((row) => {
+        completedCountByCollection.set(row.collection_id, (completedCountByCollection.get(row.collection_id) ?? 0) + 1);
+      });
+      if (scopedDepartmentId) {
+        totalDepartmentCount = departmentCountResult.count ?? departments.length;
+      }
     }
 
     const creatorIds = Array.from(new Set(collectionRows.map((row) => row.created_by).filter((id): id is string => Boolean(id))));
@@ -113,6 +153,7 @@ export default async function DataCollectionsPage() {
         linkUrl: row.link_url,
         authorName: (row.created_by ? nameById.get(row.created_by) : undefined) ?? "-",
         createdAt: row.created_at,
+        completedDepartmentCount: completedCountByCollection.get(row.id) ?? 0,
         entries: entries
           .filter((entry) => entry.collection_id === row.id)
           .map((entry) => ({
@@ -129,5 +170,14 @@ export default async function DataCollectionsPage() {
     regularTemplates = regularRows.map((row) => toView(row, []));
   }
 
-  return <DataCollectionBoard collections={collections} departments={departments} regularTemplates={regularTemplates} canCreate={isAdmin(profile)} />;
+  return (
+    <DataCollectionBoard
+      collections={collections}
+      departments={departments}
+      totalDepartmentCount={totalDepartmentCount}
+      scopedDepartmentName={scopedDepartmentId ? departments[0]?.department_name ?? null : null}
+      regularTemplates={regularTemplates}
+      canCreate={isAdmin(profile)}
+    />
+  );
 }

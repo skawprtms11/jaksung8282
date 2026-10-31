@@ -4,6 +4,9 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Building2, FilePenLine, Gamepad2, Settings } from "lucide-react";
+import { resolveScopeRestore, toPersistedHeaderScope } from "@/lib/auth/header-scope";
+import { useStoredHeaderScope, writeStoredHeaderScope } from "@/lib/auth/header-scope-store";
+import type { AppRole } from "@/types/enums";
 import { cn } from "@/lib/utils/cn";
 
 export type MobileView = "client" | "department" | "game" | "settings";
@@ -17,6 +20,8 @@ const navigation = [
 ];
 
 export function MobileAppShell({
+  profileId,
+  role,
   initialView,
   departments = [],
   clients = [],
@@ -27,9 +32,11 @@ export function MobileAppShell({
   gameView,
   settingsView
 }: {
+  profileId: string;
+  role: AppRole | null;
   initialView: MobileView;
   departments: { id: string; department_name: string }[];
-  clients: { id: string; client_name: string }[];
+  clients: { id: string; client_name: string; department_id: string }[];
   selectedDepartmentId: string;
   selectedClientId: string;
   clientView: ReactNode;
@@ -43,6 +50,29 @@ export function MobileAppShell({
   const [isGameActive, setIsGameActive] = useState(false);
   const content = activeView === "client" ? clientView : activeView === "department" ? departmentView : activeView === "game" ? gameView : settingsView;
   const hideBottomNavigation = activeView === "game" && isGameActive;
+  const storedScope = useStoredHeaderScope(profileId);
+  // 데스크톱 헤더와 같은 저장 조건을 쓴다. URL 에 조건이 없을 때만 저장된 부서·화주로 복원한다.
+  const pendingRestore = resolveScopeRestore({
+    urlScope: { departmentId: searchParams.get("department_id") ?? "", clientId: searchParams.get("client_id") ?? "" },
+    storedScope
+  });
+  const restoreDepartmentId = pendingRestore?.departmentId ?? "";
+  const restoreClientId = pendingRestore?.clientId ?? "";
+  const hasPendingRestore = pendingRestore !== null;
+
+  useEffect(() => {
+    if (!hasPendingRestore) {
+      return;
+    }
+    const next = new URLSearchParams(searchParams.toString());
+    if (restoreDepartmentId) {
+      next.set("department_id", restoreDepartmentId);
+    }
+    if (restoreClientId) {
+      next.set("client_id", restoreClientId);
+    }
+    router.replace(`/mobile?${next.toString()}`, { scroll: false });
+  }, [hasPendingRestore, restoreClientId, restoreDepartmentId, router, searchParams]);
 
   useEffect(() => {
     function syncViewFromUrl() {
@@ -72,7 +102,22 @@ export function MobileAppShell({
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  // 서버가 내려준 부서·화주 목록(화주담당자는 배정 화주만)에 있는 값만 다음 화면으로 넘긴다.
+  function persistScope(departmentId: string, clientId: string) {
+    writeStoredHeaderScope(
+      profileId,
+      toPersistedHeaderScope({
+        role,
+        scope: { departmentId, clientId },
+        departmentIds: departments.map((department) => department.id),
+        clients,
+        assignedClientIds: clients.map((client) => client.id)
+      })
+    );
+  }
+
   function changeDepartment(departmentId: string) {
+    persistScope(departmentId, "");
     const next = new URLSearchParams(searchParams.toString());
     next.set("view", activeView);
     next.set("department_id", departmentId);
@@ -81,6 +126,7 @@ export function MobileAppShell({
   }
 
   function changeClient(clientId: string) {
+    persistScope(selectedDepartmentId, clientId);
     const next = new URLSearchParams(searchParams.toString());
     next.set("view", activeView);
     next.set("client_id", clientId);
