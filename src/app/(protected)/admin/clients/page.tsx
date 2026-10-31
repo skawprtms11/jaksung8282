@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { isAdmin } from "@/lib/auth/permissions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { toContainsPattern } from "@/lib/utils/search";
 
 type DepartmentOption = { id: string; department_name: string };
 type ClientRow = {
@@ -53,7 +54,7 @@ export default async function ClientsPage({
             .limit(CLIENT_MASTER_LIMIT);
 
           if (searchColumn) {
-            query = query.ilike(searchColumn, `%${params.q}%`);
+            query = query.ilike(searchColumn, toContainsPattern(params.q ?? ""));
           }
           if (params.department_id) {
             query = query.eq("department_id", params.department_id);

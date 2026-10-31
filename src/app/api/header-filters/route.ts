@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
+import { PASSWORD_CHANGE_REQUIRED_MESSAGE } from "@/lib/auth/password-change";
 import { isAdmin } from "@/lib/auth/permissions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { HeaderFilterOptions } from "@/components/layout/Header";
@@ -50,7 +51,10 @@ function normalizeHeaderFilterOptions(value: Json | null): HeaderFilterOptions |
 }
 
 export async function GET() {
-  const { profile } = await getCurrentUserProfile();
+  const { profile, mustChangePassword } = await getCurrentUserProfile();
+  if (mustChangePassword) {
+    return NextResponse.json({ message: PASSWORD_CHANGE_REQUIRED_MESSAGE }, { status: 403 });
+  }
   if (!profile) {
     return NextResponse.json({ message: "로그인이 필요합니다." }, { status: 401 });
   }

@@ -17,7 +17,23 @@ export function formDataToObject(formData: FormData) {
   return result;
 }
 
-export function safeErrorMessage(message?: string) {
+// PostgreSQL 원문 오류는 입력값(한글 포함)·컬럼·함수명을 그대로 담을 수 있어 화면에 그대로 보여주지 않는다.
+const RAW_DATABASE_ERROR_PATTERNS = [
+  /invalid input syntax/i,
+  /violates/i,
+  /\bfunction\s/i,
+  /\bcolumn\s/i,
+  /\brelation\s/i,
+  /syntax error/i,
+  /does not exist/i,
+  /null value/i,
+  /value too long/i,
+  /out of range/i
+];
+
+// code 를 넘기면 RAISE EXCEPTION(P0001)으로 의도해서 만든 문구만 통과시킨다.
+// 대부분의 호출부는 message 만 넘기므로 그때는 원문 오류 패턴을 걸러 낸 한글 문구만 통과시킨다.
+export function safeErrorMessage(message?: string, code?: string) {
   if (!message) {
     return "처리 중 오류가 발생했습니다.";
   }
@@ -27,7 +43,10 @@ export function safeErrorMessage(message?: string) {
   if (message.includes("permission") || message.includes("policy") || message.includes("RLS")) {
     return "처리 권한이 없습니다.";
   }
-  if (/[가-힣]/.test(message) && message.length <= 160) {
+  const isIntendedMessage = code
+    ? code === "P0001"
+    : !RAW_DATABASE_ERROR_PATTERNS.some((pattern) => pattern.test(message));
+  if (isIntendedMessage && /[가-힣]/.test(message) && message.length <= 160) {
     return message;
   }
   if (message.includes("weekly_client_report_items.title") || (message.includes("column") && message.includes("title"))) {

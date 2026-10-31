@@ -93,10 +93,20 @@
 ### 비밀번호 초기화
 
 - 관리자만 사용자 목록 행의 초기화 버튼을 사용할 수 있다.
-- 확인 팝업 승인 후 대상 profile의 사번을 서버에서 조회하고 Supabase Auth Admin API로 같은 ID의 Auth 사용자 비밀번호를 변경한다.
-- 초기 비밀번호는 등록된 사번과 동일하다. Supabase의 최소 6자리 정책 때문에 사번이 6자리 미만이면 뒤에 `0`을 추가해 6자리로 만들고, 확인 팝업에 해당 계정의 실제 초기 비밀번호를 안내한다.
-- 브라우저 상태, 응답, 로그 또는 `profiles` 테이블에 평문 비밀번호를 저장하지 않는다.
-- 사번이 비어 있거나 다른 Supabase 비밀번호 정책을 충족하지 못하거나 Auth 사용자가 연결되지 않은 경우 변경하지 않고 오류를 표시한다.
+- 확인 팝업 승인 후 서버가 `crypto` 기반 무작위 임시 비밀번호(14자, 영문 대소문자·숫자 각 1자 이상, 혼동 문자 `I l O o 0 1` 제외, `generateTemporaryPassword`)를 만들고 Supabase Auth Admin API로 같은 ID의 Auth 사용자 비밀번호를 바꾼다. 사번 등 추측 가능한 값은 쓰지 않는다.
+- 같은 호출에서 `app_metadata.must_change_password = true`를 설정한다. 해당 사용자는 로그인 직후 미들웨어·보호 레이아웃이 `/reset-password`(비밀번호 변경)로 강제 이동시키며, 변경 화면과 로그아웃만 쓸 수 있다.
+- 비밀번호·플래그 변경 직후 service_role 전용 함수 `public.revoke_user_sessions(uuid)`(`20261031110000_revoke_user_sessions.sql`)로 대상 사용자의 `auth.sessions`·`auth.refresh_tokens`를 모두 지워 기존(탈취됐을 수 있는) 세션을 끊는다. 실패하면 1회 즉시 재시도하고, 그래도 실패하면 초기화는 완료로 두고 팝업에 세션 종료 실패 경고와 "세션 종료 다시 시도" 버튼을 표시한다(`sessionRevokeFailed`). 버튼은 관리자 전용 서버 액션 `revokeUserSessionsAction`(활성 관리자 확인 + 대상 ID uuid 검증 + 대상 프로필 존재 확인, 내부 1회 재시도)을 호출해 결과(완료/재실패)를 팝업에 표시한다. 이미 발급된 access token은 만료(기본 1시간)까지 서명 검증만으로는 유효하지만 갱신·Auth 서버 경유 요청(비밀번호 변경 포함)은 실패한다.
+- 강제 변경 계정은 `getCurrentUserProfile`이 profile을 `null`로 돌려주므로 이를 쓰는 서버 액션·API·화면이 모두 거부한다. `requireActiveProfile`·API(`header-filters`, `meeting-materials/tab`, `mini-game-rankings`)는 "비밀번호를 먼저 변경하세요."로 응답한다(`getProfileAccessError`). 비밀번호 변경 액션·로그아웃은 예외다.
+- 임시 비밀번호는 server action 응답으로 관리자에게 한 번만 전달되어 확인 팝업에 표시된다(복사 버튼 제공). 팝업을 닫으면 다시 볼 수 없고, 서버 로그·DB·`profiles`에 평문을 저장하지 않는다.
+- 사용자가 새 비밀번호로 바꾸면 서버가 서비스 키로 플래그를 `false`로 해제하고 세션을 갱신(`refreshSession`)한 뒤 첫 화면으로 보낸다.
+- Supabase 비밀번호 정책(특수문자 필수 등)을 충족하지 못하거나 Auth 사용자가 연결되지 않은 경우 변경하지 않고 오류를 표시한다.
+
+### 비밀번호 변경·로그인 제한
+
+- `/reset-password`는 세션 종류에 따라 동작한다. 비로그인: 재설정 메일 요청 / 재설정 메일 링크 세션(`amr`에 `recovery`): 새 비밀번호만 입력 / 임시 비밀번호 계정: "관리자에게 받은 임시 비밀번호"를 확인한 뒤 변경 / 그 외 로그인 세션: 현재 비밀번호를 확인한 뒤 변경.
+- 로그인과 현재(임시) 비밀번호 확인 실패는 `login_attempts`에 이메일 HMAC + 클라이언트 IP HMAC(키는 서비스 키에서 파생, `src/lib/auth/login-hash.ts`, 서비스 키 교체 시 기록 초기화)으로 기록한다. 판정과 실패 선기록은 DB 함수 `reserve_login_attempt`, 성공 처리는 `record_login_success`가 같은 이메일을 직렬화해 수행한다(`20261031130000_login_attempt_rpc.sql`, 함수가 없으면 제한 없이 허용하고 로그만 남김). 같은 이메일·같은 IP 15분 5회 실패 시 그 IP에서 15분 차단, 같은 이메일 전체(IP 무관) 15분 30회 실패 시 비신뢰 IP에서 15분 차단하며 이때는 비밀번호 재설정 메일로 본인 확인 후 다시 로그인하라는 안내를 덧붙인다(임계값 `src/lib/auth/login-lock.ts`, SQL과 테스트로 일치 확인). IP 헤더는 `x-nf-client-connection-ip`(Netlify)를 쓰고, 운영(`NODE_ENV=production`)에서 이 헤더가 없으면 `unknown` 버킷으로 묶는다. 개발 환경만 `x-real-ip` → `x-forwarded-for`의 마지막 값으로 대체한다(`src/lib/auth/client-ip.ts`). 로그인 성공·현재 비밀번호 확인 성공·재설정 메일 세션의 비밀번호 변경 성공 시 해당 이메일·IP 기록을 지우고 성공 1행(`succeeded = true`)을 남긴다. 최근 30일 안에 성공 기록이 있는 IP는 이메일 전체 30회 잠금에서 제외하되 그 IP의 5회 제한은 유지한다(`unknown` 버킷은 제외 대상 아님). 차단 문구는 계정 존재 여부와 무관하게 같다. 가입 요청 제한의 IP 해시는 기존 데이터 호환을 위해 평문 sha256을 유지한다.
+- 비밀번호 재설정 메일 요청은 같은 이메일 1시간 3회, 같은 IP 1시간 10회까지만 실제로 발송한다(IP 헤더가 없는 `unknown` 버킷은 이메일 기준만 적용). 판정과 기록은 DB 함수 `reserve_password_reset`이 같은 이메일·IP를 직렬화해 `password_reset_attempts`(이메일·IP HMAC, service_role 전용)에 남긴다(`20261031130000_login_attempt_rpc.sql`, 임계값 `src/lib/auth/password-reset-limit.ts`, SQL과 테스트로 일치 확인). 함수가 없거나 호출이 실패하면 제한 없이 발송하고 로그만 남긴다. 제한 초과·메일 발송 오류·성공 모두 "입력한 주소로 계정이 있으면 비밀번호 재설정 메일을 발송했습니다." 한 문구로 응답해 계정 존재 여부와 제한 상태를 드러내지 않으며, 서버 로그에는 오류 코드만 남긴다.
+- 시도 기록 정리: 각 DB 함수는 자기 이메일의 오래된 행만 지우고, 다른 이메일의 오래된 행은 잠긴 행을 건너뛰며(`for update skip locked`) 호출당 최대 100행씩 정리한다. 요청이 뜸해 쌓인 행이 많으면 운영에서 `delete from public.login_attempts where created_at < now() - interval '30 days'` / `delete from public.password_reset_attempts where created_at < now() - interval '1 hour'`를 한가한 시간에 실행한다.
 
 ## 6. 데이터와 주요 코드
 

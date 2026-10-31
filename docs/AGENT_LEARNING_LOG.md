@@ -55,6 +55,14 @@
 **교훈**: 직접 처리하는 1인 작업일수록 문서 게이트를 스스로 대신해야 한다. 기능 계약이 바뀌는 커밋은 머지 전에 `docs/menus/README.md`의 공유 코드 표를 열어 영향 문서를 대조할 것. verifier 의뢰서에 "메뉴 문서 동기화 여부" 항목을 상시 포함.
 **파일**: `docs/menus/client-reports.md:49,79` · `docs/menus/mobile-app.md:44` · `docs/menus/user-management.md` · `docs/menus/department-reports.md`
 
+### 2026-10-29 — [dev-team] Write 도구가 저장소 밖 동명 폴더에 마이그레이션을 생성
+
+**상황**: 보안 보완 마이그레이션 3개 중 2개를 Write 도구로 작성.
+**실수/오판**: 실제 저장소 경로는 `문서 - 서민호의 MacBook␣Pro`(한글 NFD + 줄바꿈 없는 공백 U+00A0)인데, Write 도구가 NFC·일반 공백 경로로 정규화해 `~/Documents` 아래 별개 폴더(`…MacBook Pro/New project 3/supabase/`)에 파일을 만들었다. 도구는 "생성 성공"을 반환했고, Edit 도구는 같은 경로를 "파일 없음"으로 거부했다.
+**원인**: 경로 문자열의 유니코드 정규화·공백 문자 차이를 도구가 구분하지 않음. 생성 성공 메시지만 믿고 저장소 안 실재 여부를 확인하지 않았다.
+**교훈**: 이 저장소에서는 파일 생성·수정을 Bash(heredoc·python, 상대경로)로 한다. 파일을 만든 뒤에는 `git status --short`로 저장소 안에 잡히는지 반드시 확인한다.
+**파일**: `supabase/migrations/20261029100100_*.sql` · `supabase/migrations/20261029100200_*.sql` (이동 완료, 잘못 생긴 빈 폴더 삭제)
+
 ---
 
 ## 🎯 자주 반복되는 카테고리 (주의 영역)
@@ -66,3 +74,5 @@
 - 톡방 INSERT 누락 — 작업 단계 진행했는데 기록 안 함
 - 검수 누락 — verifier-team 거치지 않고 "완료" 보고
 - 감사팀 누락 — 결제·DB·법적 문구 등 도메인 작업에 해당 감사팀 호출 안 함
+
+- 2026-10-31 dev-team: 로그인 제한 4차 보완 중 Write 도구(절대경로)로 새 마이그레이션을 만들어 저장소 밖(NFC·일반 공백 경로) 폴더에 생성됨(3번째 재발). 저장소 실제 경로는 NFD + "MacBook Pro"(NBSP)라 Write/Edit 도구의 절대경로가 다른 폴더로 해석된다. 즉시 저장소로 mv, 생성된 빈 폴더 rmdir. 교훈: 이 저장소에서는 파일 생성·수정을 Bash(상대경로, heredoc/python)로만 하고, 생성 직후 `git status`로 저장소 안인지 확인한다.

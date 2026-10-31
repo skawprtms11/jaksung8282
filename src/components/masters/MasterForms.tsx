@@ -2,7 +2,7 @@
 
 import { type ClipboardEvent, type KeyboardEvent, useActionState, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowRight, Building2, FileSpreadsheet, KeyRound, PackagePlus, Pencil, Plus, RotateCcw, Save, Search, Trash2, UserRoundCheck, X } from "lucide-react";
+import { ArrowRight, Building2, Copy, FileSpreadsheet, KeyRound, Loader2, PackagePlus, Pencil, Plus, RotateCcw, Save, Search, Trash2, UserRoundCheck, X } from "lucide-react";
 import {
   approveUserRegistrationRequestAction,
   deleteClientsAction,
@@ -11,6 +11,7 @@ import {
   importLaborCentersAction,
   rejectUserRegistrationRequestAction,
   resetUserPasswordAction,
+  revokeUserSessionsAction,
   saveClientAction,
   saveClientAssignmentsAction,
   saveClientsBulkImportAction,
@@ -24,7 +25,6 @@ import { ActionMessage } from "@/components/common/ActionMessage";
 import { EmptyState } from "@/components/common/EmptyState";
 import { SubmitButton } from "@/components/common/SubmitButton";
 import { TableShell } from "@/components/common/TableShell";
-import { getInitialPassword, isInitialPasswordAdjusted } from "@/lib/auth/initial-password";
 import { roleLabel } from "@/lib/auth/permissions";
 import type { AppRole } from "@/types/enums";
 
@@ -1675,8 +1675,20 @@ function UserEditDialog({
 
 function UserPasswordResetDialog({ user, onClose }: { user: UserMasterValue; onClose: () => void }) {
   const [state, action] = useActionState(resetUserPasswordAction, null);
-  const initialPassword = getInitialPassword(user.employee_no);
-  const isAdjusted = isInitialPasswordAdjusted(user.employee_no);
+  const [copyMessage, setCopyMessage] = useState("");
+  const temporaryPassword = state?.ok ? state.data?.temporaryPassword ?? "" : "";
+  const [revokeState, revokeAction, isRevoking] = useActionState(revokeUserSessionsAction, null);
+  // 재시도로 세션 종료에 성공하면 경고 대신 완료 메시지를 보여준다.
+  const sessionRevokeFailed = state?.ok ? Boolean(state.data?.sessionRevokeFailed) && !revokeState?.ok : false;
+
+  async function copyTemporaryPassword() {
+    try {
+      await navigator.clipboard.writeText(temporaryPassword);
+      setCopyMessage("복사했습니다.");
+    } catch {
+      setCopyMessage("복사하지 못했습니다. 직접 선택해 복사하세요.");
+    }
+  }
 
   return (
     <ModalPortal>
@@ -1693,24 +1705,50 @@ function UserPasswordResetDialog({ user, onClose }: { user: UserMasterValue; onC
             </button>
           </div>
           <div className="p-5">
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm font-bold leading-6 text-amber-900">
-              비밀번호를 초기화 하시겠습니까? 초기화시 비밀번호는 사번과 동일합니다
-              {isAdjusted ? (
-                <p className="mt-2 border-t border-amber-200 pt-2 text-amber-950">
-                  단, 6자리 미만 사번은 뒤에 0을 추가합니다. 이 계정의 초기 비밀번호는 {initialPassword}입니다.
+            {temporaryPassword ? (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm font-bold leading-6 text-emerald-900">
+                <p>임시 비밀번호</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <code className="flex-1 select-all rounded-xl border border-emerald-200 bg-white px-3 py-2 font-mono text-base tracking-wider text-[#012241]">
+                    {temporaryPassword}
+                  </code>
+                  <button type="button" onClick={copyTemporaryPassword} className="icon-tool-button" aria-label="임시 비밀번호 복사">
+                    <Copy className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
+                {copyMessage ? <p className="mt-1 text-xs text-emerald-700">{copyMessage}</p> : null}
+                <p className="mt-2 border-t border-emerald-200 pt-2 text-emerald-950">
+                  이 창을 닫으면 임시 비밀번호를 다시 볼 수 없습니다. 사용자에게 안전한 경로로 전달하세요. 사용자는 첫 로그인 때 새 비밀번호로 변경해야 합니다.
                 </p>
-              ) : null}
-            </div>
-            <div className="mt-3">
-              <ActionMessage state={state} />
-            </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm font-bold leading-6 text-amber-900">
+                비밀번호를 초기화 하시겠습니까? 무작위 임시 비밀번호가 발급되며, 사용자는 첫 로그인 때 비밀번호를 변경해야 합니다.
+              </div>
+            )}
+            {sessionRevokeFailed ? (
+              <div role="alert" className="mt-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-900">
+                <p>경고: 비밀번호는 초기화됐지만 이 사용자의 기존 로그인 세션을 종료하지 못했습니다. 세션 종료를 다시 시도하고, 계속 실패하면 시스템 담당자에게 요청하세요.</p>
+                <button type="submit" formAction={revokeAction} disabled={isRevoking} className="focus-ring tool-button mt-2 disabled:cursor-not-allowed disabled:opacity-50">
+                  {isRevoking ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RotateCcw className="h-4 w-4" aria-hidden="true" />}
+                  세션 종료 다시 시도
+                </button>
+                {revokeState && !revokeState.ok ? <p className="mt-2 text-red-700">{revokeState.message}</p> : null}
+              </div>
+            ) : (
+              <div className="mt-3">
+                <ActionMessage state={revokeState?.ok ? revokeState : state} />
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-2 border-t border-[#e4dac9] px-5 py-4">
-            <button type="button" onClick={onClose} className="tool-button">취소</button>
-            <SubmitButton variant="danger">
-              <KeyRound className="h-4 w-4" aria-hidden="true" />
-              초기화
-            </SubmitButton>
+            <button type="button" onClick={onClose} className="tool-button">{temporaryPassword ? "닫기" : "취소"}</button>
+            {temporaryPassword ? null : (
+              <SubmitButton variant="danger">
+                <KeyRound className="h-4 w-4" aria-hidden="true" />
+                초기화
+              </SubmitButton>
+            )}
           </div>
         </form>
       </div>

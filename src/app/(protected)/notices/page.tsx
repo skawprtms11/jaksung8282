@@ -2,6 +2,7 @@ import { NoticeBoard } from "@/components/notices/NoticeBoard";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { isAdmin } from "@/lib/auth/permissions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { toContainsPattern } from "@/lib/utils/search";
 import type { NoticeType } from "@/types/enums";
 
 type NoticeRow = {
@@ -56,7 +57,7 @@ export default async function NoticesPage({
       .order("created_at", { ascending: false })
       .range(from, to);
     if (params.q) {
-      query = query.ilike("title", `%${params.q}%`);
+      query = query.ilike("title", toContainsPattern(params.q));
     }
     if (params.type) {
       query = query.eq("notice_type", params.type);

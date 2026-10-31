@@ -18,6 +18,7 @@ import {
   type DepartmentCollectionEntry,
   type DepartmentCollectionItem
 } from "@/components/data-collections/DepartmentCollectionWorkspace";
+import { createCollectionImageUrlResolver } from "@/lib/data-collections/image";
 import { normalizeCollectionColumns, normalizeCollectionOptions, normalizeCollectionWidths, normalizeEntryRows } from "@/lib/data-collections/template";
 import type { Json } from "@/types/database";
 import { ClientReviewTable } from "@/components/reports/ClientReviewTable";
@@ -685,7 +686,7 @@ export default async function DepartmentReportsPage({
           .eq("department_id", departmentFilter)
         : Promise.resolve({ data: [] })
     ]);
-    dataCollectionItems = ((collectionData ?? []) as {
+    const collectionRows = (collectionData ?? []) as {
       id: string;
       title: string;
       description: string;
@@ -695,12 +696,15 @@ export default async function DepartmentReportsPage({
       link_url: string | null;
       template: Json;
       created_at: string;
-    }[]).map((row) => ({
+    }[];
+    // 비공개 버킷 사진은 서버에서 만료 1시간 서명 주소로 바꿔 내려준다.
+    const resolveImageUrl = await createCollectionImageUrlResolver(collectionRows.map((row) => row.image_url));
+    dataCollectionItems = collectionRows.map((row) => ({
       id: row.id,
       title: row.title,
       description: row.description,
       example: row.example,
-      imageUrl: row.image_url,
+      imageUrl: resolveImageUrl(row.image_url),
       columns: normalizeCollectionColumns(row.template),
       widths: normalizeCollectionWidths(row.template, normalizeCollectionColumns(row.template).length),
       options: normalizeCollectionOptions(row.template, normalizeCollectionColumns(row.template).length),

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUserProfile } from "@/lib/auth/current-user";
+import { requireActiveProfile } from "@/lib/auth/current-user";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { MiniGameRanking } from "@/components/game/HuindungiWalkGame";
 
@@ -22,9 +22,10 @@ type ScoreQueryRow = {
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const { profile } = await getCurrentUserProfile();
-  if (!profile?.is_active) {
-    return NextResponse.json({ message: "로그인이 필요합니다.", rankings: [] }, { status: 401 });
+  // 서비스 키로 전체 랭킹을 읽으므로 승인 대기(역할 미지정) 계정도 다른 API 와 같은 기준으로 막는다.
+  const { profile, error: profileError } = await requireActiveProfile();
+  if (!profile) {
+    return NextResponse.json({ message: profileError, rankings: [] }, { status: 401 });
   }
 
   try {

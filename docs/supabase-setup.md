@@ -14,6 +14,8 @@ supabase db push
 
 Supabase Dashboard에서 Auth 사용자를 먼저 만든 뒤, SQL Editor에서 해당 사용자의 UUID를 넣어 실행한다.
 
+> 경고: 아래 `<admin_email>`, `<employee_no>` 등은 자리표시자다. 예시 값을 그대로 사용하지 말고 실제 관리자 이메일·사번으로 바꾼다. 관리자 Auth 비밀번호도 추측하기 어려운 값으로 정한다.
+
 ```sql
 insert into public.departments (department_code, department_name, sort_order)
 values ('TPL', 'TPL사업부', 1)
@@ -24,8 +26,8 @@ insert into public.profiles (
   id, email, employee_no, full_name, department_id, app_role, is_active
 ) values (
   '<auth-user-id>',
-  'admin@example.com',
-  'ADMIN001',
+  '<admin_email>',
+  '<employee_no>',
   '관리자',
   '<department-id>',
   'admin',

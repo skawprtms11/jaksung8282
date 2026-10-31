@@ -60,7 +60,7 @@ type DepartmentRow = {
 
 type CurrentUser = {
   id: string;
-  app_role: AppRole;
+  app_role: AppRole | null;
   department_id: string | null;
   department_name?: string | null;
   full_name: string;

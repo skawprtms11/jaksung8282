@@ -3,6 +3,7 @@ import { UserMasterControls } from "@/components/masters/MasterForms";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isAdmin } from "@/lib/auth/permissions";
+import { toContainsPattern } from "@/lib/utils/search";
 import type { AppRole, UserRegistrationStatus } from "@/types/enums";
 
 type DepartmentOption = { id: string; department_name: string };
@@ -68,7 +69,7 @@ export default async function UsersPage({
           query = query.eq("department_id", departmentFilter);
         }
         if (params.q) {
-          query = query.ilike("full_name", `%${params.q}%`);
+          query = query.ilike("full_name", toContainsPattern(params.q));
         }
         if (params.department_id) {
           query = query.eq("department_id", params.department_id);

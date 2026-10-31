@@ -7,6 +7,7 @@ import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { canViewDepartmentMaster, isAdmin } from "@/lib/auth/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { toContainsPattern } from "@/lib/utils/search";
 import type { AppRole } from "@/types/enums";
 
 type DepartmentRow = {
@@ -76,7 +77,7 @@ export default async function DepartmentsPage({ searchParams }: { searchParams: 
         query = query.eq("id", profile.department_id);
       }
       if (searchColumn) {
-        query = query.ilike(searchColumn, `%${params.q}%`);
+        query = query.ilike(searchColumn, toContainsPattern(params.q ?? ""));
       }
       return query;
     };

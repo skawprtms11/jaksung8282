@@ -2,9 +2,9 @@
 
 import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
-import { getCurrentUserProfile } from "@/lib/auth/current-user";
-import { getInitialPassword } from "@/lib/auth/initial-password";
-import { canRegisterDepartmentClients, isAdmin } from "@/lib/auth/permissions";
+import { getCurrentUserProfile, requireActiveProfile } from "@/lib/auth/current-user";
+import { generateTemporaryPassword } from "@/lib/auth/initial-password";
+import { canRegisterDepartmentClients, isAdmin, type ProfileSummary } from "@/lib/auth/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createLaborSupabaseClient } from "@/lib/supabase/labor";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -32,8 +32,8 @@ function isDuplicateDepartmentNameError(error: { code?: string; message?: string
 }
 
 async function requireAdmin() {
-  const { profile } = await getCurrentUserProfile();
-  if (!isAdmin(profile)) {
+  const { profile } = await requireActiveProfile();
+  if (!profile || !isAdmin(profile)) {
     return { profile: null, error: "관리자만 처리할 수 있습니다." };
   }
   return { profile, error: null };
@@ -102,7 +102,7 @@ export async function importLaborCentersAction(state: ActionResult | null, formD
 
 async function resolveDefaultClientDepartmentId(
   supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
-  profile: NonNullable<Awaited<ReturnType<typeof requireAdmin>>["profile"]>
+  profile: Pick<ProfileSummary, "id" | "department_id">
 ) {
   if (profile.department_id) {
     return profile.department_id;
@@ -1057,7 +1057,29 @@ export async function deleteUsersAction(_: ActionResult | null, formData: FormDa
   return { ok: true, message: "선택한 사용자를 미사용 처리했습니다." };
 }
 
-export async function resetUserPasswordAction(_: ActionResult | null, formData: FormData): Promise<ActionResult> {
+// 일시적 오류(네트워크·커넥션 풀)로 실패하는 경우가 있어 1회만 즉시 재시도한다.
+async function revokeUserSessionsWithRetry(admin: ReturnType<typeof createSupabaseAdminClient>, userId: string) {
+  const first = await admin.rpc("revoke_user_sessions", { p_user_id: userId });
+  if (!first.error) {
+    return true;
+  }
+  console.error("세션 종료 실패(재시도 예정)", first.error.code);
+  const retry = await admin.rpc("revoke_user_sessions", { p_user_id: userId });
+  if (retry.error) {
+    console.error("세션 종료 재시도 실패", retry.error.code);
+    return false;
+  }
+  return true;
+}
+
+// sessionRevokeFailed: 초기화는 끝났지만 기존 세션 종료에 실패한 경우(관리자 경고 표시용)
+export type UserPasswordResetResult = { temporaryPassword: string; sessionRevokeFailed?: boolean };
+
+// 임시 비밀번호는 응답으로 관리자에게 한 번만 전달하고 로그·DB 어디에도 남기지 않는다.
+export async function resetUserPasswordAction(
+  _: ActionResult<UserPasswordResetResult> | null,
+  formData: FormData
+): Promise<ActionResult<UserPasswordResetResult>> {
   const { error: authError } = await requireAdmin();
   if (authError) {
     return { ok: false, message: authError };
@@ -1077,35 +1099,78 @@ export async function resetUserPasswordAction(_: ActionResult | null, formData: 
 
   const { data: targetUser, error: targetError } = await admin
     .from("profiles")
-    .select("id,employee_no")
+    .select("id")
     .eq("id", parsedUserId.data)
     .maybeSingle();
   if (targetError || !targetUser) {
     return { ok: false, message: "비밀번호를 초기화할 사용자 정보를 찾을 수 없습니다." };
   }
 
-  const employeeNo = targetUser.employee_no.trim();
-  if (!employeeNo) {
-    return { ok: false, message: "등록된 사번이 없어 비밀번호를 초기화할 수 없습니다." };
-  }
-
-  const initialPassword = getInitialPassword(employeeNo);
-  const { error } = await admin.auth.admin.updateUserById(targetUser.id, { password: initialPassword });
+  const temporaryPassword = generateTemporaryPassword();
+  // must_change_password 플래그로 다음 로그인 때 비밀번호 변경 화면을 강제한다(app_metadata 는 기존 키와 병합됨).
+  const { error } = await admin.auth.admin.updateUserById(targetUser.id, {
+    password: temporaryPassword,
+    app_metadata: { must_change_password: true }
+  });
   if (error) {
     return {
       ok: false,
       message: error.message.toLowerCase().includes("password")
-        ? "등록된 사번이 Supabase 비밀번호 정책을 충족하지 않습니다. 사번과 Auth 비밀번호 정책을 확인하세요."
+        ? "임시 비밀번호가 Supabase 비밀번호 정책을 충족하지 않습니다. Auth 비밀번호 정책을 확인하세요."
         : "비밀번호 초기화에 실패했습니다. Auth 사용자 연결 상태를 확인하세요."
+    };
+  }
+
+  // 탈취됐을 수 있는 기존 세션(리프레시 토큰 포함)을 모두 끊는다. 실패해도 초기화 자체는 끝났으므로 구분해 알린다.
+  if (!(await revokeUserSessionsWithRetry(admin, targetUser.id))) {
+    return {
+      ok: true,
+      message:
+        "임시 비밀번호를 발급했지만 기존 로그인 세션 종료에 실패했습니다. 사용자는 첫 로그인 때 새 비밀번호로 변경해야 하며, 세션 종료를 다시 시도하거나 시스템 담당자에게 확인을 요청하세요.",
+      data: { temporaryPassword, sessionRevokeFailed: true }
     };
   }
 
   return {
     ok: true,
-    message: initialPassword === employeeNo
-      ? "비밀번호를 등록된 사번으로 초기화했습니다."
-      : "비밀번호를 사번 뒤에 0을 붙인 6자리 초기 비밀번호로 변경했습니다."
+    message: "임시 비밀번호를 발급하고 기존 로그인 세션을 모두 종료했습니다. 사용자는 첫 로그인 때 새 비밀번호로 변경해야 합니다.",
+    data: { temporaryPassword }
   };
+}
+
+// 비밀번호 초기화 후 세션 종료가 실패했을 때 관리자가 팝업에서 다시 시도하는 용도.
+export async function revokeUserSessionsAction(_: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  // requireAdmin 은 requireActiveProfile 을 거치므로 비활성·강제 변경 대기 관리자도 거부된다.
+  const { error: authError } = await requireAdmin();
+  if (authError) {
+    return { ok: false, message: authError };
+  }
+
+  const parsedUserId = idSchema.safeParse(String(formData.get("user_id") ?? "").trim());
+  if (!parsedUserId.success) {
+    return { ok: false, message: "세션을 종료할 사용자를 확인하세요." };
+  }
+
+  let admin: ReturnType<typeof createSupabaseAdminClient>;
+  try {
+    admin = createSupabaseAdminClient();
+  } catch {
+    return { ok: false, message: "SUPABASE_SERVICE_ROLE_KEY를 서버 환경변수에 설정하세요." };
+  }
+
+  const { data: targetUser, error: targetError } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("id", parsedUserId.data)
+    .maybeSingle();
+  if (targetError || !targetUser) {
+    return { ok: false, message: "세션을 종료할 사용자 정보를 찾을 수 없습니다." };
+  }
+
+  if (!(await revokeUserSessionsWithRetry(admin, targetUser.id))) {
+    return { ok: false, message: "기존 로그인 세션 종료에 다시 실패했습니다. 시스템 담당자에게 확인을 요청하세요." };
+  }
+  return { ok: true, message: "기존 로그인 세션을 모두 종료했습니다." };
 }
 
 async function requireUserRegistrationApprover(departmentId: string) {

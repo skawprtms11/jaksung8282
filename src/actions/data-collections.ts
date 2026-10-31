@@ -4,14 +4,17 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { isAdmin } from "@/lib/auth/permissions";
+import { COLLECTION_IMAGE_BUCKET, toCollectionImagePath } from "@/lib/data-collections/image";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { safeErrorMessage, type ActionResult } from "@/lib/utils/form";
+import { idSchema } from "@/lib/validations/common";
 import type { Json } from "@/types/database";
 
 const MAX_TEMPLATE_COLUMNS = 30;
 const MAX_ENTRY_ROWS = 300;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_COLUMN_OPTIONS = 100;
 
 export type CollectionTemplate = {
   columns: string[];
@@ -26,8 +29,8 @@ const dataCollectionSchema = z.object({
   example: z.string().trim().max(5000).default(""),
   image_url: z.string().trim().max(1000).default(""),
   columns: columnsSchema,
-  widths: z.array(z.coerce.number().int().min(0).max(2000)).optional(),
-  options: z.array(z.array(z.string().trim().max(120))).optional(),
+  widths: z.array(z.coerce.number().int().min(0).max(2000)).max(MAX_TEMPLATE_COLUMNS).optional(),
+  options: z.array(z.array(z.string().trim().max(120)).max(MAX_COLUMN_OPTIONS)).max(MAX_TEMPLATE_COLUMNS).optional(),
   collection_type: z.enum(["regular", "adhoc"]).default("adhoc"),
   entry_mode: z.enum(["grid", "link"]).default("grid"),
   link_url: z.string().trim().max(1000).default("")
@@ -80,6 +83,11 @@ export async function saveDataCollectionAction(_: ActionResult | null, formData:
   }
 
   const { id, title, description, example, image_url, columns } = parsed.data;
+  // 버킷이 비공개라 화면에는 서명 주소가 오가지만 DB 에는 저장 경로만 남긴다.
+  const imagePath = toCollectionImagePath(image_url);
+  if (image_url && !imagePath) {
+    return { ok: false, message: "안내 사진은 업로드한 파일만 사용할 수 있습니다." };
+  }
   const widths = Array.from({ length: columns.length }, (_, index) => parsed.data.widths?.[index] ?? 0);
   // 컬럼별 목록박스 선택지. 빈 배열이면 일반 텍스트 컬럼이다.
   const options = Array.from({ length: columns.length }, (_, index) =>
@@ -92,7 +100,7 @@ export async function saveDataCollectionAction(_: ActionResult | null, formData:
     collection_type: parsed.data.collection_type,
     entry_mode: parsed.data.entry_mode,
     link_url: parsed.data.entry_mode === "link" ? parsed.data.link_url : null,
-    image_url: image_url || null,
+    image_url: imagePath,
     template: { columns, widths, options } as unknown as Json,
     updated_by: profile.id,
     updated_at: new Date().toISOString()
@@ -110,7 +118,7 @@ export async function saveDataCollectionAction(_: ActionResult | null, formData:
   return { ok: true, message: id ? "자료취합을 수정했습니다." : "자료취합을 등록했습니다." };
 }
 
-export async function uploadCollectionImageAction(formData: FormData): Promise<ActionResult<{ url: string }>> {
+export async function uploadCollectionImageAction(formData: FormData): Promise<ActionResult<{ url: string; path: string }>> {
   const { profile } = await getCurrentUserProfile();
   if (!profile?.is_active || !isAdmin(profile)) {
     return { ok: false, message: "사진 업로드는 관리자만 가능합니다." };
@@ -153,15 +161,21 @@ export async function uploadCollectionImageAction(formData: FormData): Promise<A
     return { ok: false, message: "Supabase 관리자 환경변수를 확인하세요." };
   }
   const path = `guides/${Date.now()}-${Math.random().toString(16).slice(2)}.${extension}`;
-  const { error } = await adminClient.storage.from("data-collections").upload(path, file, {
+  const { error } = await adminClient.storage.from(COLLECTION_IMAGE_BUCKET).upload(path, file, {
     contentType: resolvedContentType,
     upsert: false
   });
   if (error) {
     return { ok: false, message: safeErrorMessage(error.message) };
   }
-  const { data } = adminClient.storage.from("data-collections").getPublicUrl(path);
-  return { ok: true, message: "사진을 업로드했습니다.", data: { url: data.publicUrl } };
+  // 비공개 버킷: 미리보기용 서명 주소만 돌려주고, 저장 시 서버가 경로로 되돌려 보관한다.
+  const { data: signed, error: signError } = await adminClient.storage
+    .from(COLLECTION_IMAGE_BUCKET)
+    .createSignedUrl(path, 3600);
+  if (signError || !signed) {
+    return { ok: false, message: safeErrorMessage(signError?.message) };
+  }
+  return { ok: true, message: "사진을 업로드했습니다.", data: { url: signed.signedUrl, path } };
 }
 
 export async function closeDataCollectionAction(formData: FormData): Promise<ActionResult> {
@@ -169,10 +183,11 @@ export async function closeDataCollectionAction(formData: FormData): Promise<Act
   if (!profile?.is_active || !isAdmin(profile)) {
     return { ok: false, message: "자료취합 종결은 관리자만 가능합니다." };
   }
-  const collectionId = String(formData.get("id") ?? "");
-  if (!collectionId) {
+  const parsedId = idSchema.safeParse(String(formData.get("id") ?? ""));
+  if (!parsedId.success) {
     return { ok: false, message: "종결할 취합건을 찾을 수 없습니다." };
   }
+  const collectionId = parsedId.data;
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
     return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요." };
@@ -200,11 +215,13 @@ export async function setDataCollectionStatusAction(formData: FormData): Promise
   if (!profile?.is_active || !isAdmin(profile)) {
     return { ok: false, message: "취합 상태 변경은 관리자만 가능합니다." };
   }
-  const collectionId = String(formData.get("id") ?? "");
-  const status = String(formData.get("status") ?? "") as DataCollectionStatus;
-  if (!collectionId || !COLLECTION_STATUSES.includes(status)) {
+  const parsed = z
+    .object({ id: idSchema, status: z.enum(COLLECTION_STATUSES) })
+    .safeParse({ id: String(formData.get("id") ?? ""), status: String(formData.get("status") ?? "") });
+  if (!parsed.success) {
     return { ok: false, message: "변경할 상태를 확인하세요." };
   }
+  const { id: collectionId, status } = parsed.data;
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
     return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요." };
@@ -227,10 +244,11 @@ export async function deleteDataCollectionAction(formData: FormData): Promise<Ac
   if (!profile?.is_active || !isAdmin(profile)) {
     return { ok: false, message: "자료취합 삭제는 관리자만 가능합니다." };
   }
-  const collectionId = String(formData.get("id") ?? "");
-  if (!collectionId) {
+  const parsedId = idSchema.safeParse(String(formData.get("id") ?? ""));
+  if (!parsedId.success) {
     return { ok: false, message: "삭제할 취합건을 찾을 수 없습니다." };
   }
+  const collectionId = parsedId.data;
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
     return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요." };
@@ -251,7 +269,7 @@ export async function deleteDataCollectionAction(formData: FormData): Promise<Ac
 const collectionEntrySchema = z.object({
   collection_id: z.string().uuid(),
   department_id: z.string().uuid(),
-  rows: z.array(z.array(z.string().max(1000))).max(MAX_ENTRY_ROWS),
+  rows: z.array(z.array(z.string().max(1000)).max(MAX_TEMPLATE_COLUMNS)).max(MAX_ENTRY_ROWS),
   is_completed: z.boolean()
 });
 
