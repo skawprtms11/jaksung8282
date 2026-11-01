@@ -1,108 +1,46 @@
 import { redirect } from "next/navigation";
-import { ClientMasterControls } from "@/components/masters/MasterForms";
 import { PageHeader } from "@/components/common/PageHeader";
+import { NowClientMasterTable, NowSourceNotice } from "@/components/masters/NowMasterViews";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { isAdmin } from "@/lib/auth/permissions";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { toContainsPattern } from "@/lib/utils/search";
+import { sortNowMasterRows, toClientMasterViewRow, type ClientMasterViewRow } from "@/lib/masters/now-master";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
-type DepartmentOption = { id: string; department_name: string };
-type ClientRow = {
-  id: string;
-  client_code: string;
-  client_name: string;
-  notes: string | null;
-  department_id: string | null;
-  is_active: boolean;
-  sort_order: number;
-  created_at: string;
-  updated_at: string;
-};
+const NOW_CLIENT_LIMIT = 2000;
 
-const CLIENT_MASTER_LIMIT = 200;
-
-export default async function ClientsPage({
-  searchParams
-}: {
-  searchParams: Promise<{ q?: string; department_id?: string }>;
-}) {
-  const params = await searchParams;
+export default async function ClientsPage() {
   const { profile } = await getCurrentUserProfile();
   if (!isAdmin(profile)) {
     redirect("/notices?error=forbidden");
   }
 
-  const supabase = await createSupabaseServerClient();
-  let departments: DepartmentOption[] = [];
-  let clients: ClientRow[] = [];
-
-  if (supabase) {
-    const [{ data: departmentData }, { data: clientData }] = await Promise.all([
-      supabase.from("departments").select("id,department_name").eq("is_active", true).order("sort_order"),
-      (async () => {
-        const baseQuery = (withNotes: boolean, searchColumn?: "client_code" | "client_name") => {
-          let query = supabase
-            .from("clients")
-            .select(
-              withNotes
-                ? "id,client_code,client_name,notes,department_id,is_active,sort_order,created_at,updated_at"
-                : "id,client_code,client_name,department_id,is_active,sort_order,created_at,updated_at"
-            )
-            .eq("is_active", true)
-            .order("sort_order")
-            .order("client_name")
-            .limit(CLIENT_MASTER_LIMIT);
-
-          if (searchColumn) {
-            query = query.ilike(searchColumn, toContainsPattern(params.q ?? ""));
-          }
-          if (params.department_id) {
-            query = query.eq("department_id", params.department_id);
-          }
-
-          return query;
-        };
-
-        // 검색어를 PostgREST 필터 문자열에 보간하지 않도록 컬럼별로 조회한 뒤 합친다.
-        const runQuery = async (withNotes: boolean) => {
-          if (!params.q) {
-            return baseQuery(withNotes);
-          }
-          const [codeResult, nameResult] = await Promise.all([
-            baseQuery(withNotes, "client_code"),
-            baseQuery(withNotes, "client_name")
-          ]);
-          const mergedRows = new Map<string, ClientRow>();
-          for (const row of [...(codeResult.data ?? []), ...(nameResult.data ?? [])] as unknown as ClientRow[]) {
-            mergedRows.set(row.id, row);
-          }
-          return {
-            data: [...mergedRows.values()]
-              .sort(
-                (left, right) =>
-                  left.sort_order - right.sort_order || left.client_name.localeCompare(right.client_name, "ko")
-              )
-              .slice(0, CLIENT_MASTER_LIMIT),
-            error: codeResult.error ?? nameResult.error
-          };
-        };
-
-        const result = await runQuery(true);
-        if (result.error?.message.includes("notes")) {
-          return runQuery(false);
-        }
-        return result;
-      })()
-    ]);
-
-    departments = (departmentData ?? []) as DepartmentOption[];
-    clients = (clientData ?? []) as unknown as ClientRow[];
+  let rows: ClientMasterViewRow[] = [];
+  let loadError: string | null = null;
+  try {
+    // 현황관리(now) 원본을 서비스키로 조회만 한다. 화면 진입 권한은 위에서 관리자만 통과시켰다.
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .schema("now")
+      .from("client")
+      .select("id,client_code,client_name,erp_code,labor_code,pl_code,rep_client_code,rep_client_name,is_active,sort_order,note")
+      .limit(NOW_CLIENT_LIMIT);
+    if (error) {
+      loadError = "현황관리 화주 정보를 불러오지 못했습니다.";
+    } else {
+      rows = sortNowMasterRows(data ?? [], (row) => row.client_name).map(toClientMasterViewRow);
+    }
+  } catch {
+    loadError = "SUPABASE_SERVICE_ROLE_KEY를 서버 환경변수에 설정하세요.";
   }
 
   return (
     <>
-      <PageHeader title="화주마스터" description="화주 정보를 등록하고 수정합니다." />
-      <ClientMasterControls departments={departments} clients={clients} />
+      <PageHeader title="화주마스터" description="현황관리(now) 화주마스터를 조회합니다. 등록·수정·삭제는 현황관리에서 합니다." />
+      <NowSourceNotice />
+      {loadError ? (
+        <p className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">{loadError}</p>
+      ) : null}
+      <NowClientMasterTable rows={rows} />
     </>
   );
 }

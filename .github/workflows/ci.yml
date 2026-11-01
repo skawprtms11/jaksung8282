@@ -51,7 +51,5 @@ jobs:
           NEXT_PUBLIC_APP_NAME: TPL사업부 주간자료 시스템
           APP_TIMEZONE: Asia/Seoul
           NEXT_PUBLIC_SITE_URL: https://placeholder.example.com
-          LABOR_SUPABASE_URL: https://placeholder-labor.supabase.co
-          LABOR_SUPABASE_SERVICE_ROLE_KEY: placeholder-labor-key
           NEXT_TELEMETRY_DISABLED: "1"
         run: npm run build
