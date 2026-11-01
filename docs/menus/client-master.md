@@ -2,103 +2,63 @@
 
 ## 1. 목적
 
-`/admin/clients`는 사업부에서 사용할 화주 기본정보를 등록·수정·일괄 등록하고 사용 여부를 관리하는 관리자 메뉴다. 화주를 특정 부서에 연결하고 담당자를 지정하는 운영 기능은 부서마스터가 소유한다.
+`/admin/clients`는 현황관리(now) 시스템의 화주마스터(`now.client`)를 조회하는 관리자 전용 조회 메뉴다.
+
+### 결정 변경 기록 (2026-11-01 대표님 결정)
+
+- now 가 원본이다. 화주의 등록·수정·일괄등록·삭제(미사용)는 현황관리에서만 한다.
+- 주간자료는 조회만 한다. now → `public.clients` 사본은 현황관리 트리거가 실시간 반영한다. 기존 단건 등록·수정, 일괄 등록(`bulk_import_clients_atomic`), 다건 삭제 UI와 서버 액션(`saveClientAction`, `saveClientsBulkImportAction`, `deleteClientsAction`)은 삭제했다.
+- `bulk_import_clients_atomic` RPC 와 `clientSchema` 는 DB·테스트 호환을 위해 남아 있으나 앱에서 호출하지 않는다.
+- 현황관리 sql/002 의 가드 트리거가 `public.clients` 직접 쓰기를 이미 막고 있다(`now.sync = 'on'` 일 때만 통과).
 
 ## 2. 접근과 범위
 
 - `admin`만 접근한다.
-- 페이지 진입과 모든 server action에서 관리자 여부를 다시 검사한다.
-- 활성 화주만 조회하며 기본 최대 200건이다.
-
-URL filters:
-
-- `q`: 화주코드 또는 화주명 부분 검색
-- `department_id`: 레거시 `clients.department_id` 기준 필터
-
-운영 관계의 기준은 `department_client_links`이므로 `department_id` 필터를 새로운 관계 로직에 재사용하기 전에 목적을 확인한다.
+- 관리자 확인 뒤에만 서버에서 서비스키 관리자 클라이언트로 `now.client`를 조회한다(`schema("now")`, 최대 2,000건). 브라우저에 서비스키를 보내지 않는다.
 
 ## 3. 화면 기능
 
-### 목록
+- 상단 안내: "now(현황관리) 시스템이 원본이며 변경은 즉시 반영됩니다. 등록·수정은 현황관리에서 하세요."
+- 목록 칸: 화주코드, 화주명, ERP코드, 노임코드, 손익코드, 대표화주(코드+이름), 사용여부, 비고.
+- 화면 안 즉시 검색(화주명·코드·ERP·노임·손익·대표화주)과 "미사용 포함" 선택. 기본은 사용 화주만.
+- 정렬: 사용 → `sort_order` → 화주명.
+- 등록·수정·삭제 버튼은 없다.
 
-- 화주코드, 화주명, 비고
-- 선택, 전체 선택
-- 신규 등록, 일괄 등록, 단건 수정, 다건 삭제
-- 사용 중인 활성 화주만 표시
+## 4. 사본 반영 규칙 (현황관리 소유)
 
-### 단건 등록·수정
+- 현황관리 `now.tg_sync_client`(트리거 `trg_sync_public`)가 now.client 저장 시 같은 트랜잭션에서 `public.clients`를 같은 id로 갱신(없으면 추가)한다. 감시·복사 열: `client_code`, `client_name`, `is_active`, `sort_order`, `note → notes`, 대표 부서 → `department_id`.
+- 삭제는 반영하지 않고 `is_active`로 처리한다. `now_use`(현황관리 화면 전용 숨김)는 복사하지 않는다.
+- 주간자료는 이 트리거·함수를 소유하지 않으며 별도 동기화를 하지 않는다.
 
-입력:
+## 5. 관계 책임 분리
 
-- 화주코드: 필수, 최대 30자
-- 화주명: 필수, 최대 100자
-- 비고
-- 선택적 레거시 부서 ID
-- 사용 여부, 정렬순서
-
-`saveClientAction`은 `clientSchema`로 검증하고 신규면 `created_by`, 수정이면 `updated_by`를 기록한다. 과거 DB에 `notes` 또는 nullable `department_id` migration이 없는 환경을 위한 오류 메시지와 제한적 호환 retry가 존재한다.
-
-### 일괄 등록
-
-- 입력 컬럼: 화주코드, 화주명, 비고
-- 표 직접 입력 또는 Excel/스프레드시트의 탭 구분 데이터 붙여넣기
-- 첫 행이 `화주코드`, `화주명`이면 header로 인식해 제외
-- 미완성 행은 저장을 차단
-- 한 번에 최대 2,000건
-- `bulk_import_clients_atomic` RPC로 한 트랜잭션 처리
-- 동일 화주코드가 payload에 반복되면 마지막 값이 반영되고 결과 메시지에 중복 건수를 표시
-- 결과는 전체, 신규, 업데이트, 중복 count를 반환
-
-### 삭제
-
-- `deleteClientsAction`은 선택 ID를 검증한 뒤 `clients.is_active = false`로 바꾼다.
-- hard delete하지 않는다.
-- 이 동작이 기존 `department_client_links`와 보고서 이력을 삭제하지는 않는다.
-
-## 4. 관계 책임 분리
-
-- 화주 기본정보: 화주마스터
-- 부서에 화주 등록: 부서마스터의 `department_client_links`
-- 부서별 화주담당자: 부서마스터의 `client_assignments`
+- 화주 기본정보: 현황관리 화주마스터 → 실시간 사본
+- 부서-화주 연결: 현황관리 부서마스터 → 실시간 사본
+- 부서별 화주담당자: 주간자료 부서마스터의 `client_assignments`
 - `saveClientAssignmentsAction`은 현재 사용하지 않으며 부서마스터에서 처리하라는 오류를 반환한다.
 
-이 책임을 다시 화주마스터에 중복 구현하지 않는다. 여러 부서가 같은 화주를 연결할 수 있는 현재 관계 모델을 유지한다.
-
-## 5. 데이터와 주요 코드
+## 6. 데이터와 주요 코드
 
 | 구분 | 위치 |
 | --- | --- |
 | 서버 페이지 | `src/app/(protected)/admin/clients/page.tsx` |
-| 화면·일괄입력 | `ClientMasterControls`, `ClientBulkRegisterDialog` in `MasterForms.tsx` |
-| 서버 액션 | `saveClientAction`, `saveClientsBulkImportAction`, `deleteClientsAction` |
-| 검증 | `clientSchema`, `bulkClientImportRowSchema` |
-| 테이블 | `clients` |
-| 관계 테이블 | `department_client_links`, `client_assignments` |
-| RPC | `bulk_import_clients_atomic` |
-| migration | `007`, `009`, `019`, `020` migration |
+| 화면 | `NowSourceNotice`, `NowClientMasterTable` in `src/components/masters/NowMasterViews.tsx` |
+| 순수 함수 | `src/lib/masters/now-master.ts` (`toClientMasterViewRow` 등), `tests/now-master.test.ts` |
+| 서버 액션 | 없음(조회 전용) |
+| 원본 테이블 | `now.client` (읽기 전용) |
+| 주간자료 테이블 | `clients` |
+| 사본 반영·가드 | 현황관리 저장소 `sql/002_takeover_public_masters.sql` |
 
-모든 성공 동작은 `/admin/clients`와 `header-filter-options` cache를 갱신한다.
+## 7. 변경 불변 조건
 
-## 6. 변경 불변 조건
-
-- 화주코드는 중복 의미를 갖지 않도록 기존 DB/RPC unique 계약을 확인한다.
-- 일괄 등록은 부분 성공하지 않아야 한다.
+- now 스키마에 쓰지 않는다(트리거·함수·데이터 변경 금지).
+- `clients.id`를 재생성하지 않는다. hard delete 하지 않는다.
 - `clients.department_id`를 유일한 부서 관계로 취급하지 않는다.
 - 화주 미사용 처리가 과거 보고서, 물동량, 승인 이력을 삭제하지 않아야 한다.
-- 화주명 변경 후 부서마스터, 헤더 필터, 보고서 관계 조회가 새 이름을 표시해야 한다.
-- 목록 제한을 넘는 운영 규모가 예상되면 무작정 limit를 늘리지 말고 pagination을 추가한다.
+- 화주명 변경(현황관리) 후 부서마스터, 헤더 필터, 보고서 관계 조회가 새 이름을 표시해야 한다.
 
-## 7. 교차 메뉴 영향과 검증
-
-- 화주 기본정보 변경은 부서마스터, 헤더 필터, 화주자료, 부서자료, 회의자료에 영향을 준다.
-- 미사용 처리는 신규 선택 대상에서 제외되지만 과거 보고서 표시 이름 관계가 유지되는지 확인한다.
-
-필수 시나리오:
+## 8. 검증 시나리오
 
 - 비관리자 route 접근 차단
-- 코드·이름 검색과 레거시 부서 필터
-- 단건 신규·수정과 notes migration 호환 오류
-- Excel header 포함/미포함 붙여넣기
-- 미완성 행, 2,000건 초과, payload 내 중복
-- 일괄 RPC 전체 rollback과 결과 count
-- 다건 미사용 후 헤더·부서마스터 선택 대상 제거
+- 현황관리에서 화주명·사용여부 변경 → 새로고침 시 목록과 주간자료 화면 반영
+- 서비스키 누락·now 조회 실패 시 경고 문구

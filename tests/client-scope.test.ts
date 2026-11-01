@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveOwnerClientIds } from "@/lib/auth/client-scope";
+import { keepLinkedClientIds, resolveOwnerClientIds } from "@/lib/auth/client-scope";
 
 describe("resolveOwnerClientIds", () => {
   it("returns every assigned client when no client is requested", () => {
@@ -24,5 +24,12 @@ describe("resolveOwnerClientIds", () => {
   it("returns no client when nothing is assigned", () => {
     expect(resolveOwnerClientIds(new Set())).toEqual([]);
     expect(resolveOwnerClientIds(new Set(), "client-a")).toEqual([]);
+  });
+});
+
+describe("keepLinkedClientIds", () => {
+  it("keeps only assignments whose department-client link is active", () => {
+    expect(keepLinkedClientIds(["a", "b", "b", "c"], ["b", "c", "d"])).toEqual(["b", "c"]);
+    expect(keepLinkedClientIds(["a"], [])).toEqual([]);
   });
 });

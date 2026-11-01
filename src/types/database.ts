@@ -731,4 +731,44 @@ export type Database = {
       : never;
     Enums: Record<string, never>;
   };
+  // 현황관리(now) 원본 마스터. 주간자료는 서비스키로 조회만 한다(필요한 열만 정의).
+  now: {
+    Tables: {
+      client: {
+        Row: {
+          id: string;
+          client_code: string;
+          client_name: string;
+          erp_code: string | null;
+          labor_code: string | null;
+          pl_code: string | null;
+          rep_client_code: string | null;
+          rep_client_name: string | null;
+          is_active: boolean;
+          sort_order: number;
+          note: string | null;
+        } & Record<string, unknown>;
+        Insert: Record<string, never>;
+        Update: Record<string, never>;
+        Relationships: [];
+      };
+      center: {
+        Row: {
+          id: string;
+          center_name: string;
+          lease_type: string | null;
+          building_type: string | null;
+          address: string | null;
+          is_active: boolean;
+          sort_order: number;
+          note: string | null;
+        } & Record<string, unknown>;
+        Insert: Record<string, never>;
+        Update: Record<string, never>;
+        Relationships: [];
+      };
+    };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+  };
 };

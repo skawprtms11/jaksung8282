@@ -16,7 +16,7 @@
 | `client_owner` | 소속 부서이면서 자신에게 활성 배정된 화주 |
 
 - 부서-화주 관계는 `department_client_links`가 기준이다.
-- 화주담당자 제한은 `client_assignments(user_id, department_id, client_id, is_active)`까지 확인한다. `department_id`는 RLS 헬퍼 `is_assigned_department_client`와 같은 기준으로 조회 부서와 정확히 일치해야 한다.
+- 화주담당자 제한은 `client_assignments(user_id, department_id, client_id, is_active)`까지 확인한다. `department_id`는 RLS 헬퍼 `is_assigned_department_client`와 같은 기준으로 조회 부서와 정확히 일치해야 한다. 배정 화주 목록은 같은 부서에 활성 `department_client_links`가 있는 화주만 남긴다(현황관리에서 연결 해제된 배정은 데이터는 두고 화면에서 숨김, `keepLinkedClientIds`).
 - 관리자가 아닌 사용자의 부서 범위를 확정하지 못하면(`profiles.department_id`가 비어 있으면) 부서 범위 쿼리는 조회하지 않고 빈 결과를 돌려준다.
 - 관리자가 부서를 선택하지 않으면 `pickDefaultDepartmentId`로 기본 부서를 정한다.
 - 화주가 선택되지 않으면 역할 범위에서 `pickDefaultClientId`로 기본 화주를 정한다.

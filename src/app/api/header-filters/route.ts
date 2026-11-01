@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { PASSWORD_CHANGE_REQUIRED_MESSAGE } from "@/lib/auth/password-change";
+import { keepLinkedClientIds } from "@/lib/auth/client-scope";
 import { isAdmin } from "@/lib/auth/permissions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { HeaderFilterOptions } from "@/components/layout/Header";
@@ -50,6 +51,14 @@ function normalizeHeaderFilterOptions(value: Json | null): HeaderFilterOptions |
   };
 }
 
+// 담당자 배정은 소속 부서에 활성 연결된 화주(clients 목록)만 남긴다.
+function withLinkedAssignments(options: HeaderFilterOptions, departmentId: string | null): HeaderFilterOptions {
+  const linkedClientIds = options.clients
+    .filter((client) => client.department_id === departmentId)
+    .map((client) => client.id);
+  return { ...options, assignedClientIds: keepLinkedClientIds(options.assignedClientIds, linkedClientIds) };
+}
+
 export async function GET() {
   const { profile, mustChangePassword } = await getCurrentUserProfile();
   if (mustChangePassword) {
@@ -72,7 +81,7 @@ export async function GET() {
   const { data: rpcData, error: rpcError } = await supabase.rpc("get_header_filter_options");
   const rpcOptions = rpcError ? null : normalizeHeaderFilterOptions(rpcData);
   if (rpcOptions) {
-    return NextResponse.json(rpcOptions, { headers: cacheHeaders });
+    return NextResponse.json(withLinkedAssignments(rpcOptions, profile.department_id), { headers: cacheHeaders });
   }
 
   const departmentFilter = isAdmin(profile) ? undefined : profile.department_id;
@@ -127,5 +136,5 @@ export async function GET() {
     assignedClientIds: ((assignmentResult.data ?? []) as ClientAssignmentRow[]).map((assignment) => assignment.client_id)
   };
 
-  return NextResponse.json(response, { headers: cacheHeaders });
+  return NextResponse.json(withLinkedAssignments(response, profile.department_id), { headers: cacheHeaders });
 }

@@ -104,10 +104,6 @@ export const clientSchema = z.object({
   sort_order: z.coerce.number().int().min(0).default(0)
 });
 
-export const departmentClientSchema = clientSchema.extend({
-  department_id: idSchema
-});
-
 export const userSchema = z.object({
   id: z.string().uuid().optional(),
   email: z.string().trim().email("올바른 이메일을 입력하세요."),

@@ -1,6 +1,6 @@
 import dynamic from "next/dynamic";
 import { type ClientReportTableRow } from "@/components/reports/ClientReportsTable";
-import { resolveOwnerClientIds } from "@/lib/auth/client-scope";
+import { keepLinkedClientIds, resolveOwnerClientIds } from "@/lib/auth/client-scope";
 import { pickDefaultClientId, pickDefaultDepartmentId } from "@/lib/auth/default-scope";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { isAdmin } from "@/lib/auth/permissions";
@@ -251,13 +251,27 @@ export default async function ClientReportsPage({
     const isClientOwner = profile.app_role === "client_owner";
     let assignedClients: { id: string; client_name: string }[] = [];
     if (isClientOwner && departmentFilter) {
-      const { data: assignmentRows } = await dataClient
-        .from("client_assignments")
-        .select("client_id,clients(id,client_name)")
-        .eq("user_id", profile.id)
-        .eq("department_id", departmentFilter)
-        .eq("is_active", true);
+      const [{ data: assignmentRows }, { data: activeLinkRows }] = await Promise.all([
+        dataClient
+          .from("client_assignments")
+          .select("client_id,clients(id,client_name)")
+          .eq("user_id", profile.id)
+          .eq("department_id", departmentFilter)
+          .eq("is_active", true),
+        dataClient
+          .from("department_client_links")
+          .select("client_id")
+          .eq("department_id", departmentFilter)
+          .eq("is_active", true)
+      ]);
+      const linkedAssignedIds = new Set(
+        keepLinkedClientIds(
+          ((assignmentRows ?? []) as unknown as DefaultClientAssignmentRow[]).map((assignment) => assignment.client_id),
+          (activeLinkRows ?? []).map((link) => link.client_id)
+        )
+      );
       assignedClients = ((assignmentRows ?? []) as unknown as DefaultClientAssignmentRow[])
+        .filter((assignment) => linkedAssignedIds.has(assignment.client_id))
         .filter((assignment) => assignment.clients)
         .map((assignment) => ({
           id: assignment.clients?.id ?? assignment.client_id,
