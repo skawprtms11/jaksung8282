@@ -5,8 +5,17 @@ import {
   matchesNowMasterSearch,
   sortNowMasterRows,
   toCenterMasterViewRow,
-  toClientMasterViewRow
+  toClientMasterViewRow,
+  toDepartmentMasterViewRow
 } from "@/lib/masters/now-master";
+
+describe("now.department row conversion", () => {
+  it("converts a now.department row for the department master table", () => {
+    expect(
+      toDepartmentMasterViewRow({ id: "d1", dept_code: null, dept_name: " 안성1팀 ", is_active: true, sort_order: 2, note: " " })
+    ).toEqual({ id: "d1", departmentCode: "-", departmentName: "안성1팀", isActive: true, note: "-" });
+  });
+});
 
 describe("now row conversion", () => {
   it("converts a now.client row for the client master table", () => {

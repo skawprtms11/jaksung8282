@@ -9,6 +9,7 @@ import { DepartmentSubmissionEditor, type DepartmentSubmissionEditorInitialSubmi
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { canSubmitDepartment, roleLabel } from "@/lib/auth/permissions";
 import { getCurrentWeekOption, getReportMonthByThursday, getWeekEndDate, getWeekOfMonth, resolveWeekFromSelection } from "@/lib/dates/week";
+import { keepOperatingLinks, loadOperatingClientKeys } from "@/lib/masters/operating-clients";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { ClientReportStatus, Importance, VolumeType, VolumeUnit } from "@/types/enums";
@@ -90,11 +91,13 @@ export default async function MobilePage({ searchParams }: { searchParams: Promi
     return <main className="min-h-dvh bg-[#faf6ef] px-5 py-16 text-center"><h1 className="text-lg font-black">소속부서를 확인할 수 없습니다.</h1><p className="mt-2 text-sm font-bold text-slate-500">관리자에게 소속부서 등록을 요청하세요.</p></main>;
   }
 
-  const [{ data: departmentData }, { data: categoryData }, { data: linkData }, { data: assignmentData }] = await Promise.all([
+  // 작성 화주 목록은 운영 화주(운영 표 ∩ 활성 연결)만 보여 준다.
+  const [{ data: departmentData }, { data: categoryData }, { data: linkData }, { data: assignmentData }, operatingKeys] = await Promise.all([
     dataClient.from("departments").select("id,department_name").eq("id", departmentId).maybeSingle(),
     dataClient.from("work_categories").select("id,category_name,icon_key").eq("is_active", true).order("sort_order"),
     dataClient.from("department_client_links").select("department_id,clients(id,client_name)").eq("department_id", departmentId).eq("is_active", true),
-    profile.app_role === "client_owner" ? dataClient.from("client_assignments").select("client_id").eq("user_id", profile.id).eq("department_id", departmentId).eq("is_active", true) : Promise.resolve({ data: [] })
+    profile.app_role === "client_owner" ? dataClient.from("client_assignments").select("client_id").eq("user_id", profile.id).eq("department_id", departmentId).eq("is_active", true) : Promise.resolve({ data: [] }),
+    loadOperatingClientKeys(dataClient, departmentId)
   ]);
   const department = (departmentData as Department | null) ?? { id: departmentId, department_name: profile.department_name ?? "소속부서" };
   if (departmentOptions.length === 0) departmentOptions = [department];
@@ -102,7 +105,7 @@ export default async function MobilePage({ searchParams }: { searchParams: Promi
   const assignmentIds = new Set(((assignmentData ?? []) as Assignment[]).map((row) => row.client_id));
   const linkedClients = Array.from(
     new Map(
-      ((linkData ?? []) as unknown as ClientLink[])
+      keepOperatingLinks((linkData ?? []) as unknown as ClientLink[], operatingKeys, (row) => row.clients?.id)
         .filter((row) => row.clients)
         .map((row) => [row.clients!.id, { id: row.clients!.id, client_name: row.clients!.client_name, department_id: row.department_id }])
     ).values()

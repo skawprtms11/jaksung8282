@@ -2,15 +2,13 @@
 
 import { useActionState, useState } from "react";
 import { createPortal } from "react-dom";
-import { Building2, Copy, KeyRound, Loader2, PackagePlus, Pencil, RotateCcw, Save, Search, Trash2, UserRoundCheck, X } from "lucide-react";
+import { Copy, KeyRound, Loader2, Pencil, RotateCcw, Save, Search, Trash2, UserRoundCheck, X } from "lucide-react";
 import {
   approveUserRegistrationRequestAction,
   deleteUsersAction,
   rejectUserRegistrationRequestAction,
   resetUserPasswordAction,
   revokeUserSessionsAction,
-  saveClientAssignmentsAction,
-  saveDepartmentClientAssignmentsAction,
   saveDepartmentHeadAction,
   saveUserAction
 } from "@/actions/masters";
@@ -22,14 +20,6 @@ import { roleLabel } from "@/lib/auth/permissions";
 import type { AppRole } from "@/types/enums";
 
 type Department = { id: string; department_name: string };
-type DepartmentFormValue = {
-  id: string;
-  department_code: string;
-  department_name: string;
-  notes: string | null;
-  is_active: boolean;
-  sort_order: number;
-};
 type UserFormValue = {
   id: string;
   email: string;
@@ -55,112 +45,15 @@ type UserRegistrationRequestValue = {
   requested_at: string;
   departments: Department | null;
 };
-type AssignmentUser = { id: string; full_name: string; department_id: string | null; app_role: AppRole };
-type AssignmentValue = { user_id: string; is_primary: boolean };
-type DepartmentClientValue = {
-  id: string;
-  client_code: string;
-  client_name: string;
-  notes: string | null;
-  department_id: string | null;
-};
-type DepartmentClientLinkValue = { department_id: string; client_id: string; is_active: boolean };
-type DepartmentAssignmentValue = AssignmentValue & { department_id: string | null; client_id: string; is_active: boolean };
-export function DepartmentMasterTable({
-  departments,
-  users,
-  headCandidates,
-  clients,
-  departmentClientLinks,
-  assignments,
-  canManage
-}: {
-  departments: DepartmentFormValue[];
-  users: AssignmentUser[];
-  headCandidates: AssignmentUser[];
-  clients: DepartmentClientValue[];
-  departmentClientLinks: DepartmentClientLinkValue[];
-  assignments: DepartmentAssignmentValue[];
-  canManage: boolean;
-}) {
-  const [headDepartment, setHeadDepartment] = useState<DepartmentFormValue | null>(null);
+export type DepartmentHeadCandidate = { id: string; full_name: string; department_id: string | null; app_role: AppRole };
 
-  return (
-    <section className="space-y-3">
-      <TableShell>
-        <table className="table-sticky min-w-[700px] w-full text-left text-sm">
-          <thead>
-            <tr>
-              <th className="px-3 py-3">부서명</th>
-              <th className="px-3 py-3">부서장</th>
-              <th className="px-3 py-3">화주등록</th>
-              <th className="px-3 py-3">비고</th>
-            </tr>
-          </thead>
-          <tbody>
-            {departments.map((department) => {
-              const headNames = users
-                .filter((user) => user.department_id === department.id && user.app_role === "department_head")
-                .map((user) => user.full_name);
-              return (
-                <tr key={department.id} className="border-t border-slate-100">
-                  <td className="px-3 py-3">
-                    <span className="inline-flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-[#007050]" />
-                      {department.department_name}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3">
-                    <span className="inline-flex items-center gap-2">
-                      {headNames.join(", ") || "-"}
-                      {canManage ? (
-                        <button
-                          type="button"
-                          onClick={() => setHeadDepartment(department)}
-                          className="icon-tool-button"
-                          aria-label={`${department.department_name} 부서장 지정`}
-                          title="부서장 지정"
-                        >
-                          <Pencil className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                      ) : null}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3">
-                    <DepartmentClientManager
-                      department={department}
-                      clients={clients}
-                      departmentClientLinks={departmentClientLinks}
-                      users={users}
-                      assignments={assignments}
-                    />
-                  </td>
-                  <td className="px-3 py-3 text-slate-500">{department.notes?.trim() || "-"}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </TableShell>
-
-      {headDepartment ? (
-        <DepartmentHeadDialog
-          department={headDepartment}
-          users={headCandidates}
-          onClose={() => setHeadDepartment(null)}
-        />
-      ) : null}
-    </section>
-  );
-}
-
-function DepartmentHeadDialog({
+export function DepartmentHeadDialog({
   department,
   users,
   onClose
 }: {
-  department: DepartmentFormValue;
-  users: AssignmentUser[];
+  department: Department;
+  users: DepartmentHeadCandidate[];
   onClose: () => void;
 }) {
   const [state, action] = useActionState(saveDepartmentHeadAction, null);
@@ -213,198 +106,6 @@ function ModalPortal({ children }: { children: React.ReactNode }) {
     return null;
   }
   return createPortal(children, document.body);
-}
-
-export function DepartmentClientManager({
-  department,
-  clients,
-  departmentClientLinks,
-  users,
-  assignments
-}: {
-  department: DepartmentFormValue;
-  clients: DepartmentClientValue[];
-  departmentClientLinks: DepartmentClientLinkValue[];
-  users: AssignmentUser[];
-  assignments: DepartmentAssignmentValue[];
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [assignmentClientId, setAssignmentClientId] = useState<string | null>(null);
-  const registeredClientIds = departmentClientLinks
-    .filter((link) => link.department_id === department.id && link.is_active)
-    .map((link) => link.client_id);
-  const registeredClients = clients.filter((client) => registeredClientIds.includes(client.id));
-  const departmentUsers = users.filter((user) => user.department_id === department.id && user.app_role === "client_owner");
-  const assignmentClient = registeredClients.find((client) => client.id === assignmentClientId) ?? null;
-
-  return (
-    <>
-      <button type="button" onClick={() => setIsOpen(true)} className="icon-tool-button" aria-label={`${department.department_name} 등록 화주`}>
-        <PackagePlus className="h-4 w-4" aria-hidden="true" />
-      </button>
-
-      {isOpen ? (
-        <ModalPortal>
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby={`client-manager-${department.id}`}>
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-[1.5rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.34)]">
-            <div className="flex items-start justify-between gap-4 border-b border-[#e4dac9] px-5 py-4">
-              <div>
-                <h2 id={`client-manager-${department.id}`} className="text-lg font-black text-[#012241]">{department.department_name} 등록 화주</h2>
-                <p className="mt-1 text-sm text-slate-500">화주 등록·해제는 현황관리(now) 부서마스터에서 합니다. 여기서는 화주담당자만 지정합니다.</p>
-              </div>
-              <button type="button" onClick={() => setIsOpen(false)} className="icon-tool-button" aria-label="팝업 닫기">
-                <X className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
-
-            <section className="max-h-[76vh] overflow-y-auto p-5">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h3 className="font-black text-[#012241]">등록된 화주목록</h3>
-                <span className="rounded-full bg-[#fbf8f2] px-3 py-1 text-xs font-bold text-slate-500">{registeredClients.length}건</span>
-              </div>
-              {registeredClients.length === 0 ? (
-                <p className="rounded-2xl border border-dashed border-[#d3c6b0] bg-white/80 px-4 py-10 text-center text-sm font-semibold text-slate-500">현황관리에 등록된 화주가 없습니다.</p>
-              ) : (
-                <div className="space-y-2">
-                  {registeredClients.map((client) => {
-                    const assignedUsers = assignments
-                      .filter((assignment) => assignment.department_id === department.id && assignment.client_id === client.id && assignment.is_active)
-                      .map((assignment) => users.find((user) => user.id === assignment.user_id)?.full_name)
-                      .filter(Boolean);
-                    return (
-                      <div
-                        key={client.id}
-                        className="flex w-full items-center gap-3 rounded-2xl border border-[#e4dac9] bg-white/86 px-3 py-3 text-left text-sm transition hover:border-[#007050]/30 hover:bg-white"
-                      >
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate font-black text-[#012241]">{client.client_name}</span>
-                          <span className="mt-0.5 block truncate text-xs font-semibold text-slate-500">{client.client_code}</span>
-                          <span className="mt-2 block truncate text-xs text-slate-500">
-                            {assignedUsers.length > 0 ? assignedUsers.join(", ") : "담당자 미지정"}
-                          </span>
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setAssignmentClientId(client.id)}
-                          className="icon-tool-button shrink-0"
-                          aria-label={`${client.client_name} 담당자 등록`}
-                        >
-                          <UserRoundCheck className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-          </div>
-        </div>
-        </ModalPortal>
-      ) : null}
-
-      {assignmentClient ? (
-        <DepartmentClientAssignmentDialog
-          department={department}
-          client={assignmentClient}
-          users={departmentUsers}
-          assignments={assignments.filter((assignment) => assignment.department_id === department.id && assignment.client_id === assignmentClient.id && assignment.is_active)}
-          onClose={() => setAssignmentClientId(null)}
-        />
-      ) : null}
-    </>
-  );
-}
-
-function DepartmentClientAssignmentDialog({
-  department,
-  client,
-  users,
-  assignments,
-  onClose
-}: {
-  department: DepartmentFormValue;
-  client: DepartmentClientValue;
-  users: AssignmentUser[];
-  assignments: DepartmentAssignmentValue[];
-  onClose: () => void;
-}) {
-  const [state, action] = useActionState(saveDepartmentClientAssignmentsAction, null);
-  const [selectedUserIds, setSelectedUserIds] = useState(assignments.map((assignment) => assignment.user_id));
-  const [primaryUserId, setPrimaryUserId] = useState(assignments.find((assignment) => assignment.is_primary)?.user_id ?? assignments[0]?.user_id ?? "");
-
-  function toggleUser(userId: string, checked: boolean) {
-    const next = checked ? Array.from(new Set([...selectedUserIds, userId])) : selectedUserIds.filter((id) => id !== userId);
-    setSelectedUserIds(next);
-    if (!next.includes(primaryUserId)) {
-      setPrimaryUserId(next[0] ?? "");
-    }
-  }
-
-  return (
-    <ModalPortal>
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/72 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby={`assignment-${client.id}`}>
-      <form action={action} className="w-full max-w-2xl overflow-hidden rounded-[1.5rem] border border-[#e4dac9] bg-white shadow-[0_28px_80px_rgba(16,34,61,0.24)]">
-        <input type="hidden" name="department_id" value={department.id} />
-        <input type="hidden" name="client_id" value={client.id} />
-        <input type="hidden" name="user_ids" value={selectedUserIds.join(",")} />
-        <input type="hidden" name="primary_user_id" value={primaryUserId} />
-        <div className="flex items-start justify-between gap-4 border-b border-[#e4dac9] px-5 py-4">
-          <div>
-            <h2 id={`assignment-${client.id}`} className="text-lg font-black text-[#012241]">담당자 선정</h2>
-            <p className="mt-1 text-sm text-slate-500">{department.department_name} · {client.client_name}</p>
-          </div>
-          <button type="button" onClick={onClose} className="icon-tool-button" aria-label="팝업 닫기">
-            <X className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </div>
-        <div className="max-h-[62vh] overflow-y-auto p-5">
-          {users.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-[#d3c6b0] bg-[#fbf8f2] px-4 py-10 text-center text-sm font-semibold text-slate-500">
-              해당 부서에 등록 가능한 화주담당자가 없습니다.
-            </p>
-          ) : (
-            <div className="grid gap-2 md:grid-cols-2">
-              {users.map((user) => {
-                const checked = selectedUserIds.includes(user.id);
-                return (
-                  <label key={user.id} className="flex items-center justify-between gap-3 rounded-2xl border border-[#e4dac9] bg-[#fbf8f2] px-3 py-3 text-sm">
-                    <span className="min-w-0 flex-1 font-bold text-[#012241]">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(event) => toggleUser(user.id, event.target.checked)}
-                        className="mr-2 h-4 w-4 rounded border-slate-300"
-                      />
-                      {user.full_name}
-                    </span>
-                    <input
-                      type="radio"
-                      name={`primary-${client.id}`}
-                      checked={primaryUserId === user.id}
-                      disabled={!checked}
-                      onChange={() => setPrimaryUserId(user.id)}
-                      aria-label={`${user.full_name} 대표 담당자 지정`}
-                    />
-                  </label>
-                );
-              })}
-            </div>
-          )}
-          <div className="mt-4">
-            <ActionMessage state={state} />
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 border-t border-[#e4dac9] px-5 py-4">
-          <button type="button" onClick={onClose} className="tool-button">닫기</button>
-          <SubmitButton>
-            <UserRoundCheck className="h-4 w-4" aria-hidden="true" />
-            저장
-          </SubmitButton>
-        </div>
-      </form>
-    </div>
-    </ModalPortal>
-  );
 }
 
 export function UserForm({ departments }: { departments: Department[] }) {
@@ -856,62 +557,5 @@ export function UserMasterControls({
       {editingUser ? <UserEditDialog user={editingUser} departments={departments} onClose={() => setEditingUserId(null)} /> : null}
       {passwordResetUser ? <UserPasswordResetDialog user={passwordResetUser} onClose={() => setPasswordResetUserId(null)} /> : null}
     </section>
-  );
-}
-
-export function ClientAssignmentForm({
-  clientId,
-  users,
-  assignments
-}: {
-  clientId: string;
-  users: AssignmentUser[];
-  assignments: AssignmentValue[];
-}) {
-  const [state, action] = useActionState(saveClientAssignmentsAction, null);
-  const [selected, setSelected] = useState(assignments.map((assignment) => assignment.user_id));
-  const [primary, setPrimary] = useState(assignments.find((assignment) => assignment.is_primary)?.user_id ?? selected[0] ?? "");
-  return (
-    <details className="glass-row p-3">
-      <summary className="cursor-pointer text-sm font-bold text-[#007050]">담당자 등록</summary>
-      <form action={action} className="mt-3 space-y-3">
-        <input type="hidden" name="client_id" value={clientId} />
-        <input type="hidden" name="user_ids" value={selected.join(",")} />
-        <input type="hidden" name="primary_user_id" value={primary} />
-        <div className="grid gap-2 md:grid-cols-2">
-          {users.map((user) => {
-            const checked = selected.includes(user.id);
-            return (
-              <label key={user.id} className="glass-row flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                <span>
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={(event) => {
-                      const next = event.target.checked ? [...selected, user.id] : selected.filter((id) => id !== user.id);
-                      setSelected(next);
-                      if (!next.includes(primary)) {
-                        setPrimary(next[0] ?? "");
-                      }
-                    }}
-                  />{" "}
-                  {user.full_name}
-                </span>
-                <input
-                  type="radio"
-                  name={`primary-${clientId}`}
-                  checked={primary === user.id}
-                  disabled={!checked}
-                  onChange={() => setPrimary(user.id)}
-                  aria-label={`${user.full_name} 대표 담당자 지정`}
-                />
-              </label>
-            );
-          })}
-        </div>
-        <SubmitButton variant="secondary">담당자 저장</SubmitButton>
-        <ActionMessage state={state} />
-      </form>
-    </details>
   );
 }

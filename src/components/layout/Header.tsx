@@ -15,7 +15,7 @@ import {
 import { useStoredHeaderScope, writeStoredHeaderScope } from "@/lib/auth/header-scope-store";
 import { SignOutForm } from "./SignOutForm";
 import type { ProfileSummary } from "@/lib/auth/permissions";
-import { canViewMeetingMaterials, roleLabel } from "@/lib/auth/permissions";
+import { canRegisterDepartmentClients, canViewMeetingMaterials, roleLabel } from "@/lib/auth/permissions";
 
 export type HeaderDepartmentFilterOption = { id: string; department_name: string };
 export type HeaderClientFilterOption = { id: string; client_name: string; department_id: string };
@@ -45,6 +45,10 @@ const routeMeta: Record<string, { title: string; description: string }> = {
   "/client-reports": {
     title: "화주별 자료 작성",
     description: "실시사항, 예정사항, 물동량을 등록합니다."
+  },
+  "/client-registrations": {
+    title: "부서별화주등록",
+    description: "부서별 운영 화주와 화주 담당자를 등록합니다."
   },
   "/admin/departments": {
     title: "부서마스터",
@@ -191,7 +195,8 @@ function HeaderScopeFilter({
   const isAdminUser = profile.app_role === "admin";
   const isClientWritePage = pathname === "/client-reports";
   const isDepartmentReportPage = pathname === "/department-reports";
-  const requiresDepartmentSelection = isDepartmentReportPage || isClientWritePage;
+  const isClientRegistrationPage = pathname === "/client-registrations";
+  const requiresDepartmentSelection = isDepartmentReportPage || isClientWritePage || isClientRegistrationPage;
   const activeMeetingTab = searchParams.get("tab") ?? "collection";
   const isMeetingMaterialsTab = pathname === "/meeting-materials" && activeMeetingTab === "materials";
   const restrictMeetingMaterialsAll =
@@ -538,6 +543,9 @@ function resolveScopeModeForProfile(pathname: string, profile: ProfileSummary): 
   const isMeetingOnlyRoute =
     pathname.startsWith("/meeting-materials") || pathname.startsWith("/data-collections");
   if (scopeMode !== "none" && isMeetingOnlyRoute && !canViewMeetingMaterials(profile)) {
+    return "none";
+  }
+  if (scopeMode !== "none" && pathname.startsWith("/client-registrations") && !canRegisterDepartmentClients(profile)) {
     return "none";
   }
   return scopeMode;

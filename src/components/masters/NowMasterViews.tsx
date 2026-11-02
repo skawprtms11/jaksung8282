@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, Search } from "lucide-react";
+import { Building2, Pencil, Search } from "lucide-react";
 import { EmptyState } from "@/components/common/EmptyState";
 import { TableShell } from "@/components/common/TableShell";
+import { DepartmentHeadDialog, type DepartmentHeadCandidate } from "@/components/masters/MasterForms";
 import {
   matchesNowMasterSearch,
   type CenterMasterViewRow,
-  type ClientMasterViewRow
+  type ClientMasterViewRow,
+  type DepartmentMasterViewRow
 } from "@/lib/masters/now-master";
 
 export function NowSourceNotice() {
@@ -132,6 +134,99 @@ export function NowClientMasterTable({ rows }: { rows: ClientMasterViewRow[] }) 
           </table>
         </TableShell>
       )}
+    </section>
+  );
+}
+
+export type DepartmentMasterTableRow = DepartmentMasterViewRow & {
+  headNames: string;
+  // 부서장 지정은 주간자료 사본(public.departments)이 사용 중인 부서만 가능하다.
+  canAssignHead: boolean;
+};
+
+export function NowDepartmentMasterTable({
+  rows,
+  headCandidates,
+  canManage
+}: {
+  rows: DepartmentMasterTableRow[];
+  headCandidates: DepartmentHeadCandidate[];
+  canManage: boolean;
+}) {
+  const [query, setQuery] = useState("");
+  const [includeInactive, setIncludeInactive] = useState(false);
+  const [headDepartment, setHeadDepartment] = useState<{ id: string; department_name: string } | null>(null);
+  const visibleRows = rows.filter(
+    (row) =>
+      (includeInactive || row.isActive) &&
+      matchesNowMasterSearch(query, [row.departmentCode, row.departmentName, row.headNames, row.note])
+  );
+
+  return (
+    <section>
+      <ListFilter
+        query={query}
+        onQueryChange={setQuery}
+        includeInactive={includeInactive}
+        onIncludeInactiveChange={setIncludeInactive}
+        placeholder="부서명·부서코드·부서장 검색"
+        shownCount={visibleRows.length}
+        totalCount={rows.length}
+      />
+      <p className="mb-3 text-xs font-semibold text-slate-500">
+        부서별 운영 화주와 화주담당자 지정은 화주자료 아래 &lsquo;부서별화주등록&rsquo; 메뉴에서 합니다.
+      </p>
+      {visibleRows.length === 0 ? (
+        <EmptyState title="표시할 부서가 없습니다." description="부서 등록·수정은 현황관리(now) 부서마스터에서 합니다." />
+      ) : (
+        <TableShell>
+          <table className="table-sticky w-full min-w-[760px] text-left text-sm">
+            <thead>
+              <tr>
+                <th className="px-3 py-3">부서코드</th>
+                <th className="px-3 py-3">부서명</th>
+                <th className="px-3 py-3">부서장</th>
+                <th className="px-3 py-3">사용여부</th>
+                <th className="px-3 py-3">비고</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRows.map((row) => (
+                <tr key={row.id} className="border-t border-slate-100">
+                  <td className="px-3 py-3 font-semibold text-slate-600">{row.departmentCode}</td>
+                  <td className="px-3 py-3">
+                    <span className="inline-flex items-center gap-2 font-black text-[#012241]">
+                      <Building2 className="h-4 w-4 text-[#007050]" aria-hidden="true" />
+                      {row.departmentName}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3">
+                    <span className="inline-flex items-center gap-2 text-slate-700">
+                      {row.headNames || "-"}
+                      {canManage && row.canAssignHead ? (
+                        <button
+                          type="button"
+                          onClick={() => setHeadDepartment({ id: row.id, department_name: row.departmentName })}
+                          className="icon-tool-button"
+                          aria-label={`${row.departmentName} 부서장 지정`}
+                          title="부서장 지정"
+                        >
+                          <Pencil className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      ) : null}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3"><UsageBadge isActive={row.isActive} /></td>
+                  <td className="px-3 py-3 text-slate-500">{row.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableShell>
+      )}
+      {headDepartment ? (
+        <DepartmentHeadDialog department={headDepartment} users={headCandidates} onClose={() => setHeadDepartment(null)} />
+      ) : null}
     </section>
   );
 }

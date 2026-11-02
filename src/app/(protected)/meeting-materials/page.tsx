@@ -36,6 +36,7 @@ import {
   type ClientReportSearchFilters
 } from "@/lib/reports/client-report-search";
 import { makeConfirmationRequestItems, makePriorityOpenRequestItems } from "@/lib/reports/meeting-materials-tab-data";
+import { keepOperatingLinks, loadOperatingClientKeys } from "@/lib/masters/operating-clients";
 import { cn } from "@/lib/utils/cn";
 import { formatCompactDate } from "@/lib/utils/labels";
 import type { DepartmentSubmissionStatus, Importance, ItemPeriod, VolumeType, VolumeUnit } from "@/types/enums";
@@ -792,7 +793,19 @@ async function MeetingMaterialsContent({
         return null;
       }
     })();
-    const [{ data: rpcData, error: rpcError }, compatibilityRequestData, loadedAuthorNames, memoRowResult, weekMemosResult] = await Promise.all([
+    // 취합현황의 부서별 작성 대상(분모)은 운영 화주(운영 표 ∩ 활성 연결)만 센다. 작성된 자료(분자)는 이력이라 제한하지 않는다.
+    const operatingKeysPromise =
+      activeTab === "collection"
+        ? loadOperatingClientKeys(supabase, isAdmin(profile) ? params.department_id ?? null : profile.department_id)
+        : Promise.resolve(null);
+    const [
+      { data: rpcData, error: rpcError },
+      compatibilityRequestData,
+      loadedAuthorNames,
+      memoRowResult,
+      weekMemosResult,
+      operatingKeys
+    ] = await Promise.all([
       supabase.rpc("get_meeting_materials_payload", {
         p_tab: activeTab,
         p_week_start_date: selectedWeek.weekStartDate,
@@ -805,7 +818,8 @@ async function MeetingMaterialsContent({
       compatibilityRequestPromise,
       reportAuthorNamesPromise,
       memoContentPromise,
-      weekMemosPromise
+      weekMemosPromise,
+      operatingKeysPromise
     ]);
     reportAuthorNames = loadedAuthorNames;
     initialMemoContent = (memoRowResult.data as { content?: string | null } | null)?.content ?? "";
@@ -815,7 +829,7 @@ async function MeetingMaterialsContent({
 
     if (!rpcError && isMeetingMaterialsPayload(rpcData)) {
       departments = rpcData.departments;
-      clients = rpcData.clients;
+      clients = keepOperatingLinks(rpcData.clients, operatingKeys, (client) => client.id);
       reports = normalizeMeetingReports(rpcData.reports);
       submissions = rpcData.submissions.map((submission) => ({
         ...submission,
@@ -1081,10 +1095,10 @@ async function MeetingMaterialsContent({
     ]);
 
     departments = (departmentResult.data ?? []) as DepartmentRow[];
-    clients = ((clientResult.data ?? []) as ClientLinkSummaryRow[]).map((link) => ({
+    clients = keepOperatingLinks(((clientResult.data ?? []) as ClientLinkSummaryRow[]).map((link) => ({
       id: link.client_id,
       department_id: link.department_id
-    }));
+    })), operatingKeys, (client) => client.id);
     reports = normalizeMeetingReports((reportResult.error ? [] : reportResult.data ?? []) as unknown as MeetingReportRow[]);
     if (activeTab === "collection" || activeTab === "materials") {
       confirmationRequestItems = makeConfirmationRequestItems(

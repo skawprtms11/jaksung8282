@@ -9,6 +9,7 @@ import {
   isAllowedClientTransition,
   isAllowedDepartmentTransition,
 } from "@/lib/auth/permissions";
+import { keepOperatingLinks, loadOperatingClientKeys } from "@/lib/masters/operating-clients";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
@@ -897,12 +898,14 @@ export async function saveDepartmentSubmissionAction(
   // 자동 처리 실패는 부서 확정 자체를 막지 않는다.
   let autoFilledCount = 0;
   let autoSubmittedCount = 0;
+  let autoFillSkipped = false;
   if (status === "submitted_to_division") {
     try {
-      const [{ data: linkRows }, { data: existingReports }, { data: categoryRows }] = await Promise.all([
+      // 자동 확정 대상은 운영 화주(운영 표 ∩ 활성 연결)만. 운영하지 않는 연결 화주에 '특이사항 없음' 자료를 만들지 않는다.
+      const [{ data: linkRows }, { data: existingReports }, { data: categoryRows }, operatingKeys] = await Promise.all([
         supabase
           .from("department_client_links")
-          .select("client_id")
+          .select("department_id,client_id")
           .eq("department_id", parsed.data.department_id)
           .eq("is_active", true),
         supabase
@@ -911,13 +914,22 @@ export async function saveDepartmentSubmissionAction(
           .eq("department_id", parsed.data.department_id)
           .eq("week_start_date", parsed.data.week_start_date)
           .is("deleted_at", null),
-        supabase.from("work_categories").select("id").eq("is_active", true).order("sort_order").limit(1)
+        supabase.from("work_categories").select("id").eq("is_active", true).order("sort_order").limit(1),
+        loadOperatingClientKeys(supabase, parsed.data.department_id)
       ]);
       const existingReportRows = (existingReports ?? []) as { id: string; client_id: string; status: ClientReportStatus }[];
       const existingClientIds = new Set(existingReportRows.map((row) => row.client_id));
-      const missingClientIds = Array.from(
-        new Set(((linkRows ?? []) as { client_id: string }[]).map((row) => row.client_id))
-      ).filter((clientId) => !existingClientIds.has(clientId));
+      // 쓰기 경로는 fail-closed: 운영 표를 읽지 못하면 연결 기준으로 대신 만들지 않고 자동 확정을 건너뛴다.
+      autoFillSkipped = operatingKeys === null;
+      if (autoFillSkipped) {
+        console.warn("부서 확정: 운영 화주 조회 실패로 미작성 화주 자동 확정을 건너뜀");
+      }
+      const operatingLinkRows = operatingKeys
+        ? keepOperatingLinks((linkRows ?? []) as { department_id: string; client_id: string }[], operatingKeys, (row) => row.client_id)
+        : [];
+      const missingClientIds = Array.from(new Set(operatingLinkRows.map((row) => row.client_id))).filter(
+        (clientId) => !existingClientIds.has(clientId)
+      );
       const defaultCategoryId = ((categoryRows ?? []) as { id: string }[])[0]?.id;
       if (defaultCategoryId) {
         for (const clientId of missingClientIds) {
@@ -978,7 +990,7 @@ export async function saveDepartmentSubmissionAction(
     ok: true,
     message:
       status === "submitted_to_division"
-        ? `사업부 검토요청을 완료했습니다.${autoFilledCount > 0 ? ` (미작성 화주 ${autoFilledCount}건은 '${NO_SPECIAL_ISSUE_TEXT}'으로 자동 확정)` : ""}${autoSubmittedCount > 0 ? ` (미확정 화주자료 ${autoSubmittedCount}건 함께 확정)` : ""}`
+        ? `사업부 검토요청을 완료했습니다.${autoFilledCount > 0 ? ` (미작성 화주 ${autoFilledCount}건은 '${NO_SPECIAL_ISSUE_TEXT}'으로 자동 확정)` : ""}${autoSubmittedCount > 0 ? ` (미확정 화주자료 ${autoSubmittedCount}건 함께 확정)` : ""}${autoFillSkipped ? " (운영 화주 정보를 불러오지 못해 미작성 화주 자동 확정을 건너뛰었습니다. 미작성 화주를 확인하세요.)" : ""}`
         : "부서자료를 저장했습니다.",
     data: {
       id: typeof saved.id === "string" ? saved.id : id,

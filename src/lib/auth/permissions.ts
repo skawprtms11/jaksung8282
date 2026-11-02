@@ -40,6 +40,23 @@ export function canRegisterDepartmentClients(profile: Pick<ProfileSummary, "app_
   return profile?.app_role === "admin" || profile?.app_role === "department_head" || profile?.app_role === "manager";
 }
 
+// 부서별화주등록의 운영 화주·담당자 저장 권한. DB RPC(save_department_operating_clients 등)와 같은 규칙.
+export function canManageDepartmentClients(
+  profile: Pick<ProfileSummary, "app_role" | "department_id" | "is_active"> | null,
+  departmentId: string | null | undefined
+) {
+  if (!profile?.is_active || !profile.app_role || !departmentId) {
+    return false;
+  }
+  if (profile.app_role === "admin") {
+    return true;
+  }
+  return (
+    (profile.app_role === "department_head" || profile.app_role === "manager") &&
+    profile.department_id === departmentId
+  );
+}
+
 export function canViewMeetingMaterials(profile: Pick<ProfileSummary, "app_role"> | null) {
   return profile?.app_role === "admin" || profile?.app_role === "department_head" || profile?.app_role === "manager";
 }

@@ -68,7 +68,7 @@ URL 범위:
 
 공통사항 탭에는 다음 영역이 함께 나타난다.
 
-1. 작성현황: 부서 등록 화주 수 대비 선택 주차 작성 보고서 수
+1. 작성현황: 부서 운영 화주 수(운영 표 ∩ 활성 연결, [client-registrations.md](./client-registrations.md)) 대비 선택 주차 작성 보고서 수
 2. 내용건수: 선택 주차 화주 항목을 중요도별 집계
 3. 물동량: 선택 주차 입고·출고 합계
 4. 사업부 요청사항: 관리자 작성 요청 중 `closed_at is null`인 항목
@@ -162,6 +162,7 @@ submitted_to_division -> draft  (관리자·부서장, 확정 후 3일 이내)
 - `saveDepartmentSubmissionAction`은 `departmentSubmissionSchema`를 검증하고 `save_department_submission_atomic` RPC를 호출한다.
 - RPC는 부서/주차 중복을 잠그고 제출 행과 section 내용을 한 트랜잭션으로 upsert한다.
 - 확정 제출은 관리자·부서장만 가능하며 `finalized_by`, `finalized_at`과 승인 이력을 기록한다.
+- 확정 제출 시 선택 주차 자료가 없는 화주를 '특이사항 없음'으로 자동 확정하는 대상은 운영 화주(운영 표 ∩ 활성 연결)만이다(2026-11-02). 공휴일근무 화주 선택 목록도 운영 화주만 보여 준다.
 - 확정취소는 `cancel_department_submission_atomic`을 사용하고 3일 제한을 DB에서 최종 검사한다.
 - 최종 승인·반려는 관리자만 `transition_department_submission_status`로 처리한다. 반려 사유는 필수다.
 - 확정 또는 승인 상태에서는 일반 내용과 공실을 수정하지 않는다.

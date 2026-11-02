@@ -21,6 +21,7 @@
 | 회의자료 `/meeting-materials` | `docs/menus/meeting-materials.md` |
 | 부서자료 `/department-reports` | `docs/menus/department-reports.md` |
 | 화주자료 `/client-reports` | `docs/menus/client-reports.md` |
+| 부서별화주등록 `/client-registrations` | `docs/menus/client-registrations.md` |
 | 미니게임 `/mini-game` | `docs/menus/mini-game.md` |
 | 부서마스터 `/admin/departments` | `docs/menus/department-master.md` |
 | 센터마스터 `/admin/centers` | `docs/menus/center-master.md` |
@@ -129,6 +130,7 @@ tests                          순수 로직과 권한 계약 단위 테스트
 - 비관리자는 자신의 `profile.department_id` 밖의 부서를 조회하거나 수정할 수 없다.
 - 화주담당자는 `client_assignments`의 활성 배정과 부서가 모두 일치해야 한다.
 - 부서와 화주의 현재 관계는 `department_client_links`가 기준이다. nullable인 `clients.department_id`만으로 관계를 판단하지 않는다.
+- 작성·선택 화주 목록(헤더, 화주자료 편집, 모바일, 부서자료 작성현황·공휴일근무, 회의자료 취합 분모, 부서 확정 자동 확정)은 운영 화주(`department_operating_clients` 활성 ∩ 활성 연결)만 쓴다. 과거 자료 조회는 제한하지 않는다.
 - 가입 요청은 비활성 `client_owner` 프로필로 생성된다. 관리자 또는 같은 부서의 부서장·매니저 승인 후 활성화된다.
 
 ### Auth And Global Shell
@@ -206,8 +208,14 @@ tests                          순수 로직과 권한 계약 단위 테스트
 - 관리자, 부서장, 매니저가 조회할 수 있고 비관리자는 소속 부서만 본다.
 - 부서 자체 생성·수정·미사용은 현황관리(now)에서만 한다(public.departments 는 현황관리 가드로 쓰기 차단). 주간자료는 조회와 관리자 부서장 지정(`profiles`만 갱신)만 한다.
 - 부서-화주 연결은 현황관리(now) 시스템이 원본이다(2026-11-01 결정). 현황관리 트리거(`trg_sync_public`)가 `department_client_links`에 실시간 사본 반영하며, 주간자료에서는 등록·해제하지 않는다(조회 전용).
-- 화주담당자 배정(`client_assignments`)은 계속 이 메뉴에서 관리자 또는 해당 부서의 부서장·매니저가 수행한다.
-- 부서-화주 연결과 담당자 배정은 별도 관계다. 현황관리에서 연결을 해제해도 배정 데이터는 남기고, 배정 기반 화면 목록(부서마스터·헤더·화주자료·모바일)은 활성 연결이 있는 것만 보여 준다(`keepLinkedClientIds`).
+- (2026-11-02) 부서 목록은 `now.department`를 서버에서 서비스키로 조회만 한다. 화주담당자 배정 UI는 부서별화주등록으로 옮겼다.
+- 부서-화주 연결과 담당자 배정은 별도 관계다. 현황관리에서 연결을 해제해도 배정 데이터는 남기고, 배정 기반 화면 목록(헤더·화주자료·모바일)은 활성 연결이 있는 것만 보여 준다(`keepLinkedClientIds`).
+
+### `/client-registrations` - 부서별화주등록
+
+- 관리자(전체 부서), 부서장·매니저(소속 부서)가 접근한다. 화주담당자는 메뉴 숨김·접근 차단.
+- 현황관리 활성 연결 화주 중 운영 화주를 `department_operating_clients`에 저장하고, 화주별 담당자(부서 소속 활성 사용자 여러 명, 대표 1명)를 `client_assignments`에 저장한다.
+- 쓰기는 `save_department_operating_clients`, `save_department_client_assignments` RPC(security definer, 내부 역할·부서 검사)로만 한다. 상세는 `docs/menus/client-registrations.md`.
 
 ### `/admin/centers` - 센터마스터
 
@@ -220,7 +228,7 @@ tests                          순수 로직과 권한 계약 단위 테스트
 
 - 화주 원본은 같은 DB의 현황관리 `now.client`다(2026-11-01 결정). 등록·수정·일괄등록·삭제는 현황관리에서만 하고, 이 메뉴는 관리자 조회 전용이다.
 - 현황관리 트리거가 `clients`에 같은 id로 실시간 사본 반영한다. public 마스터 4개 표는 현황관리 가드 트리거로 직접 쓰기가 막혀 있다.
-- 담당자 지정은 부서마스터에서 한다.
+- 담당자 지정은 부서별화주등록에서 한다.
 
 ### `/admin/users` - 사용자관리
 
@@ -283,7 +291,7 @@ submitted_to_division -> draft  (확정 후 3일 이내 확정취소)
 | 영역 | 기준 테이블 |
 | --- | --- |
 | 조직과 사용자 | `departments`, `profiles`, `user_registration_requests` |
-| 화주 관계 | `clients`, `department_client_links`, `client_assignments` |
+| 화주 관계 | `clients`, `department_client_links`, `department_operating_clients`, `client_assignments` |
 | 업무 분류 | `work_categories` |
 | 화주 주간자료 | `weekly_client_reports`, `weekly_client_report_items`, `weekly_volumes` |
 | 부서 주간자료 | `department_weekly_submissions`, `department_weekly_contents` |

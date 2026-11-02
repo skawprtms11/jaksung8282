@@ -166,6 +166,24 @@ export type Tables = {
     };
     Update: Partial<Tables["department_client_links"]["Row"]>;
   };
+  // 부서별화주등록의 운영 화주(주간자료 전용). 쓰기는 save_department_operating_clients RPC 로만 한다.
+  department_operating_clients: {
+    Row: {
+      id: string;
+      department_id: string;
+      client_id: string;
+      is_active: boolean;
+      created_at: string;
+      created_by: string | null;
+      updated_at: string;
+      updated_by: string | null;
+    };
+    Insert: Partial<Tables["department_operating_clients"]["Row"]> & {
+      department_id: string;
+      client_id: string;
+    };
+    Update: Partial<Tables["department_operating_clients"]["Row"]>;
+  };
   user_registration_requests: {
     Row: {
       id: string;
@@ -624,6 +642,22 @@ export type Database = {
         };
         Returns: Json;
       };
+      save_department_operating_clients: {
+        Args: {
+          p_department_id: string;
+          p_client_ids: string[];
+        };
+        Returns: Json;
+      };
+      save_department_client_assignments: {
+        Args: {
+          p_department_id: string;
+          p_client_id: string;
+          p_user_ids: string[];
+          p_primary_user_id?: string | null;
+        };
+        Returns: Json;
+      };
       cancel_client_reports_submission_atomic: {
         Args: {
           p_report_ids: string[];
@@ -744,6 +778,19 @@ export type Database = {
           pl_code: string | null;
           rep_client_code: string | null;
           rep_client_name: string | null;
+          is_active: boolean;
+          sort_order: number;
+          note: string | null;
+        } & Record<string, unknown>;
+        Insert: Record<string, never>;
+        Update: Record<string, never>;
+        Relationships: [];
+      };
+      department: {
+        Row: {
+          id: string;
+          dept_code: string | null;
+          dept_name: string;
           is_active: boolean;
           sort_order: number;
           note: string | null;

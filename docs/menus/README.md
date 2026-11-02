@@ -9,6 +9,7 @@
 | 회의자료 | `/meeting-materials` | [meeting-materials.md](./meeting-materials.md) |
 | 부서자료 | `/department-reports` | [department-reports.md](./department-reports.md) |
 | 화주자료 | `/client-reports` | [client-reports.md](./client-reports.md) |
+| 부서별화주등록 | `/client-registrations` | [client-registrations.md](./client-registrations.md) |
 | 미니게임 | `/mini-game` | [mini-game.md](./mini-game.md) |
 | 부서마스터 | `/admin/departments` | [department-master.md](./department-master.md) |
 | 센터마스터 | `/admin/centers` | [center-master.md](./center-master.md) |
@@ -22,6 +23,7 @@
 - `src/components/masters/MasterForms.tsx` 또는 `src/actions/masters.ts`: 영향받는 마스터 메뉴 문서를 모두 확인한다.
 - `src/components/masters/NowMasterViews.tsx`, `src/lib/masters/now-master.ts`: 화주마스터, 센터마스터, 부서마스터 문서를 모두 확인한다(현황관리 now 원본 조회).
 - `src/components/layout/Header.tsx`, `Sidebar.tsx`, `/api/header-filters`: 회의자료, 부서자료, 화주자료와 권한이 달라지는 모든 메뉴 문서를 확인한다.
+- `src/lib/masters/operating-clients.ts`, `department_operating_clients` 표·RPC: 부서별화주등록, 화주자료, 부서자료, 회의자료, 모바일 앱 문서를 모두 확인한다(운영 화주 = 운영 표 ∩ 활성 연결이 이 화면들의 작성·선택 화주 목록 기준).
 - 사이드바의 공지사항·회의자료·부서자료·화주자료는 배포 환경에서 전체 route payload를 백그라운드 프리페치한다. 마스터·보조 메뉴는 자동 부분 프리페치를 사용하며 모든 링크는 Next.js 기본 내비게이션을 유지한다.
 - `src/lib/auth/permissions.ts`, `src/types/enums.ts`, `src/types/database.ts`, Supabase RLS/RPC: 루트 `AGENTS.md`와 영향받는 모든 메뉴 문서를 확인한다.
 
@@ -36,6 +38,7 @@
 | 화주자료 `/client-reports`, 부서자료 `/department-reports`, 회의자료 `/meeting-materials`, 모바일 `/mobile` | 부서·화주 | 기존 화면별 조회 로직 그대로(화주자료 필수 선택, 회의자료 탭 제한·부서 이전/다음 이동 유지) |
 | 공지사항 `/notices`, `/notices/[id]` | 부서만 | 자료취합 공지의 부서별 완료현황을 선택 부서 행만 표시. 공지 목록·본문은 부서 개념이 없어 그대로. 새 자료취합 공지의 대상 부서는 계속 활성 부서 전체 |
 | 자료취합 `/data-collections` | 부서만 | 부서 행·작성 내용은 선택 부서로 좁힌다. 진행률·자동 완료 상태·상태 필터는 활성 부서 전체 기준으로 계산하고, 한 부서 조회 중에는 "완료율(전체 부서)"와 "선택 부서 ○○: 확정/미확정"으로 구분 표시 |
+| 부서별화주등록 `/client-registrations` | 부서만(필수 선택) | 관리자는 선택 부서, 부서장·매니저는 소속 부서로 강제. 화주담당자는 조건 미적용(메뉴 차단) |
 | 관리 `/admin/*`, 미니게임 `/mini-game` | 미적용 | 헤더는 저장된 조건을 비활성 상태로 표시하고 "이 화면은 헤더 조건 미적용" 안내. 관리 화면의 `department_id`는 그 화면 자체 필터로만 쓴다 |
 
 헤더에는 부서만 적용하는 화면에서 "이 화면은 부서 조건만 적용" 안내를 표시하고 화주 선택은 비활성화한다. 회의자료·자료취합은 `canViewMeetingMaterials`가 아니면 조건 미적용으로 취급한다.
