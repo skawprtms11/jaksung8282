@@ -50,6 +50,34 @@ export function toClientMasterViewRow(row: NowClientRow): ClientMasterViewRow {
   };
 }
 
+// now.department.id 는 public.departments.id 와 같다(현황관리 사본 트리거가 같은 id 로 반영).
+export type NowDepartmentRow = {
+  id: string;
+  dept_code: string | null;
+  dept_name: string;
+  is_active: boolean;
+  sort_order: number;
+  note: string | null;
+};
+
+export type DepartmentMasterViewRow = {
+  id: string;
+  departmentCode: string;
+  departmentName: string;
+  isActive: boolean;
+  note: string;
+};
+
+export function toDepartmentMasterViewRow(row: NowDepartmentRow): DepartmentMasterViewRow {
+  return {
+    id: row.id,
+    departmentCode: displayText(row.dept_code),
+    departmentName: row.dept_name.trim(),
+    isActive: row.is_active,
+    note: displayText(row.note)
+  };
+}
+
 export type NowCenterRow = {
   id: string;
   center_name: string;

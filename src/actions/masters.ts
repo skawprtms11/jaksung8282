@@ -4,7 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { getCurrentUserProfile, requireActiveProfile } from "@/lib/auth/current-user";
 import { generateTemporaryPassword } from "@/lib/auth/initial-password";
-import { canRegisterDepartmentClients, isAdmin } from "@/lib/auth/permissions";
+import { isAdmin } from "@/lib/auth/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { idSchema, userSchema } from "@/lib/validations/common";
@@ -113,131 +113,6 @@ async function updateDepartmentLeaders(departmentId: string, headUserId: string,
   }
 
   return null;
-}
-
-async function resolveWritableDepartmentId(requestedDepartmentId: string) {
-  const { profile } = await getCurrentUserProfile();
-  if (!canRegisterDepartmentClients(profile)) {
-    return { profile: null, departmentId: "", error: "부서 화주 등록 권한이 없습니다." };
-  }
-  if (!profile) {
-    return { profile: null, departmentId: "", error: "로그인이 필요합니다." };
-  }
-  const departmentId = isAdmin(profile) ? requestedDepartmentId : profile.department_id;
-  if (!departmentId) {
-    return { profile: null, departmentId: "", error: "소속 부서 정보를 확인하세요." };
-  }
-  if (!isAdmin(profile) && requestedDepartmentId !== departmentId) {
-    return { profile: null, departmentId: "", error: "소속 부서만 처리할 수 있습니다." };
-  }
-  return { profile, departmentId, error: null };
-}
-
-export async function saveDepartmentClientAssignmentsAction(_: ActionResult | null, formData: FormData): Promise<ActionResult> {
-  const departmentIdParsed = idSchema.safeParse(String(formData.get("department_id") ?? ""));
-  const clientIdParsed = idSchema.safeParse(String(formData.get("client_id") ?? ""));
-  if (!departmentIdParsed.success || !clientIdParsed.success) {
-    return { ok: false, message: "부서 또는 화주 정보를 확인하세요." };
-  }
-
-  const { profile, departmentId, error: authError } = await resolveWritableDepartmentId(departmentIdParsed.data);
-  if (authError || !profile) {
-    return { ok: false, message: authError ?? "권한이 없습니다." };
-  }
-
-  const selectedUserIds = String(formData.get("user_ids") ?? "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-  const primaryUserId = String(formData.get("primary_user_id") ?? "").trim();
-  const parsedUserIds = z.array(idSchema).safeParse(selectedUserIds);
-  if (!parsedUserIds.success) {
-    return { ok: false, message: "담당자 정보를 확인하세요." };
-  }
-  const primaryUserIdParsed = primaryUserId ? idSchema.safeParse(primaryUserId) : null;
-  if (primaryUserIdParsed && !primaryUserIdParsed.success) {
-    return { ok: false, message: "대표 담당자 정보를 확인하세요." };
-  }
-  if (primaryUserId && !parsedUserIds.data.includes(primaryUserId)) {
-    return { ok: false, message: "대표 담당자는 선택한 담당자 중에서 지정하세요." };
-  }
-
-  let admin: ReturnType<typeof createSupabaseAdminClient>;
-  try {
-    admin = createSupabaseAdminClient();
-  } catch {
-    return { ok: false, message: "SUPABASE_SERVICE_ROLE_KEY를 서버 환경변수에 설정하세요." };
-  }
-
-  const { data: link, error: linkError } = await admin
-    .from("department_client_links")
-    .select("client_id")
-    .eq("department_id", departmentId)
-    .eq("client_id", clientIdParsed.data)
-    .eq("is_active", true)
-    .maybeSingle();
-
-  if (linkError) {
-    return { ok: false, message: safeErrorMessage(linkError.message) };
-  }
-  if (!link) {
-    return { ok: false, message: "해당 부서에 등록된 화주만 담당자를 지정할 수 있습니다." };
-  }
-
-  let validUserIds: string[] = [];
-  if (parsedUserIds.data.length > 0) {
-    const { data: users, error: userError } = await admin
-      .from("profiles")
-      .select("id")
-      .in("id", parsedUserIds.data)
-      .eq("department_id", departmentId)
-      .eq("app_role", "client_owner")
-      .eq("is_active", true);
-
-    if (userError) {
-      return { ok: false, message: safeErrorMessage(userError.message) };
-    }
-    validUserIds = (users ?? []).map((user) => user.id);
-    if (validUserIds.length !== parsedUserIds.data.length) {
-      return { ok: false, message: "해당 부서의 활성 화주담당자만 지정할 수 있습니다." };
-    }
-  }
-
-  const { error: deactivateError } = await admin
-    .from("client_assignments")
-    .update({ is_active: false })
-    .eq("department_id", departmentId)
-    .eq("client_id", clientIdParsed.data);
-
-  if (deactivateError) {
-    return { ok: false, message: safeErrorMessage(deactivateError.message) };
-  }
-
-  if (validUserIds.length > 0) {
-    const rows = validUserIds.map((userId, index) => ({
-      department_id: departmentId,
-      client_id: clientIdParsed.data,
-      user_id: userId,
-      is_primary: primaryUserId ? userId === primaryUserId : index === 0,
-      is_active: true,
-      assigned_by: profile.id
-    }));
-    const { error } = await admin.from("client_assignments").upsert(rows, { onConflict: "department_id,client_id,user_id" });
-    if (error) {
-      return { ok: false, message: safeErrorMessage(error.message) };
-    }
-  }
-
-  revalidateMasterPath("/admin/departments");
-  return { ok: true, message: "화주 담당자를 저장했습니다." };
-}
-
-export async function saveClientAssignmentsAction(): Promise<ActionResult> {
-  const { error: authError } = await requireAdmin();
-  if (authError) {
-    return { ok: false, message: authError ?? "권한이 없습니다." };
-  }
-  return { ok: false, message: "담당자는 부서마스터의 화주등록 화면에서 부서별로 지정하세요." };
 }
 
 export async function saveUserAction(_: ActionResult | null, formData: FormData): Promise<ActionResult> {

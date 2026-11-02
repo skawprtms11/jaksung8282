@@ -82,7 +82,7 @@
 - `manager`
 - `client_owner`
 
-역할이나 부서를 변경하면 기존 `client_assignments`가 자동 정리되지 않는다. `client_owner` 배정 유효성에 영향을 주는 변경은 부서마스터 담당자 배정도 확인한다.
+역할이나 부서를 변경하면 기존 `client_assignments`가 자동 정리되지 않는다. `client_owner` 배정 유효성에 영향을 주는 변경은 부서별화주등록(`/client-registrations`)의 담당자 배정도 확인한다.
 
 ### 미사용
 
@@ -138,7 +138,7 @@ Auth Admin 기능에는 서버의 `SUPABASE_SERVICE_ROLE_KEY`가 필요하다. �
 ## 8. 교차 메뉴 영향과 검증
 
 - 역할·부서 변경은 사이드바 메뉴, 헤더 범위, 회의자료 접근, 보고서 쓰기, 마스터 접근에 영향을 준다.
-- `client_owner` 활성화 후에는 부서마스터에서 화주담당자 배정이 필요하다.
+- `client_owner` 활성화 후에는 부서별화주등록(`/client-registrations`)에서 화주담당자 배정이 필요하다.
 
 필수 시나리오:
 

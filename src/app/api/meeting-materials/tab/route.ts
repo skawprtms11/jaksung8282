@@ -17,6 +17,7 @@ import {
   type MeetingTab,
   type OpenRequestQueryRow
 } from "@/lib/reports/meeting-materials-tab-data";
+import { keepOperatingLinks, loadOperatingClientKeys } from "@/lib/masters/operating-clients";
 import { loadMeetingReportAuthorNames } from "@/lib/reports/meeting-report-authors";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -127,7 +128,8 @@ export async function GET(request: NextRequest) {
   const compatibilityRowsPromise = profilePromise.then(({ profile }) =>
     profile && canViewMeetingMaterials(profile) ? fetchCompatibilityRequestRows(tab) : undefined
   );
-  const [{ profile, mustChangePassword }, { data, error }, compatibilityRows, reportAuthorNames] = await Promise.all([
+  // 취합현황 작성 대상(분모)은 운영 화주(운영 표 ∩ 활성 연결)만 센다. RLS 가 비관리자를 소속 부서로 제한한다.
+  const [{ profile, mustChangePassword }, { data, error }, compatibilityRows, reportAuthorNames, operatingKeys] = await Promise.all([
     profilePromise,
     supabase.rpc("get_meeting_materials_payload", {
       p_tab: tab,
@@ -141,7 +143,8 @@ export async function GET(request: NextRequest) {
     compatibilityRowsPromise,
     tab === "materials"
       ? loadMeetingReportAuthorNames(supabase, selectedWeek.weekStartDate, params.department_id ?? null)
-      : Promise.resolve<Record<string, string>>({})
+      : Promise.resolve<Record<string, string>>({}),
+    tab === "collection" ? loadOperatingClientKeys(supabase, params.department_id ?? null) : Promise.resolve(null)
   ]);
   if (mustChangePassword) {
     return NextResponse.json({ error: PASSWORD_CHANGE_REQUIRED_MESSAGE }, { status: 403 });
@@ -168,7 +171,7 @@ export async function GET(request: NextRequest) {
     : undefined;
   const tabData = buildMeetingTabData({
     tab,
-    payload: data,
+    payload: tab === "collection" ? { ...data, clients: keepOperatingLinks(data.clients, operatingKeys, (client) => client.id) } : data,
     params,
     selectedWeek,
     openRequests: compatibilityRequests ?? data.openRequests,

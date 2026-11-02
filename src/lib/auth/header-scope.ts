@@ -9,7 +9,7 @@ export type HeaderScopeMode = "full" | "department" | "none";
 export const emptyHeaderScope: HeaderScope = { departmentId: "", clientId: "" };
 
 const fullScopeRoutes = ["/client-reports", "/department-reports", "/meeting-materials", "/mobile"];
-const departmentScopeRoutes = ["/notices", "/data-collections"];
+const departmentScopeRoutes = ["/notices", "/data-collections", "/client-registrations"];
 
 function matchesRoute(pathname: string, route: string) {
   return pathname === route || pathname.startsWith(`${route}/`);

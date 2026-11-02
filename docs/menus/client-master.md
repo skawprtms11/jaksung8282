@@ -34,8 +34,8 @@
 
 - 화주 기본정보: 현황관리 화주마스터 → 실시간 사본
 - 부서-화주 연결: 현황관리 부서마스터 → 실시간 사본
-- 부서별 화주담당자: 주간자료 부서마스터의 `client_assignments`
-- `saveClientAssignmentsAction`은 현재 사용하지 않으며 부서마스터에서 처리하라는 오류를 반환한다.
+- 부서별 운영 화주·화주담당자: 주간자료 `부서별화주등록`(`/client-registrations`)의 `department_operating_clients`·`client_assignments`
+- (2026-11-02) 사용하지 않던 `saveClientAssignmentsAction`을 삭제했다.
 
 ## 6. 데이터와 주요 코드
 

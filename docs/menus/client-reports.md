@@ -16,6 +16,7 @@
 | `client_owner` | 소속 부서이면서 자신에게 활성 배정된 화주 |
 
 - 부서-화주 관계는 `department_client_links`가 기준이다.
+- (2026-11-02) 편집 화주 목록·기본 화주·화주담당자 배정 화주는 운영 화주(`department_operating_clients` 활성 ∩ 활성 연결, [client-registrations.md](./client-registrations.md))만 남긴다(`loadOperatingClientKeys`·`keepOperatingLinks`). 보고서 목록·검색 조회는 운영 여부와 무관하게 과거 자료를 그대로 보여 준다. DB 쓰기 검사(`is_department_client`)는 활성 연결 기준 그대로다.
 - 화주담당자 제한은 `client_assignments(user_id, department_id, client_id, is_active)`까지 확인한다. `department_id`는 RLS 헬퍼 `is_assigned_department_client`와 같은 기준으로 조회 부서와 정확히 일치해야 한다. 배정 화주 목록은 같은 부서에 활성 `department_client_links`가 있는 화주만 남긴다(현황관리에서 연결 해제된 배정은 데이터는 두고 화면에서 숨김, `keepLinkedClientIds`).
 - 관리자가 아닌 사용자의 부서 범위를 확정하지 못하면(`profiles.department_id`가 비어 있으면) 부서 범위 쿼리는 조회하지 않고 빈 결과를 돌려준다.
 - 관리자가 부서를 선택하지 않으면 `pickDefaultDepartmentId`로 기본 부서를 정한다.
@@ -134,7 +135,7 @@ submitted -> draft              (확정 후 3일 이내)
 | 검색 의미 | `src/lib/reports/client-report-search.ts` |
 | 입력 검증 | `clientReportSchema`, `reportItemSchema`, `volumeSchema` |
 | 테이블 | `weekly_client_reports`, `weekly_client_report_items`, `weekly_volumes` |
-| 범위 테이블 | `department_client_links`, `client_assignments`, `work_categories` |
+| 범위 테이블 | `department_client_links`, `department_operating_clients`, `client_assignments`, `work_categories` |
 | 관련 migration | `018_atomic_report_saves_and_indexes.sql`, `025_confirmation_cancel_window_three_days.sql`, `029_simplify_permission_helpers.sql`, `20260817012721_preserve_client_report_items_on_save.sql` |
 
 ## 9. 교차 메뉴 영향

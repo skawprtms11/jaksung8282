@@ -9,6 +9,7 @@ export const protectedRoutes = [
   "/meeting-materials",
   "/department-reports",
   "/client-reports",
+  "/client-registrations",
   "/admin",
   "/data-collections"
 ] as const;

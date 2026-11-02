@@ -4,6 +4,7 @@ import { keepLinkedClientIds, resolveOwnerClientIds } from "@/lib/auth/client-sc
 import { pickDefaultClientId, pickDefaultDepartmentId } from "@/lib/auth/default-scope";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { isAdmin } from "@/lib/auth/permissions";
+import { keepOperatingLinks, loadOperatingClientKeys } from "@/lib/masters/operating-clients";
 import {
   getCurrentWeekOption,
   getReportMonthByThursday,
@@ -249,9 +250,13 @@ export default async function ClientReportsPage({
     const isDepartmentScopeBlocked = !isAdmin(profile) && !departmentFilter;
     defaultDepartmentId = departmentFilter ?? null;
     const isClientOwner = profile.app_role === "client_owner";
+    // 작성·선택 목록은 운영 화주(운영 표 ∩ 활성 연결)만. 과거 자료 목록(weekly_client_reports 조회)은 제한하지 않는다.
+    const operatingKeysPromise = isDepartmentScopeBlocked
+      ? Promise.resolve(null)
+      : loadOperatingClientKeys(dataClient, departmentFilter);
     let assignedClients: { id: string; client_name: string }[] = [];
     if (isClientOwner && departmentFilter) {
-      const [{ data: assignmentRows }, { data: activeLinkRows }] = await Promise.all([
+      const [{ data: assignmentRows }, { data: activeLinkRows }, ownerOperatingKeys] = await Promise.all([
         dataClient
           .from("client_assignments")
           .select("client_id,clients(id,client_name)")
@@ -262,12 +267,18 @@ export default async function ClientReportsPage({
           .from("department_client_links")
           .select("client_id")
           .eq("department_id", departmentFilter)
-          .eq("is_active", true)
+          .eq("is_active", true),
+        operatingKeysPromise
       ]);
+      const operatingLinkRows = keepOperatingLinks(
+        (activeLinkRows ?? []).map((link) => ({ department_id: departmentFilter, client_id: link.client_id })),
+        ownerOperatingKeys,
+        (link) => link.client_id
+      );
       const linkedAssignedIds = new Set(
         keepLinkedClientIds(
           ((assignmentRows ?? []) as unknown as DefaultClientAssignmentRow[]).map((assignment) => assignment.client_id),
-          (activeLinkRows ?? []).map((link) => link.client_id)
+          operatingLinkRows.map((link) => link.client_id)
         )
       );
       assignedClients = ((assignmentRows ?? []) as unknown as DefaultClientAssignmentRow[])
@@ -285,13 +296,20 @@ export default async function ClientReportsPage({
       if (isClientOwner) {
         defaultClientId = pickDefaultClientId(assignedClients, profile.app_role) || undefined;
       } else {
-        const { data: defaultClientLinks } = await dataClient
-          .from("department_client_links")
-          .select("clients(id,client_name)")
-          .eq("department_id", departmentFilter)
-          .eq("is_active", true)
-          .order("client_id", { ascending: true });
-        const defaultClients = ((defaultClientLinks ?? []) as unknown as ClientLinkRow[])
+        const [{ data: defaultClientLinks }, defaultOperatingKeys] = await Promise.all([
+          dataClient
+            .from("department_client_links")
+            .select("department_id,clients(id,client_name)")
+            .eq("department_id", departmentFilter)
+            .eq("is_active", true)
+            .order("client_id", { ascending: true }),
+          operatingKeysPromise
+        ]);
+        const defaultClients = keepOperatingLinks(
+          (defaultClientLinks ?? []) as unknown as ClientLinkRow[],
+          defaultOperatingKeys,
+          (link) => link.clients?.id
+        )
           .filter((link) => link.clients)
           .map((link) => ({
             id: link.clients?.id ?? "",
@@ -313,7 +331,8 @@ export default async function ClientReportsPage({
       { data: clientData },
       { data: profileData },
       { data: reportData, error: reportError },
-      { data: editorReportData, error: editorReportError }
+      { data: editorReportData, error: editorReportError },
+      operatingKeys
     ] = await Promise.all([
       (() => {
         if (isDepartmentScopeBlocked) {
@@ -401,11 +420,12 @@ export default async function ClientReportsPage({
           query = query.eq("department_id", departmentFilter);
         }
         return query;
-      })()
+      })(),
+      operatingKeysPromise
     ]);
     departments = (departmentData ?? []) as DepartmentOption[];
     categories = (categoryData ?? []) as CategoryOption[];
-    clients = ((clientData ?? []) as unknown as ClientLinkRow[])
+    clients = keepOperatingLinks((clientData ?? []) as unknown as ClientLinkRow[], operatingKeys, (link) => link.clients?.id)
       .filter((link) => link.clients)
       .map((link) => ({
         id: link.clients?.id ?? "",

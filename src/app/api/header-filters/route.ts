@@ -3,6 +3,7 @@ import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { PASSWORD_CHANGE_REQUIRED_MESSAGE } from "@/lib/auth/password-change";
 import { keepLinkedClientIds } from "@/lib/auth/client-scope";
 import { isAdmin } from "@/lib/auth/permissions";
+import { keepOperatingLinks, loadOperatingClientKeys } from "@/lib/masters/operating-clients";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { HeaderFilterOptions } from "@/components/layout/Header";
 import type { Json } from "@/types/database";
@@ -51,8 +52,13 @@ function normalizeHeaderFilterOptions(value: Json | null): HeaderFilterOptions |
   };
 }
 
-// 담당자 배정은 소속 부서에 활성 연결된 화주(clients 목록)만 남긴다.
-function withLinkedAssignments(options: HeaderFilterOptions, departmentId: string | null): HeaderFilterOptions {
+// 화주 목록은 운영 화주(운영 표 ∩ 활성 연결)만 남기고, 담당자 배정도 그 목록 안의 화주만 남긴다.
+function withLinkedAssignments(
+  source: HeaderFilterOptions,
+  departmentId: string | null,
+  operatingKeys: Set<string> | null
+): HeaderFilterOptions {
+  const options = { ...source, clients: keepOperatingLinks(source.clients, operatingKeys, (client) => client.id) };
   const linkedClientIds = options.clients
     .filter((client) => client.department_id === departmentId)
     .map((client) => client.id);
@@ -78,13 +84,18 @@ export async function GET() {
     });
   }
 
-  const { data: rpcData, error: rpcError } = await supabase.rpc("get_header_filter_options");
+  const departmentFilter = isAdmin(profile) ? undefined : profile.department_id;
+  const [{ data: rpcData, error: rpcError }, operatingKeys] = await Promise.all([
+    supabase.rpc("get_header_filter_options"),
+    loadOperatingClientKeys(supabase, departmentFilter)
+  ]);
   const rpcOptions = rpcError ? null : normalizeHeaderFilterOptions(rpcData);
   if (rpcOptions) {
-    return NextResponse.json(withLinkedAssignments(rpcOptions, profile.department_id), { headers: cacheHeaders });
+    return NextResponse.json(withLinkedAssignments(rpcOptions, profile.department_id, operatingKeys), {
+      headers: cacheHeaders
+    });
   }
 
-  const departmentFilter = isAdmin(profile) ? undefined : profile.department_id;
   const [departmentResult, clientResult, assignmentResult] = await Promise.all([
     (() => {
       let query = supabase
@@ -136,5 +147,7 @@ export async function GET() {
     assignedClientIds: ((assignmentResult.data ?? []) as ClientAssignmentRow[]).map((assignment) => assignment.client_id)
   };
 
-  return NextResponse.json(withLinkedAssignments(response, profile.department_id), { headers: cacheHeaders });
+  return NextResponse.json(withLinkedAssignments(response, profile.department_id, operatingKeys), {
+    headers: cacheHeaders
+  });
 }

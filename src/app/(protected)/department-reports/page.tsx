@@ -25,6 +25,8 @@ import { ClientReviewTable } from "@/components/reports/ClientReviewTable";
 import { pickDefaultDepartmentId } from "@/lib/auth/default-scope";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
 import { canReviewClientReport, canSubmitDepartment, isAdmin } from "@/lib/auth/permissions";
+import { keepOperatingLinks, loadOperatingClientKeys } from "@/lib/masters/operating-clients";
+import { selectAllPages } from "@/lib/supabase/paged-select";
 import {
   filterClientReportSearchItems,
   filterDepartmentCommonSearchItems,
@@ -50,7 +52,7 @@ type DepartmentOption = { id: string; department_name: string };
 type CategoryOption = { id: string; category_name: string; icon_key: string };
 type CenterOption = { id: string; center_name: string };
 type HolidayClientOption = { id: string; client_name: string };
-type HolidayClientLinkRow = { clients: { id: string; client_name: string } | null };
+type HolidayClientLinkRow = { department_id: string; clients: { id: string; client_name: string } | null };
 type HolidayWorkerOption = { id: string; full_name: string };
 type ProfileNameRow = HolidayWorkerOption & { is_active: boolean };
 type ClientReviewItem = {
@@ -510,7 +512,7 @@ export default async function DepartmentReportsPage({
       { data: departmentData },
       { data: categoryData },
       { data: reportData, error: reportError },
-      { count },
+      { data: countLinkData },
       { data: submissionData },
       { data: holidayClientData },
       { data: holidayWorkerData },
@@ -525,7 +527,8 @@ export default async function DepartmentReportsPage({
       // 자료취합 탭: 진행 중 취합건과 이 부서의 작성 내용. 별도 순차 await로 두면
       // 페이지 렌더마다 DB 왕복이 한 번 더 붙으므로 반드시 이 Promise.all 안에서 함께 조회한다.
       { data: collectionData },
-      { data: collectionEntryData }
+      { data: collectionEntryData },
+      operatingKeys
     ] = await Promise.all([
       (() => {
         if (isDepartmentScopeBlocked) {
@@ -569,19 +572,26 @@ export default async function DepartmentReportsPage({
       })(),
       (() => {
         if (isDepartmentScopeBlocked) {
-          return Promise.resolve({ count: 0 });
+          return Promise.resolve({ data: [] });
         }
-        let query = dataClient
-          .from("department_client_links")
-          .select("client_id", { count: "exact", head: true })
-          .eq("is_active", true);
-        if (departmentFilter) {
-          query = query.eq("department_id", departmentFilter);
-        }
-        if (selectedClientFilter) {
-          query = query.eq("client_id", selectedClientFilter);
-        }
-        return query;
+        // 작성 현황 분모는 운영 화주(운영 표 ∩ 활성 연결)만 센다. 아래에서 운영 표와 교집합을 계산하므로
+        // 행을 읽되 PostgREST 최대 행(1,000)에서 잘리지 않게 나눠 읽는다.
+        return selectAllPages<{ department_id: string; client_id: string }>(
+          (from, to) => {
+            let query = dataClient
+              .from("department_client_links")
+              .select("department_id,client_id")
+              .eq("is_active", true);
+            if (departmentFilter) {
+              query = query.eq("department_id", departmentFilter);
+            }
+            if (selectedClientFilter) {
+              query = query.eq("client_id", selectedClientFilter);
+            }
+            return query.order("department_id").order("client_id").range(from, to);
+          },
+          { label: "부서자료 작성 현황 분모" }
+        );
       })(),
       departmentFilter
           ? dataClient
@@ -597,7 +607,7 @@ export default async function DepartmentReportsPage({
       departmentFilter
           ? dataClient
             .from("department_client_links")
-            .select("clients(id,client_name)")
+            .select("department_id,clients(id,client_name)")
             .eq("department_id", departmentFilter)
             .eq("is_active", true)
             .order("client_id", { ascending: true })
@@ -684,7 +694,8 @@ export default async function DepartmentReportsPage({
           .from("data_collection_entries")
           .select("collection_id,rows,is_completed")
           .eq("department_id", departmentFilter)
-        : Promise.resolve({ data: [] })
+        : Promise.resolve({ data: [] }),
+      isDepartmentScopeBlocked ? Promise.resolve(null) : loadOperatingClientKeys(dataClient, departmentFilter)
     ]);
     const collectionRows = (collectionData ?? []) as {
       id: string;
@@ -723,7 +734,11 @@ export default async function DepartmentReportsPage({
     departments = (departmentData ?? []) as DepartmentOption[];
     categories = (categoryData ?? []) as CategoryOption[];
     centerOptions = (centerData ?? []) as CenterOption[];
-    holidayClientOptions = ((holidayClientData ?? []) as unknown as HolidayClientLinkRow[])
+    holidayClientOptions = keepOperatingLinks(
+      (holidayClientData ?? []) as unknown as HolidayClientLinkRow[],
+      operatingKeys,
+      (link) => link.clients?.id
+    )
       .filter((link) => link.clients)
       .map((link) => ({
         id: link.clients?.id ?? "",
@@ -751,7 +766,11 @@ export default async function DepartmentReportsPage({
         })
       : namedReports;
     volumeReports = volumeReportError ? [] : ((volumeReportData ?? []) as unknown as DepartmentVolumeReport[]);
-    clientCount = count ?? 0;
+    clientCount = keepOperatingLinks(
+      (countLinkData ?? []) as { department_id: string; client_id: string }[],
+      operatingKeys,
+      (link) => link.client_id
+    ).length;
     initialSubmission = submissionData ? (submissionData as unknown as DepartmentSubmissionInitialRow) : null;
     const adminCreatorIds = new Set(((adminProfileData ?? []) as AdminProfileRow[]).map((adminProfile) => adminProfile.id));
     if (isAdmin(profile)) {

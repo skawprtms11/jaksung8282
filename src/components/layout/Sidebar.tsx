@@ -10,6 +10,7 @@ import {
   ClipboardCheck,
   FilePenLine,
   Home,
+  ListChecks,
   LoaderCircle,
   PackageSearch,
   PanelLeftClose,
@@ -19,7 +20,12 @@ import {
 } from "lucide-react";
 import { ScopedLink } from "./ScopedLink";
 import type { ProfileSummary } from "@/lib/auth/permissions";
-import { canManageMasters, canViewDepartmentMaster, canViewMeetingMaterials } from "@/lib/auth/permissions";
+import {
+  canManageMasters,
+  canRegisterDepartmentClients,
+  canViewDepartmentMaster,
+  canViewMeetingMaterials
+} from "@/lib/auth/permissions";
 
 const noticeMenu = { href: "/notices", label: "공지사항", icon: Home };
 const dataCollectionMenu = { href: "/data-collections", label: "자료취합", icon: Table2 };
@@ -28,6 +34,8 @@ const baseMenus = [
   { href: "/department-reports", label: "부서자료", icon: ClipboardCheck },
   { href: "/client-reports", label: "화주자료", icon: FilePenLine }
 ];
+// 화주자료 바로 아래. 관리자·부서장·매니저만 노출(화주담당자는 숨김, 페이지·액션·RPC 에서도 차단).
+const clientRegistrationMenu = { href: "/client-registrations", label: "부서별화주등록", icon: ListChecks };
 
 const fullPrefetchMenuHrefs = new Set([
   noticeMenu.href,
@@ -85,6 +93,7 @@ export function Sidebar({
       ...(canViewMeetingMaterials(profile) ? [dataCollectionMenu] : []),
       ...(canViewMeetingMaterials(profile) ? [meetingMaterialsMenu] : []),
       ...baseMenus,
+      ...(canRegisterDepartmentClients(profile) ? [clientRegistrationMenu] : []),
       ...(canViewDepartmentMaster(profile) ? [departmentMasterMenu] : []),
       ...(canViewDepartmentMaster(profile) ? [centerMasterMenu] : []),
       ...(canManageMasters(profile) ? adminMenus : [])

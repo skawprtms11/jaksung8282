@@ -13,6 +13,7 @@ export const config = {
     "/meeting-materials/:path*",
     "/department-reports/:path*",
     "/client-reports/:path*",
+    "/client-registrations/:path*",
     "/mobile/:path*",
     "/admin/:path*",
     "/mini-game/:path*",
