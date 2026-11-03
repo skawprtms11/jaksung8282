@@ -64,7 +64,7 @@ UI 노출 권한과 `src/actions/notices.ts`의 서버 검사를 함께 유지�
 3. 수정은 대상 공지의 작성자를 읽어 관리자 또는 작성자 여부를 확인한다. 비관리자 작성자는 제목·내용만 갱신되고 고정·유형·사용 여부·게시 기간은 관리자만 바꿀 수 있다.
 4. 수정 대상이 `urgent` 공지면 내용의 본문·비고만 새 값으로 받고 부서별 완료현황(`collectionStatuses`)은 DB 값을 유지한다.
 5. 신규는 `created_by`, 수정은 `updated_by`를 기록한다.
-6. 성공 후 `/notices`를 revalidate하고 팝업을 닫은 뒤 목록을 refresh한다.
+6. 성공 후 `/notices`를 revalidate하고 팝업을 닫는다. 목록은 재검증 응답의 새 props로 갱신된다(별도 refresh 없음).
 
 ### 공지 삭제
 

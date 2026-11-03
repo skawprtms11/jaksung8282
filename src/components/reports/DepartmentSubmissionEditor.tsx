@@ -2,10 +2,10 @@
 
 import type { ReactNode } from "react";
 import { useActionState, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BarChart3, Building2, CalendarDays, CheckCircle2, ChevronDown, ClipboardList, Eye, Hammer, Pencil, Plus, RotateCcw, Save, Table2, Trash2, X } from "lucide-react";
 import { createPortal } from "react-dom";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   REPORT_TAB_ACTIVE_CLASS_NAME,
   REPORT_TAB_ICON_CLASS_NAME,
@@ -35,6 +35,17 @@ import {
   type DepartmentCommonContentItem
 } from "@/lib/reports/client-report-search";
 import type { DepartmentSubmissionStatus, Importance } from "@/types/enums";
+
+// 그래프 영역 높이(h-[224px])는 바깥 컨테이너가 정하므로 자리 표시는 h-full 로 채운다.
+const DepartmentVacancyTrendChart = dynamic(
+  () => import("./DepartmentVacancyTrendChart").then((mod) => mod.DepartmentVacancyTrendChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full items-center justify-center text-sm font-bold text-slate-400">그래프를 불러오는 중입니다.</div>
+    )
+  }
+);
 
 type Department = { id: string; department_name: string };
 type Category = { id: string; category_name: string; icon_key: string };
@@ -1381,24 +1392,7 @@ function VacancyStatusBoard({
             ) : trendData.length === 0 ? (
               <div className="flex h-full items-center justify-center text-sm font-bold text-slate-400">최근 1년 공실현황 데이터가 없습니다.</div>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={trendData} margin={{ top: 30, right: 18, left: 0, bottom: 4 }}>
-                  <CartesianGrid stroke="#e7ddcd" strokeDasharray="4 4" />
-                  <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 11, fontWeight: 700 }} axisLine={false} tickLine={false} minTickGap={16} />
-                  <YAxis tick={{ fill: "#64748b", fontSize: 11, fontWeight: 700 }} axisLine={false} tickLine={false} width={58} />
-                  <Tooltip
-                    formatter={(value, name) => [formatArea(Number(value)), name === "simple_storage_area" ? "단순보관" : "공실면적"]}
-                    labelFormatter={(label) => `${label} 월평균`}
-                    contentStyle={{ borderRadius: 16, border: "1px solid #e7ddcd", fontWeight: 800 }}
-                  />
-                  {showSimpleStorage ? (
-                    <Line type="monotone" dataKey="simple_storage_area" name="단순보관" stroke="#2fae66" strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
-                  ) : null}
-                  {showVacancy ? (
-                    <Line type="monotone" dataKey="vacancy_area" name="공실면적" stroke="#f97316" strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
-                  ) : null}
-                </LineChart>
-              </ResponsiveContainer>
+              <DepartmentVacancyTrendChart data={trendData} showSimpleStorage={showSimpleStorage} showVacancy={showVacancy} />
             )}
           </div>
           <div className="h-[224px] rounded-2xl border border-[#e7ddcd] bg-[#fbf8f2] p-3">

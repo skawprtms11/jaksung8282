@@ -2,7 +2,6 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
 import { CheckCircle2, Download, GripVertical, List, Pencil, Plus, Save, Table2, Trash2, X } from "lucide-react";
 import {
   closeDataCollectionAction,
@@ -130,7 +129,6 @@ export function DataCollectionBoard({
   canCreate: boolean;
 }) {
   const totalDepartments = totalDepartmentCount;
-  const router = useRouter();
   const [editorState, setEditorState] = useState<{ mode: "create" } | { mode: "edit"; row: DataCollectionView } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(collections[0]?.id ?? null);
   const [showAll, setShowAll] = useState(false);
@@ -169,11 +167,9 @@ export function DataCollectionBoard({
       const formData = new FormData();
       formData.set("id", collection.id);
       formData.set("status", nextStatus);
+      // 액션의 revalidatePath가 저장 응답에 이 화면의 새 RSC를 실어 보내므로 router.refresh는 부르지 않는다.
       const result = await setDataCollectionStatusAction(formData);
       setMessage(result);
-      if (result.ok) {
-        router.refresh();
-      }
     });
   }
   const overallPercent = useMemo(() => {
@@ -193,9 +189,6 @@ export function DataCollectionBoard({
       formData.set("id", id);
       const result = await action(formData);
       setMessage(result);
-      if (result.ok) {
-        router.refresh();
-      }
     });
   }
 
@@ -383,7 +376,6 @@ export function DataCollectionBoard({
           onSaved={(resultMessage) => {
             setMessage({ ok: true, message: resultMessage });
             setEditorState(null);
-            router.refresh();
           }}
         />
       ) : null}

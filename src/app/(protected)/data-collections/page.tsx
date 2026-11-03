@@ -40,6 +40,32 @@ export default async function DataCollectionsPage({
   searchParams: Promise<{ department_id?: string; client_id?: string }>;
 }) {
   const params = await searchParams;
+  const supabase = await createSupabaseServerClient();
+  // 목록 조회는 프로필 확인과 동시에 시작한다(RLS 적용 사용자 클라이언트). 결과는 아래 권한·부서 범위 확인 뒤에만 쓴다.
+  const listPromise = supabase
+    ? Promise.all([
+        supabase
+          .from("data_collections")
+          .select("id,title,description,example,image_url,collection_type,entry_mode,status,link_url,template,created_by,created_at")
+          .is("deleted_at", null)
+          .is("closed_at", null)
+          .order("created_at", { ascending: false })
+          .limit(COLLECTION_LIST_LIMIT),
+        supabase
+          .from("departments")
+          .select("id,department_name")
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true })
+          .order("department_name", { ascending: true }),
+        supabase
+          .from("data_collections")
+          .select("id,title,description,example,image_url,collection_type,entry_mode,status,link_url,template,created_by,created_at")
+          .eq("collection_type", "regular")
+          .is("deleted_at", null)
+          .order("created_at", { ascending: false })
+          .limit(30)
+      ])
+    : null;
   const { profile } = await getCurrentUserProfile();
   if (!canViewMeetingMaterials(profile)) {
     return (
@@ -48,7 +74,6 @@ export default async function DataCollectionsPage({
       </section>
     );
   }
-  const supabase = await createSupabaseServerClient();
   let collections: DataCollectionView[] = [];
   let regularTemplates: DataCollectionView[] = [];
   let departments: BoardDepartment[] = [];
@@ -58,79 +83,53 @@ export default async function DataCollectionsPage({
   const departmentScope = profile ? resolveServerDepartmentScope(profile, params.department_id) : ({ kind: "blocked" } as const);
   const scopedDepartmentId = departmentScope.kind === "department" ? departmentScope.departmentId : null;
 
-  if (supabase && profile && departmentScope.kind !== "blocked") {
-    const departmentQuery = supabase
-      .from("departments")
-      .select("id,department_name")
-      .eq("is_active", true)
-      .order("sort_order", { ascending: true })
-      .order("department_name", { ascending: true });
-    const [{ data: collectionData }, { data: departmentData }, { data: regularData }] = await Promise.all([
-      supabase
-        .from("data_collections")
-        .select("id,title,description,example,image_url,collection_type,entry_mode,status,link_url,template,created_by,created_at")
-        .is("deleted_at", null)
-        .is("closed_at", null)
-        .order("created_at", { ascending: false })
-        .limit(COLLECTION_LIST_LIMIT),
-      scopedDepartmentId ? departmentQuery.eq("id", scopedDepartmentId) : departmentQuery,
-      supabase
-        .from("data_collections")
-        .select("id,title,description,example,image_url,collection_type,entry_mode,status,link_url,template,created_by,created_at")
-        .eq("collection_type", "regular")
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false })
-        .limit(30)
-    ]);
+  if (supabase && listPromise && profile && departmentScope.kind !== "blocked") {
+    const [{ data: collectionData }, { data: departmentData }, { data: regularData }] = await listPromise;
     const collectionRows = (collectionData ?? []) as CollectionQueryRow[];
     const regularRows = (regularData ?? []) as CollectionQueryRow[];
-    departments = (departmentData ?? []) as BoardDepartment[];
+    // 활성 부서 전체를 받아 범위 부서만 남긴다. 전체 건수는 진행률 분모(활성 부서 수)로 그대로 쓴다.
+    const activeDepartments = (departmentData ?? []) as BoardDepartment[];
+    departments = scopedDepartmentId
+      ? activeDepartments.filter((department) => department.id === scopedDepartmentId)
+      : activeDepartments;
+    totalDepartmentCount = activeDepartments.length;
 
     const collectionIds = collectionRows.map((row) => row.id);
-    let entryRows: EntryQueryRow[] = [];
-    const completedCountByCollection = new Map<string, number>();
-    totalDepartmentCount = departments.length;
-    if (collectionIds.length > 0) {
-      let entryQuery = supabase
-        .from("data_collection_entries")
-        .select("collection_id,department_id,rows,is_completed,updated_at,departments(department_name)")
-        .in("collection_id", collectionIds);
-      if (scopedDepartmentId) {
-        entryQuery = entryQuery.eq("department_id", scopedDepartmentId);
-      }
-      // 한 부서로 좁혀 보더라도 진행률·자동 완료 상태는 활성 부서 전체 기준이어야 하므로 확정 행 수와 활성 부서 수를 따로 센다.
-      const [{ data: entryData }, completedResult, departmentCountResult] = await Promise.all([
-        entryQuery.order("updated_at", { ascending: false }),
-        scopedDepartmentId
-          ? supabase.from("data_collection_entries").select("collection_id").in("collection_id", collectionIds).eq("is_completed", true)
-          : Promise.resolve({ data: null }),
-        scopedDepartmentId
-          ? supabase.from("departments").select("id", { count: "exact", head: true }).eq("is_active", true)
-          : Promise.resolve({ count: null })
-      ]);
-      entryRows = (entryData ?? []) as unknown as EntryQueryRow[];
-      const completedRows = scopedDepartmentId
-        ? ((completedResult.data ?? []) as { collection_id: string }[])
-        : entryRows.filter((entry) => entry.is_completed);
-      completedRows.forEach((row) => {
-        completedCountByCollection.set(row.collection_id, (completedCountByCollection.get(row.collection_id) ?? 0) + 1);
-      });
-      if (scopedDepartmentId) {
-        totalDepartmentCount = departmentCountResult.count ?? departments.length;
-      }
-    }
-
     const creatorIds = Array.from(new Set(collectionRows.map((row) => row.created_by).filter((id): id is string => Boolean(id))));
-    let nameById = new Map<string, string>();
-    if (creatorIds.length > 0) {
-      const { data: profileRows } = await supabase.from("profiles").select("id,full_name").in("id", creatorIds);
-      nameById = new Map(((profileRows ?? []) as { id: string; full_name: string }[]).map((row) => [row.id, row.full_name]));
-    }
-
-    // 비공개 버킷 사진은 서버에서 만료 1시간 서명 주소로 바꿔 내려준다.
-    const resolveImageUrl = await createCollectionImageUrlResolver(
-      [...collectionRows, ...regularRows].map((row) => row.image_url)
-    );
+    // 부서 입력·작성자 이름·사진 서명 주소는 서로 의존하지 않아 함께 조회한다.
+    const [entryResult, completedResult, { data: profileRows }, resolveImageUrl] = await Promise.all([
+      (() => {
+        if (collectionIds.length === 0) {
+          return Promise.resolve({ data: [] });
+        }
+        let entryQuery = supabase
+          .from("data_collection_entries")
+          .select("collection_id,department_id,rows,is_completed,updated_at,departments(department_name)")
+          .in("collection_id", collectionIds);
+        if (scopedDepartmentId) {
+          entryQuery = entryQuery.eq("department_id", scopedDepartmentId);
+        }
+        return entryQuery.order("updated_at", { ascending: false });
+      })(),
+      // 한 부서로 좁혀 보더라도 진행률·자동 완료 상태는 활성 부서 전체 기준이어야 하므로 확정 행 수를 따로 센다.
+      scopedDepartmentId && collectionIds.length > 0
+        ? supabase.from("data_collection_entries").select("collection_id").in("collection_id", collectionIds).eq("is_completed", true)
+        : Promise.resolve({ data: null }),
+      creatorIds.length > 0
+        ? supabase.from("profiles").select("id,full_name").in("id", creatorIds)
+        : Promise.resolve({ data: [] }),
+      // 비공개 버킷 사진은 서버에서 만료 1시간 서명 주소로 바꿔 내려준다.
+      createCollectionImageUrlResolver([...collectionRows, ...regularRows].map((row) => row.image_url))
+    ]);
+    const entryRows = (entryResult.data ?? []) as unknown as EntryQueryRow[];
+    const completedCountByCollection = new Map<string, number>();
+    const completedRows = scopedDepartmentId
+      ? ((completedResult.data ?? []) as { collection_id: string }[])
+      : entryRows.filter((entry) => entry.is_completed);
+    completedRows.forEach((row) => {
+      completedCountByCollection.set(row.collection_id, (completedCountByCollection.get(row.collection_id) ?? 0) + 1);
+    });
+    const nameById = new Map(((profileRows ?? []) as { id: string; full_name: string }[]).map((row) => [row.id, row.full_name]));
 
     const toView = (row: CollectionQueryRow, entries: EntryQueryRow[]) => {
       const columns = normalizeCollectionColumns(row.template);

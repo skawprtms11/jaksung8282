@@ -1,69 +1,15 @@
 import { NextResponse } from "next/server";
 import { getCurrentUserProfile } from "@/lib/auth/current-user";
+import { loadHeaderFilterOptions } from "@/lib/auth/header-scope-options";
 import { PASSWORD_CHANGE_REQUIRED_MESSAGE } from "@/lib/auth/password-change";
-import { keepLinkedClientIds } from "@/lib/auth/client-scope";
-import { isAdmin } from "@/lib/auth/permissions";
-import { keepOperatingLinks, loadOperatingClientKeys } from "@/lib/masters/operating-clients";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { HeaderFilterOptions } from "@/components/layout/Header";
-import type { Json } from "@/types/database";
 
 export const dynamic = "force-dynamic";
-
-type ClientLinkRow = { department_id: string; clients: { id: string; client_name: string } | null };
-type ClientAssignmentRow = { client_id: string };
 
 const cacheHeaders = {
   "Cache-Control": "private, max-age=60, stale-while-revalidate=300"
 };
-
-function isRecord(value: Json | undefined): value is Record<string, Json | undefined> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function readString(value: Json | undefined) {
-  return typeof value === "string" ? value : "";
-}
-
-function normalizeHeaderFilterOptions(value: Json | null): HeaderFilterOptions | null {
-  const source = value ?? undefined;
-  if (!isRecord(source)) {
-    return null;
-  }
-
-  const departmentsValue = source.departments;
-  const clientsValue = source.clients;
-  const assignedClientIdsValue = source.assignedClientIds;
-  if (!Array.isArray(departmentsValue) || !Array.isArray(clientsValue) || !Array.isArray(assignedClientIdsValue)) {
-    return null;
-  }
-
-  return {
-    departments: departmentsValue.filter(isRecord).map((department) => ({
-      id: readString(department.id),
-      department_name: readString(department.department_name)
-    })).filter((department) => department.id && department.department_name),
-    clients: clientsValue.filter(isRecord).map((client) => ({
-      id: readString(client.id),
-      client_name: readString(client.client_name),
-      department_id: readString(client.department_id)
-    })).filter((client) => client.id && client.client_name && client.department_id),
-    assignedClientIds: assignedClientIdsValue.map(readString).filter(Boolean)
-  };
-}
-
-// 화주 목록은 운영 화주(운영 표 ∩ 활성 연결)만 남기고, 담당자 배정도 그 목록 안의 화주만 남긴다.
-function withLinkedAssignments(
-  source: HeaderFilterOptions,
-  departmentId: string | null,
-  operatingKeys: Set<string> | null
-): HeaderFilterOptions {
-  const options = { ...source, clients: keepOperatingLinks(source.clients, operatingKeys, (client) => client.id) };
-  const linkedClientIds = options.clients
-    .filter((client) => client.department_id === departmentId)
-    .map((client) => client.id);
-  return { ...options, assignedClientIds: keepLinkedClientIds(options.assignedClientIds, linkedClientIds) };
-}
 
 export async function GET() {
   const { profile, mustChangePassword } = await getCurrentUserProfile();
@@ -84,70 +30,9 @@ export async function GET() {
     });
   }
 
-  const departmentFilter = isAdmin(profile) ? undefined : profile.department_id;
-  const [{ data: rpcData, error: rpcError }, operatingKeys] = await Promise.all([
-    supabase.rpc("get_header_filter_options"),
-    loadOperatingClientKeys(supabase, departmentFilter)
-  ]);
-  const rpcOptions = rpcError ? null : normalizeHeaderFilterOptions(rpcData);
-  if (rpcOptions) {
-    return NextResponse.json(withLinkedAssignments(rpcOptions, profile.department_id, operatingKeys), {
-      headers: cacheHeaders
-    });
-  }
-
-  const [departmentResult, clientResult, assignmentResult] = await Promise.all([
-    (() => {
-      let query = supabase
-        .from("departments")
-        .select("id,department_name")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true })
-        .order("department_name", { ascending: true });
-      if (departmentFilter) {
-        query = query.eq("id", departmentFilter);
-      }
-      return query;
-    })(),
-    (() => {
-      let query = supabase
-        .from("department_client_links")
-        .select("department_id,clients(id,client_name)")
-        .eq("is_active", true)
-        .order("department_id", { ascending: true });
-      if (departmentFilter) {
-        query = query.eq("department_id", departmentFilter);
-      }
-      return query;
-    })(),
-    profile.app_role === "client_owner" && profile.department_id
-      ? supabase
-          .from("client_assignments")
-          .select("client_id")
-          .eq("user_id", profile.id)
-          .eq("department_id", profile.department_id)
-          .eq("is_active", true)
-      : Promise.resolve({ data: [] as ClientAssignmentRow[], error: null })
-  ]);
-
-  if (departmentResult.error || clientResult.error || assignmentResult.error) {
+  const options = await loadHeaderFilterOptions(supabase, profile);
+  if (!options) {
     return NextResponse.json({ message: "필터 정보를 불러오지 못했습니다." }, { status: 500 });
   }
-
-  const response: HeaderFilterOptions = {
-    departments: (departmentResult.data ?? []) as HeaderFilterOptions["departments"],
-    clients: ((clientResult.data ?? []) as unknown as ClientLinkRow[])
-      .filter((link) => link.clients)
-      .map((link) => ({
-        id: link.clients?.id ?? "",
-        client_name: link.clients?.client_name ?? "",
-        department_id: link.department_id
-      }))
-      .sort((left, right) => left.client_name.localeCompare(right.client_name, "ko")),
-    assignedClientIds: ((assignmentResult.data ?? []) as ClientAssignmentRow[]).map((assignment) => assignment.client_id)
-  };
-
-  return NextResponse.json(withLinkedAssignments(response, profile.department_id, operatingKeys), {
-    headers: cacheHeaders
-  });
+  return NextResponse.json(options, { headers: cacheHeaders });
 }

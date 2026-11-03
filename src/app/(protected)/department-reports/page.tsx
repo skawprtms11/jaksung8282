@@ -456,6 +456,18 @@ function makeDepartmentOpenRequestItems(
     .sort((left, right) => right.requestCreatedAt.localeCompare(left.requestCreatedAt));
 }
 
+type DataCollectionRow = {
+  id: string;
+  title: string;
+  description: string;
+  example: string;
+  image_url: string | null;
+  entry_mode: string;
+  link_url: string | null;
+  template: Json;
+  created_at: string;
+};
+
 export default async function DepartmentReportsPage({
   searchParams
 }: {
@@ -465,8 +477,27 @@ export default async function DepartmentReportsPage({
   const searchFilters = parseClientReportSearchFilters(params);
   const hasSearchFilters = hasClientReportSearchFilters(searchFilters);
   const hasDateRangeFilter = Boolean(searchFilters.dateFrom || searchFilters.dateTo);
-  const { profile } = await getCurrentUserProfile();
   const supabase = await createSupabaseServerClient();
+  let dataClient = supabase;
+  if (supabase) {
+    try {
+      dataClient = createSupabaseAdminClient();
+    } catch {
+      dataClient = supabase;
+    }
+  }
+  // 활성 부서 목록은 프로필 확인과 동시에 받아 둔다(관리자 기본 부서·부서 선택 목록용). 프로필 확인 뒤에만 쓴다.
+  const activeDepartmentsPromise = dataClient
+    ? Promise.resolve(
+        dataClient
+          .from("departments")
+          .select("id,department_name")
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true })
+          .order("department_name", { ascending: true })
+      )
+    : null;
+  const { profile } = await getCurrentUserProfile();
   let departments: DepartmentOption[] = [];
   let categories: CategoryOption[] = [];
   let summaryReports: SummaryReportRow[] = [];
@@ -486,22 +517,12 @@ export default async function DepartmentReportsPage({
   let canEditDataCollection = false;
   const currentWeek = resolveWeek(params);
   const activeTab = resolveActiveTab(params);
-  if (supabase && profile) {
-    let dataClient = supabase;
-    try {
-      dataClient = createSupabaseAdminClient();
-    } catch {
-      dataClient = supabase;
-    }
+  if (dataClient && activeDepartmentsPromise && profile) {
+    const { data: activeDepartmentData } = await activeDepartmentsPromise;
+    const activeDepartments = (activeDepartmentData ?? []) as DepartmentDefaultRow[];
     let adminDefaultDepartmentId: string | undefined;
     if (isAdmin(profile) && !params.department_id) {
-      const { data: defaultDepartments } = await dataClient
-        .from("departments")
-        .select("id,department_name")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true })
-        .order("department_name", { ascending: true });
-      adminDefaultDepartmentId = pickDefaultDepartmentId((defaultDepartments ?? []) as DepartmentDefaultRow[], profile.app_role) || undefined;
+      adminDefaultDepartmentId = pickDefaultDepartmentId(activeDepartments, profile.app_role) || undefined;
     }
     const departmentFilter = isAdmin(profile) ? params.department_id ?? adminDefaultDepartmentId : profile.department_id;
     // 부서 범위를 확정하지 못한 비관리자는 전 부서 자료가 새지 않도록 조회 자체를 막는다.
@@ -509,7 +530,6 @@ export default async function DepartmentReportsPage({
     const selectedClientFilter = params.client_id;
     initialLookupDepartmentId = departmentFilter ?? null;
     const [
-      { data: departmentData },
       { data: categoryData },
       { data: reportData, error: reportError },
       { data: countLinkData },
@@ -526,20 +546,10 @@ export default async function DepartmentReportsPage({
       { data: summaryReportData, error: summaryReportError },
       // 자료취합 탭: 진행 중 취합건과 이 부서의 작성 내용. 별도 순차 await로 두면
       // 페이지 렌더마다 DB 왕복이 한 번 더 붙으므로 반드시 이 Promise.all 안에서 함께 조회한다.
-      { data: collectionData },
+      { collectionRows, resolveImageUrl },
       { data: collectionEntryData },
       operatingKeys
     ] = await Promise.all([
-      (() => {
-        if (isDepartmentScopeBlocked) {
-          return Promise.resolve({ data: [], error: null });
-        }
-        let query = dataClient.from("departments").select("id,department_name").eq("is_active", true).order("sort_order");
-        if (!isAdmin(profile) && departmentFilter) {
-          query = query.eq("id", departmentFilter);
-        }
-        return query;
-      })(),
       dataClient.from("work_categories").select("id,category_name,icon_key").eq("is_active", true).order("sort_order"),
       (() => {
         if (isDepartmentScopeBlocked) {
@@ -680,15 +690,25 @@ export default async function DepartmentReportsPage({
             return query;
           })()
         : Promise.resolve({ data: [], error: null }),
-      departmentFilter
-        ? dataClient
-          .from("data_collections")
-          .select("id,title,description,example,image_url,entry_mode,link_url,template,created_at")
-          .is("deleted_at", null)
-          .is("closed_at", null)
-          .order("created_at", { ascending: false })
-          .limit(50)
-        : Promise.resolve({ data: [] }),
+      // 비공개 버킷 사진은 서버에서 만료 1시간 서명 주소로 바꿔 내려준다. 다른 조회를 기다리지 않도록 취합건 조회에 바로 잇는다.
+      (departmentFilter
+        ? Promise.resolve(
+            dataClient
+              .from("data_collections")
+              .select("id,title,description,example,image_url,entry_mode,link_url,template,created_at")
+              .is("deleted_at", null)
+              .is("closed_at", null)
+              .order("created_at", { ascending: false })
+              .limit(50)
+          )
+        : Promise.resolve({ data: [] })
+      ).then(async ({ data }) => {
+        const rows = (data ?? []) as DataCollectionRow[];
+        return {
+          collectionRows: rows,
+          resolveImageUrl: await createCollectionImageUrlResolver(rows.map((row) => row.image_url))
+        };
+      }),
       departmentFilter
         ? dataClient
           .from("data_collection_entries")
@@ -697,19 +717,6 @@ export default async function DepartmentReportsPage({
         : Promise.resolve({ data: [] }),
       isDepartmentScopeBlocked ? Promise.resolve(null) : loadOperatingClientKeys(dataClient, departmentFilter)
     ]);
-    const collectionRows = (collectionData ?? []) as {
-      id: string;
-      title: string;
-      description: string;
-      example: string;
-      image_url: string | null;
-      entry_mode: string;
-      link_url: string | null;
-      template: Json;
-      created_at: string;
-    }[];
-    // 비공개 버킷 사진은 서버에서 만료 1시간 서명 주소로 바꿔 내려준다.
-    const resolveImageUrl = await createCollectionImageUrlResolver(collectionRows.map((row) => row.image_url));
     dataCollectionItems = collectionRows.map((row) => ({
       id: row.id,
       title: row.title,
@@ -731,7 +738,12 @@ export default async function DepartmentReportsPage({
       ])
     );
     canEditDataCollection = Boolean(departmentFilter && profile && (isAdmin(profile) || profile.department_id === departmentFilter));
-    departments = (departmentData ?? []) as DepartmentOption[];
+    // 선택 목록: 관리자는 활성 부서 전체, 부서장·매니저는 소속 부서만(범위 미확정이면 빈 목록).
+    departments = isDepartmentScopeBlocked
+      ? []
+      : isAdmin(profile)
+        ? activeDepartments
+        : activeDepartments.filter((department) => department.id === departmentFilter);
     categories = (categoryData ?? []) as CategoryOption[];
     centerOptions = (centerData ?? []) as CenterOption[];
     holidayClientOptions = keepOperatingLinks(

@@ -14,6 +14,7 @@ export function ScopedLink({
   profileId,
   className,
   prefetch,
+  onIntent,
   children,
   ...rest
 }: {
@@ -21,6 +22,7 @@ export function ScopedLink({
   profileId: string;
   className?: string;
   prefetch?: boolean | "auto" | null;
+  onIntent?: () => void;
   children: ReactNode | ((isNavigating: boolean) => ReactNode);
   "aria-current"?: "page";
   "aria-label"?: string;
@@ -34,6 +36,11 @@ export function ScopedLink({
 
   function syncDomHref(event: MouseEvent<HTMLAnchorElement> | KeyboardEvent<HTMLAnchorElement>) {
     event.currentTarget.href = scopedHref();
+  }
+
+  function handleIntent() {
+    router.prefetch(scopedHref());
+    onIntent?.();
   }
 
   function handleClick(event: MouseEvent<HTMLAnchorElement>) {
@@ -58,8 +65,8 @@ export function ScopedLink({
       onMouseDown={syncDomHref}
       onContextMenu={syncDomHref}
       onKeyDown={syncDomHref}
-      onMouseEnter={() => router.prefetch(scopedHref())}
-      onFocus={() => router.prefetch(scopedHref())}
+      onMouseEnter={handleIntent}
+      onFocus={handleIntent}
     >
       {typeof children === "function" ? children(isNavigating) : children}
     </Link>

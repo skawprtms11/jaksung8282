@@ -1,5 +1,6 @@
 "use client";
 
+import { LazyVolumeComparisonChart } from "@/components/charts/LazyVolumeComparisonChart";
 import { DepartmentCommonSearchToolbar } from "@/components/reports/DepartmentCommonSearchToolbar";
 import { MeetingDepartmentVolumeBoard } from "@/components/reports/MeetingDepartmentVolumeBoard";
 import { MeetingFacilityConstructionBoard } from "@/components/reports/MeetingFacilityConstructionBoard";
@@ -8,7 +9,6 @@ import { MeetingMaterialsTable } from "@/components/reports/MeetingMaterialsTabl
 import { DepartmentOpenRequestBoard } from "@/components/reports/DepartmentOpenRequestBoard";
 import { MemoStatusButton } from "@/components/reports/MemoStatusButton";
 import { MeetingPriorityPanel } from "@/components/reports/MeetingPriorityPanel";
-import { VolumeComparisonChart } from "@/components/charts/VolumeComparisonChart";
 import { TableShell } from "@/components/common/TableShell";
 import type { MeetingTabData } from "@/lib/reports/meeting-materials-tab-data";
 import { cn } from "@/lib/utils/cn";
@@ -78,7 +78,7 @@ function VolumesContent({ data }: { data: Extract<MeetingTabData, { tab: "volume
   const total = rows.reduce((sum, row) => ({ inbound: sum.inbound + row.inbound, outbound: sum.outbound + row.outbound, total: sum.total + row.total }), { inbound: 0, outbound: 0, total: 0 });
   return <div className="space-y-4">
     <div className="grid gap-4 xl:grid-cols-[1fr_460px]">
-      <VolumeComparisonChart rows={data.chartRows} />
+      <LazyVolumeComparisonChart rows={data.chartRows} />
       <section className="sketch-panel p-4"><h2 className="section-doodle-title mb-3">물동량 요약</h2><TableShell>
         <table className="table-sticky w-full min-w-[420px] table-fixed text-left text-xs"><thead><tr><th className="px-3 py-2.5">주차</th><th className="px-2 py-2.5 text-right">입고</th><th className="px-2 py-2.5 text-right">출고</th><th className="px-3 py-2.5 text-right">합계</th></tr></thead>
           <tbody>{rows.map((row) => <tr key={row.name} className="border-t border-slate-100"><td className="px-3 py-2 font-black text-[#012241]">{row.name}</td><td className="px-2 py-2 text-right font-bold">{row.inbound.toLocaleString("ko-KR")}</td><td className="px-2 py-2 text-right font-bold">{row.outbound.toLocaleString("ko-KR")}</td><td className="px-3 py-2 text-right font-black text-[#012241]">{row.total.toLocaleString("ko-KR")}</td></tr>)}

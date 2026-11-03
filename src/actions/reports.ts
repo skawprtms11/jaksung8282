@@ -285,6 +285,8 @@ const MAX_TRANSITION_COMMENT_LENGTH = 2000;
 
 const CONFIRMATION_CANCEL_WINDOW_DAYS = 3;
 const CONFIRMATION_CANCEL_WINDOW_MS = CONFIRMATION_CANCEL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+// 부서 확정 시 미작성 화주 자동 확정 RPC 동시 실행 수(DB 연결·PostgREST 부하를 고려한 상한).
+const AUTO_FILL_CONCURRENCY = 5;
 
 function isPastConfirmationCancelWindow(confirmedAt: string | null | undefined) {
   if (!confirmedAt) {
@@ -932,8 +934,10 @@ export async function saveDepartmentSubmissionAction(
       );
       const defaultCategoryId = ((categoryRows ?? []) as { id: string }[])[0]?.id;
       if (defaultCategoryId) {
-        for (const clientId of missingClientIds) {
-          const { error: autoFillError } = await supabase.rpc("save_client_report_atomic", {
+        // 화주별 RPC는 (화주, 주차) advisory lock과 자기 자료 행만 다뤄 서로 경합하지 않으므로
+        // 동시 실행 수를 제한해 묶음 단위로 병렬 호출한다. 실패 건은 기존처럼 건수에서만 빠진다.
+        const autoFillOne = (clientId: string) =>
+          supabase.rpc("save_client_report_atomic", {
             p_report_id: null,
             p_department_id: parsed.data.department_id,
             p_client_id: clientId,
@@ -956,9 +960,11 @@ export async function saveDepartmentSubmissionAction(
             ] as unknown as Json,
             p_volumes: [] as unknown as Json
           });
-          if (!autoFillError) {
-            autoFilledCount += 1;
-          }
+        for (let index = 0; index < missingClientIds.length; index += AUTO_FILL_CONCURRENCY) {
+          const results = await Promise.all(
+            missingClientIds.slice(index, index + AUTO_FILL_CONCURRENCY).map(autoFillOne)
+          );
+          autoFilledCount += results.filter((result) => !result.error).length;
         }
       }
       // 담당자가 확정하지 않은 기존 화주자료(저장/반려)도 부서 확정과 함께 확정한다.
@@ -1248,7 +1254,7 @@ export async function saveDepartmentMemoAction({
   department_id: string;
   week_start_date: string;
   content: string;
-}): Promise<{ ok: boolean; message?: string }> {
+}): Promise<{ ok: boolean; message?: string; content?: string }> {
   const parsedDepartmentId = idSchema.safeParse(department_id);
   if (!parsedDepartmentId.success || !/^\d{4}-\d{2}-\d{2}$/.test(week_start_date)) {
     return { ok: false, message: "저장 조건을 확인하세요." };
@@ -1270,7 +1276,7 @@ export async function saveDepartmentMemoAction({
     return { ok: false, message: "Supabase 환경변수를 먼저 설정하세요." };
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("department_meeting_memos")
     .upsert(
       {
@@ -1281,13 +1287,16 @@ export async function saveDepartmentMemoAction({
         updated_at: new Date().toISOString()
       },
       { onConflict: "department_id,week_start_date" }
-    );
+    )
+    .select("content")
+    .single();
   if (error) {
     return { ok: false, message: safeErrorMessage(error.message) };
   }
 
+  // 라우터 캐시(staleTimes.dynamic)에 남은 이전 메모 초기값이 재방문 때 되살아나지 않도록 재검증은 유지한다.
   revalidatePath("/meeting-materials");
-  return { ok: true, message: "부서 메모를 저장했습니다." };
+  return { ok: true, message: "부서 메모를 저장했습니다.", content: data?.content ?? content };
 }
 
 function canManageDepartmentData(profile: NonNullable<Awaited<ReturnType<typeof getCurrentUserProfile>>["profile"]>, departmentId: string) {
