@@ -1,18 +1,22 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { TrendingUp } from "lucide-react";
-import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart as RechartsLineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis
-} from "recharts";
 import type { VolumeType, VolumeUnit } from "@/types/enums";
+
+// 그래프 영역 높이는 바깥 컨테이너가 정하므로 자리 표시는 h-full 로 채워 로딩 중 흔들림을 막는다.
+const VolumeAnalysisChart = dynamic(
+  () => import("@/components/reports/VolumeAnalysisChart").then((mod) => mod.VolumeAnalysisChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full items-center justify-center text-sm font-semibold text-slate-400">
+        그래프를 불러오는 중입니다.
+      </div>
+    )
+  }
+);
 
 export type VolumeAnalysisHistoricalVolume = {
   client_id: string;
@@ -209,32 +213,10 @@ export function VolumeAnalysisPanel({
                 최근 1년 물동량 데이터가 없습니다.
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <RechartsLineChart data={volumeAnalysis.chartData} margin={{ top: 10, right: 18, bottom: 6, left: 0 }}>
-                  <CartesianGrid strokeDasharray="4 4" stroke="#ece3d4" />
-                  <XAxis dataKey="label" tick={{ fontSize: 12 }} minTickGap={16} />
-                  <YAxis tick={{ fontSize: 12 }} tickFormatter={(value: number) => formatNumber(value)} width={58} />
-                  <Tooltip
-                    formatter={(value) => (typeof value === "number" ? formatNumber(value) : String(value ?? "-"))}
-                    labelFormatter={(label) => `${label}`}
-                  />
-                  <Legend />
-                  {seriesOptions.map((series) =>
-                    visibleSeries[series.key] ? (
-                      <Line
-                        key={series.key}
-                        type="monotone"
-                        dataKey={series.key}
-                        name={series.label}
-                        stroke={series.color}
-                        strokeWidth={3}
-                        dot={false}
-                        activeDot={{ r: 5 }}
-                      />
-                    ) : null
-                  )}
-                </RechartsLineChart>
-              </ResponsiveContainer>
+              <VolumeAnalysisChart
+                data={volumeAnalysis.chartData}
+                series={seriesOptions.filter((series) => visibleSeries[series.key])}
+              />
             )}
           </div>
         </div>

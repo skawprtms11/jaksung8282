@@ -108,23 +108,6 @@ export function MeetingMaterialsWorkspace({
 
   useEffect(() => () => controllerRef.current?.abort(), []);
 
-  useEffect(() => {
-    let cancelled = false;
-    const timeoutId = window.setTimeout(async () => {
-      for (const tab of tabs) {
-        if (cancelled) return;
-        if (tab.value !== initialTab) {
-          await fetchTab(tab.href).catch(() => undefined);
-          await new Promise((resolve) => window.setTimeout(resolve, 180));
-        }
-      }
-    }, 700);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeoutId);
-    };
-  }, [fetchTab, initialTab, tabs]);
-
   const handleDataChanged = useCallback(() => {
     for (const [href] of cacheRef.current) {
       const tab = new URL(href, window.location.origin).searchParams.get("tab");
@@ -140,6 +123,7 @@ export function MeetingMaterialsWorkspace({
           pendingTab={pendingTab}
           tabs={tabs}
           onTabSelect={(tab, href) => void openTab(tab, href, true)}
+          // 나머지 탭을 한꺼번에 선조회하지 않고, 마우스를 올리거나 포커스한 탭만 미리 받는다.
           onTabIntent={(tab, href) => {
             if (tab !== activeTab) void fetchTab(href).catch(() => undefined);
           }}

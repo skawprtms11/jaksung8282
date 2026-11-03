@@ -1,7 +1,6 @@
 "use client";
 
 import Link, { useLinkStatus } from "next/link";
-import { useEffect } from "react";
 import { BarChart3, CalendarDays, ClipboardCheck, FileText, Hammer, LoaderCircle } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import {
@@ -29,21 +28,25 @@ const iconMap = {
   facility: Hammer
 } satisfies Record<MeetingTabValue, typeof ClipboardCheck>;
 
-let meetingTabModulesPrewarmed = false;
+// 유휴 시 탭 모듈을 한꺼번에 받지 않고, 마우스를 올리거나 포커스한 탭의 모듈만 미리 받는다.
+const meetingTabModuleLoaders: Record<MeetingTabValue, () => Promise<unknown>[]> = {
+  collection: () => [import("@/components/reports/MeetingPriorityPanel")],
+  materials: () => [import("@/components/reports/MeetingMaterialsTable")],
+  volumes: () => [
+    import("@/components/charts/VolumeComparisonChart"),
+    import("@/components/reports/MeetingDepartmentVolumeBoard")
+  ],
+  holiday: () => [import("@/components/reports/MeetingHolidayWorkBoard")],
+  facility: () => [import("@/components/reports/MeetingFacilityConstructionBoard")]
+};
+const prewarmedMeetingTabs = new Set<MeetingTabValue>();
 
-function prewarmMeetingTabModules() {
-  if (meetingTabModulesPrewarmed) {
+function prewarmMeetingTabModule(tab: MeetingTabValue) {
+  if (prewarmedMeetingTabs.has(tab)) {
     return;
   }
-  meetingTabModulesPrewarmed = true;
-  void Promise.all([
-    import("@/components/reports/MeetingPriorityPanel"),
-    import("@/components/reports/MeetingMaterialsTable"),
-    import("@/components/charts/VolumeComparisonChart"),
-    import("@/components/reports/MeetingDepartmentVolumeBoard"),
-    import("@/components/reports/MeetingHolidayWorkBoard"),
-    import("@/components/reports/MeetingFacilityConstructionBoard")
-  ]);
+  prewarmedMeetingTabs.add(tab);
+  void Promise.all(meetingTabModuleLoaders[tab]());
 }
 
 function MeetingTabIcon({ icon: Icon, pending: pendingOverride }: { icon: typeof ClipboardCheck; pending?: boolean }) {
@@ -68,24 +71,6 @@ export function MeetingMaterialsTabNav({
   onTabSelect?: (tab: MeetingTabValue, href: string) => void;
   onTabIntent?: (tab: MeetingTabValue, href: string) => void;
 }) {
-  useEffect(() => {
-    const startPrefetch = () => {
-      prewarmMeetingTabModules();
-    };
-
-    if (typeof window.requestIdleCallback === "function") {
-      const idleId = window.requestIdleCallback(startPrefetch, { timeout: 700 });
-      return () => {
-        window.cancelIdleCallback(idleId);
-      };
-    }
-
-    const timeoutId = window.setTimeout(startPrefetch, 250);
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, []);
-
   return (
     <nav className={REPORT_TAB_NAV_CLASS_NAME} aria-label="회의자료 화면 탭">
       {tabs.map((tab) => {
@@ -103,14 +88,14 @@ export function MeetingMaterialsTabNav({
               onTabSelect(tab.value, tab.href);
             }}
             onFocus={() => {
-              prewarmMeetingTabModules();
+              prewarmMeetingTabModule(tab.value);
               onTabIntent?.(tab.value, tab.href);
             }}
             onMouseEnter={() => {
-              prewarmMeetingTabModules();
+              prewarmMeetingTabModule(tab.value);
               onTabIntent?.(tab.value, tab.href);
             }}
-            onTouchStart={prewarmMeetingTabModules}
+            onTouchStart={() => prewarmMeetingTabModule(tab.value)}
             className={cn(
               REPORT_TAB_ITEM_CLASS_NAME,
               isSelected ? REPORT_TAB_ACTIVE_CLASS_NAME : REPORT_TAB_IDLE_CLASS_NAME

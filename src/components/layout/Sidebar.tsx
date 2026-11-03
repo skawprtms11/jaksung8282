@@ -1,7 +1,7 @@
 "use client";
 
 import { useLinkStatus } from "next/link";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { usePathname } from "next/navigation";
 import {
   Building2,
@@ -37,13 +37,6 @@ const baseMenus = [
 // 화주자료 바로 아래. 관리자·부서장·매니저만 노출(화주담당자는 숨김, 페이지·액션·RPC 에서도 차단).
 const clientRegistrationMenu = { href: "/client-registrations", label: "부서별화주등록", icon: ListChecks };
 
-const fullPrefetchMenuHrefs = new Set([
-  noticeMenu.href,
-  meetingMaterialsMenu.href,
-  "/department-reports",
-  "/client-reports"
-]);
-
 const departmentMasterMenu = { href: "/admin/departments", label: "부서마스터", icon: Building2 };
 const centerMasterMenu = { href: "/admin/centers", label: "센터마스터", icon: PackageSearch };
 
@@ -52,20 +45,25 @@ const adminMenus = [
   { href: "/admin/users", label: "사용자관리", icon: UsersRound }
 ];
 
-let primaryMenuModulesPrewarmed = false;
-
-function prewarmPrimaryMenuModules() {
-  if (primaryMenuModulesPrewarmed) {
-    return;
-  }
-  primaryMenuModulesPrewarmed = true;
-  void Promise.all([
-    import("@/components/notices/NoticeBoard"),
-    import("@/components/reports/ClientReportsWorkspace"),
-    import("@/components/reports/DepartmentSubmissionEditor"),
+// 모든 화면에서 유휴 시 한꺼번에 받지 않고, 메뉴에 마우스를 올리거나 포커스했을 때 그 화면 모듈만 미리 받는다.
+const menuModuleLoaders: Record<string, () => Promise<unknown>[]> = {
+  "/notices": () => [import("@/components/notices/NoticeBoard")],
+  "/client-reports": () => [import("@/components/reports/ClientReportsWorkspace")],
+  "/department-reports": () => [import("@/components/reports/DepartmentSubmissionEditor")],
+  "/meeting-materials": () => [
     import("@/components/reports/MeetingMaterialsTable"),
     import("@/components/reports/MeetingPriorityPanel")
-  ]);
+  ]
+};
+const prewarmedMenuHrefs = new Set<string>();
+
+function prewarmMenuModule(href: string) {
+  const load = menuModuleLoaders[href];
+  if (!load || prewarmedMenuHrefs.has(href)) {
+    return;
+  }
+  prewarmedMenuHrefs.add(href);
+  void Promise.all(load());
 }
 
 function MenuIcon({ icon: Icon, isNavigating }: { icon: typeof Home; isNavigating: boolean }) {
@@ -108,24 +106,6 @@ export function Sidebar({
     ],
     [menus]
   );
-
-  useEffect(() => {
-    const startPrefetch = () => {
-      prewarmPrimaryMenuModules();
-    };
-
-    if (typeof window.requestIdleCallback === "function") {
-      const idleId = window.requestIdleCallback(startPrefetch, { timeout: 900 });
-      return () => {
-        window.cancelIdleCallback(idleId);
-      };
-    }
-
-    const timeoutId = window.setTimeout(startPrefetch, 300);
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, []);
 
   return (
     <aside
@@ -180,7 +160,9 @@ export function Sidebar({
                       key={menu.href}
                       href={menu.href}
                       profileId={profile.id}
-                      prefetch={fullPrefetchMenuHrefs.has(menu.href) ? true : "auto"}
+                      // 링크 주소엔 헤더 조건이 없어 전체 프리페치(true)는 조건 붙은 실제 이동 주소와 어긋나 버려진다.
+                      prefetch="auto"
+                      onIntent={() => prewarmMenuModule(menu.href)}
                       aria-current={isActive ? "page" : undefined}
                       className={`focus-ring group flex min-w-0 items-center gap-3 rounded-[14px] px-3.5 py-3 text-sm font-bold transition ${
                         isActive

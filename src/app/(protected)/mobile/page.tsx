@@ -68,18 +68,24 @@ function toSavedReport(report: ReportRow, authorName: string): SavedClientReport
 export default async function MobilePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams;
   const selectedWeek = getSelectedWeek(params);
-  const { profile } = await getCurrentUserProfile();
   const supabase = await createSupabaseServerClient();
-  if (!profile || !supabase) return null;
+  if (!supabase) return null;
 
   let dataClient = supabase;
   try { dataClient = createSupabaseAdminClient(); } catch { dataClient = supabase; }
 
+  // 활성 부서 목록은 프로필 확인과 동시에 받아 둔다(관리자 부서 선택용). 프로필 확인 뒤에만 쓴다.
+  const activeDepartmentsPromise = Promise.resolve(
+    dataClient.from("departments").select("id,department_name").eq("is_active", true).order("sort_order")
+  );
+  const [{ profile }, { data: activeDepartmentData }] = await Promise.all([getCurrentUserProfile(), activeDepartmentsPromise]);
+  if (!profile) return null;
+  const activeDepartments = (activeDepartmentData ?? []) as Department[];
+
   let departmentOptions: Department[] = [];
   let departmentId = profile.department_id;
   if (profile.app_role === "admin") {
-    const { data } = await dataClient.from("departments").select("id,department_name").eq("is_active", true).order("sort_order");
-    departmentOptions = (data ?? []) as Department[];
+    departmentOptions = activeDepartments;
     departmentId = departmentOptions.some((department) => department.id === params.department_id)
       ? params.department_id!
       : departmentOptions.some((department) => department.id === profile.department_id)
@@ -92,12 +98,28 @@ export default async function MobilePage({ searchParams }: { searchParams: Promi
   }
 
   // 작성 화주 목록은 운영 화주(운영 표 ∩ 활성 연결)만 보여 준다.
-  const [{ data: departmentData }, { data: categoryData }, { data: linkData }, { data: assignmentData }, operatingKeys] = await Promise.all([
-    dataClient.from("departments").select("id,department_name").eq("id", departmentId).maybeSingle(),
+  // 선택 화주 자료는 부서 주간 자료(같은 부서·주차)에서 골라 쓰므로 화주 결정을 기다리지 않고 한 번에 조회한다.
+  const knownDepartment = activeDepartments.find((row) => row.id === departmentId) ?? null;
+  const [
+    { data: departmentData },
+    { data: categoryData },
+    { data: linkData },
+    { data: assignmentData },
+    operatingKeys,
+    { data: departmentReportData },
+    { data: submissionData },
+    { data: workerData }
+  ] = await Promise.all([
+    knownDepartment
+      ? Promise.resolve({ data: knownDepartment })
+      : dataClient.from("departments").select("id,department_name").eq("id", departmentId).maybeSingle(),
     dataClient.from("work_categories").select("id,category_name,icon_key").eq("is_active", true).order("sort_order"),
     dataClient.from("department_client_links").select("department_id,clients(id,client_name)").eq("department_id", departmentId).eq("is_active", true),
     profile.app_role === "client_owner" ? dataClient.from("client_assignments").select("client_id").eq("user_id", profile.id).eq("department_id", departmentId).eq("is_active", true) : Promise.resolve({ data: [] }),
-    loadOperatingClientKeys(dataClient, departmentId)
+    loadOperatingClientKeys(dataClient, departmentId),
+    dataClient.from("weekly_client_reports").select(REPORT_SELECT).eq("department_id", departmentId).eq("week_start_date", selectedWeek.weekStartDate).is("deleted_at", null).order("client_id"),
+    dataClient.from("department_weekly_submissions").select("id,department_id,week_start_date,status,finalized_at,department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content)").eq("department_id", departmentId).eq("week_start_date", selectedWeek.weekStartDate).is("deleted_at", null).maybeSingle(),
+    dataClient.from("profiles").select("id,full_name").eq("department_id", departmentId).eq("is_active", true).order("full_name")
   ]);
   const department = (departmentData as Department | null) ?? { id: departmentId, department_name: profile.department_name ?? "소속부서" };
   if (departmentOptions.length === 0) departmentOptions = [department];
@@ -113,15 +135,11 @@ export default async function MobilePage({ searchParams }: { searchParams: Promi
   const clients = profile.app_role === "client_owner" ? linkedClients.filter((client) => assignmentIds.has(client.id)) : linkedClients;
   const selectedClientId = clients.some((client) => client.id === params.client_id) ? params.client_id! : clients[0]?.id ?? "";
 
-  const [{ data: reportData }, { data: departmentReportData }, { data: submissionData }, { data: workerData }] = await Promise.all([
-    selectedClientId ? dataClient.from("weekly_client_reports").select(REPORT_SELECT).eq("department_id", departmentId).eq("client_id", selectedClientId).eq("week_start_date", selectedWeek.weekStartDate).is("deleted_at", null).limit(1) : Promise.resolve({ data: [] }),
-    dataClient.from("weekly_client_reports").select(REPORT_SELECT).eq("department_id", departmentId).eq("week_start_date", selectedWeek.weekStartDate).is("deleted_at", null).order("client_id"),
-    dataClient.from("department_weekly_submissions").select("id,department_id,week_start_date,status,finalized_at,department_weekly_contents(section_type,current_importance,current_work_category_id,current_week_content,next_importance,next_work_category_id,next_week_content)").eq("department_id", departmentId).eq("week_start_date", selectedWeek.weekStartDate).is("deleted_at", null).maybeSingle(),
-    dataClient.from("profiles").select("id,full_name").eq("department_id", departmentId).eq("is_active", true).order("full_name")
-  ]);
-  const reports = ((reportData ?? []) as unknown as ReportRow[]).map((report) => toSavedReport(report, report.created_by === profile.id ? profile.full_name : "-") );
+  const departmentReportRows = (departmentReportData ?? []) as unknown as ReportRow[];
+  const reportData = selectedClientId ? departmentReportRows.filter((report) => report.client_id === selectedClientId).slice(0, 1) : [];
+  const reports = reportData.map((report) => toSavedReport(report, report.created_by === profile.id ? profile.full_name : "-") );
   const selectedReport = reports.find((report) => report.weekStartDate === selectedWeek.weekStartDate) ?? null;
-  const departmentReports = ((departmentReportData ?? []) as unknown as ReportRow[]).map((report) => toSavedReport(report, report.created_by === profile.id ? profile.full_name : "-"));
+  const departmentReports = departmentReportRows.map((report) => toSavedReport(report, report.created_by === profile.id ? profile.full_name : "-"));
   const canEditDepartment = profile.app_role === "admin" || profile.app_role === "department_head" || profile.app_role === "manager";
   const initialView = (["client", "department", "game", "settings"] as MobileView[]).includes(params.view as MobileView) ? params.view as MobileView : "client";
 

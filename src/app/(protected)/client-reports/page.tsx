@@ -24,7 +24,7 @@ import type { ClientReportStatus, VolumeType, VolumeUnit } from "@/types/enums";
 
 type DepartmentOption = { id: string; department_name: string };
 type ClientOption = { id: string; client_name: string; department_id: string };
-type ClientLinkRow = { department_id: string; clients: { id: string; client_name: string } | null };
+type ClientLinkRow = { department_id: string; client_id: string; clients: { id: string; client_name: string } | null };
 type DefaultClientAssignmentRow = { client_id: string; clients: { id: string; client_name: string } | null };
 type CategoryOption = { id: string; category_name: string; icon_key: string };
 type ProfileNameRow = { id: string; full_name: string };
@@ -216,8 +216,27 @@ export default async function ClientReportsPage({
   const searchFilters = parseClientReportSearchFilters(params);
   const hasSearchFilters = hasClientReportSearchFilters(searchFilters);
   const hasListScopeFilters = Boolean(searchFilters.dateFrom || searchFilters.dateTo || params.status);
-  const { profile } = await getCurrentUserProfile();
   const supabase = await createSupabaseServerClient();
+  let dataClient = supabase;
+  if (supabase) {
+    try {
+      dataClient = createSupabaseAdminClient();
+    } catch {
+      dataClient = supabase;
+    }
+  }
+  // 활성 부서 목록은 프로필 확인과 동시에 받아 둔다(관리자 기본 부서·부서 선택 목록용). 프로필 확인 뒤에만 쓴다.
+  const activeDepartmentsPromise = dataClient
+    ? Promise.resolve(
+        dataClient
+          .from("departments")
+          .select("id,department_name")
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true })
+          .order("department_name", { ascending: true })
+      )
+    : null;
+  const { profile } = await getCurrentUserProfile();
   let departments: DepartmentOption[] = [];
   let clients: ClientOption[] = [];
   let editorClients: ClientOption[] = [];
@@ -228,23 +247,13 @@ export default async function ClientReportsPage({
   let defaultDepartmentId = params.department_id ?? null;
   let defaultClientId: string | undefined;
 
-  if (supabase && profile) {
-    let dataClient = supabase;
-    try {
-      dataClient = createSupabaseAdminClient();
-    } catch {
-      dataClient = supabase;
-    }
-    let adminDefaultDepartmentId: string | undefined;
-    if (isAdmin(profile) && !params.department_id) {
-      const { data: defaultDepartments } = await dataClient
-        .from("departments")
-        .select("id,department_name")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true })
-        .order("department_name", { ascending: true });
-      adminDefaultDepartmentId = pickDefaultDepartmentId((defaultDepartments ?? []) as DepartmentOption[], profile.app_role) || undefined;
-    }
+  if (dataClient && activeDepartmentsPromise && profile) {
+    const { data: activeDepartmentData } = await activeDepartmentsPromise;
+    const activeDepartments = (activeDepartmentData ?? []) as DepartmentOption[];
+    const adminDefaultDepartmentId =
+      isAdmin(profile) && !params.department_id
+        ? pickDefaultDepartmentId(activeDepartments, profile.app_role) || undefined
+        : undefined;
     const departmentFilter = isAdmin(profile) ? params.department_id ?? adminDefaultDepartmentId : profile.department_id;
     // 부서 범위를 확정하지 못한 비관리자는 전 부서 자료가 새지 않도록 조회 자체를 막는다.
     const isDepartmentScopeBlocked = !isAdmin(profile) && !departmentFilter;
@@ -254,6 +263,34 @@ export default async function ClientReportsPage({
     const operatingKeysPromise = isDepartmentScopeBlocked
       ? Promise.resolve(null)
       : loadOperatingClientKeys(dataClient, departmentFilter);
+    // 화주 선택과 무관한 조회는 기본 화주 결정을 기다리지 않고 지금 시작한다.
+    // 부서 연결 목록은 선택 목록·기본 화주·화주담당자 배정 확인이 함께 쓴다(같은 부서·활성 조건).
+    const clientLinksPromise = isDepartmentScopeBlocked
+      ? Promise.resolve({ data: [] as ClientLinkRow[], error: null })
+      : (() => {
+          let query = dataClient
+            .from("department_client_links")
+            .select("department_id,client_id,clients(id,client_name)")
+            .eq("is_active", true)
+            .order("department_id")
+            .order("client_id", { ascending: true });
+          if (departmentFilter) {
+            query = query.eq("department_id", departmentFilter);
+          }
+          return Promise.resolve(query);
+        })();
+    const categoriesPromise = Promise.resolve(
+      dataClient.from("work_categories").select("id,category_name,icon_key").eq("is_active", true).order("sort_order")
+    );
+    const profileNamesPromise = isDepartmentScopeBlocked
+      ? Promise.resolve({ data: [] as ProfileNameRow[], error: null })
+      : (() => {
+          let query = dataClient.from("profiles").select("id,full_name");
+          if (departmentFilter) {
+            query = query.eq("department_id", departmentFilter);
+          }
+          return Promise.resolve(query);
+        })();
     let assignedClients: { id: string; client_name: string }[] = [];
     if (isClientOwner && departmentFilter) {
       const [{ data: assignmentRows }, { data: activeLinkRows }, ownerOperatingKeys] = await Promise.all([
@@ -263,15 +300,14 @@ export default async function ClientReportsPage({
           .eq("user_id", profile.id)
           .eq("department_id", departmentFilter)
           .eq("is_active", true),
-        dataClient
-          .from("department_client_links")
-          .select("client_id")
-          .eq("department_id", departmentFilter)
-          .eq("is_active", true),
+        clientLinksPromise,
         operatingKeysPromise
       ]);
       const operatingLinkRows = keepOperatingLinks(
-        (activeLinkRows ?? []).map((link) => ({ department_id: departmentFilter, client_id: link.client_id })),
+        ((activeLinkRows ?? []) as unknown as ClientLinkRow[]).map((link) => ({
+          department_id: departmentFilter,
+          client_id: link.client_id
+        })),
         ownerOperatingKeys,
         (link) => link.client_id
       );
@@ -297,12 +333,7 @@ export default async function ClientReportsPage({
         defaultClientId = pickDefaultClientId(assignedClients, profile.app_role) || undefined;
       } else {
         const [{ data: defaultClientLinks }, defaultOperatingKeys] = await Promise.all([
-          dataClient
-            .from("department_client_links")
-            .select("department_id,clients(id,client_name)")
-            .eq("department_id", departmentFilter)
-            .eq("is_active", true)
-            .order("client_id", { ascending: true }),
+          clientLinksPromise,
           operatingKeysPromise
         ]);
         const defaultClients = keepOperatingLinks(
@@ -326,7 +357,6 @@ export default async function ClientReportsPage({
     const selectedClientFilter = isClientOutOfScope ? undefined : requestedClientFilter;
     defaultClientId = selectedClientFilter;
     const [
-      { data: departmentData },
       { data: categoryData },
       { data: clientData },
       { data: profileData },
@@ -334,41 +364,9 @@ export default async function ClientReportsPage({
       { data: editorReportData, error: editorReportError },
       operatingKeys
     ] = await Promise.all([
-      (() => {
-        if (isDepartmentScopeBlocked) {
-          return Promise.resolve({ data: [], error: null });
-        }
-        let query = dataClient.from("departments").select("id,department_name").eq("is_active", true).order("sort_order");
-        if (!isAdmin(profile) && departmentFilter) {
-          query = query.eq("id", departmentFilter);
-        }
-        return query;
-      })(),
-      dataClient.from("work_categories").select("id,category_name,icon_key").eq("is_active", true).order("sort_order"),
-      (() => {
-        if (isDepartmentScopeBlocked) {
-          return Promise.resolve({ data: [], error: null });
-        }
-        let query = dataClient
-          .from("department_client_links")
-          .select("department_id,clients(id,client_name)")
-          .eq("is_active", true)
-          .order("department_id");
-        if (departmentFilter) {
-          query = query.eq("department_id", departmentFilter);
-        }
-        return query;
-      })(),
-      (() => {
-        if (isDepartmentScopeBlocked) {
-          return Promise.resolve({ data: [], error: null });
-        }
-        let query = dataClient.from("profiles").select("id,full_name");
-        if (departmentFilter) {
-          query = query.eq("department_id", departmentFilter);
-        }
-        return query;
-      })(),
+      categoriesPromise,
+      clientLinksPromise,
+      profileNamesPromise,
       (() => {
         if (isDepartmentScopeBlocked || ownerClientIds?.length === 0) {
           return Promise.resolve({ data: [], error: null });
@@ -423,7 +421,12 @@ export default async function ClientReportsPage({
       })(),
       operatingKeysPromise
     ]);
-    departments = (departmentData ?? []) as DepartmentOption[];
+    // 선택 목록: 관리자는 활성 부서 전체, 부서장·매니저·화주담당자는 소속 부서만(범위 미확정이면 빈 목록).
+    departments = isDepartmentScopeBlocked
+      ? []
+      : isAdmin(profile)
+        ? activeDepartments
+        : activeDepartments.filter((department) => department.id === departmentFilter);
     categories = (categoryData ?? []) as CategoryOption[];
     clients = keepOperatingLinks((clientData ?? []) as unknown as ClientLinkRow[], operatingKeys, (link) => link.clients?.id)
       .filter((link) => link.clients)

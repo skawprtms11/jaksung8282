@@ -2,7 +2,6 @@
 
 import { useActionState, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
   ClipboardList,
@@ -178,13 +177,20 @@ export function NoticeBoard({
   headerDepartmentId?: string;
   headerClientId?: string;
 }) {
-  const router = useRouter();
   const [writeOpen, setWriteOpen] = useState(false);
   const [editingNotice, setEditingNotice] = useState<NoticeBoardRow | null>(null);
   const [detailNotice, setDetailNotice] = useState<NoticeBoardRow | null>(null);
   const [collectionNotice, setCollectionNotice] = useState<NoticeBoardRow | null>(null);
   const [visibleNotices, setVisibleNotices] = useState(notices);
   const [visibleImportantNotices, setVisibleImportantNotices] = useState(importantNotices);
+  // 게시글 저장 액션의 재검증 응답으로 새 목록이 내려오면 렌더 중에 로컬 목록을 교체한다.
+  // 댓글 수·조회수 등 로컬 반영분은 서버 값이 최신이므로 함께 덮어써도 된다.
+  const [syncedNotices, setSyncedNotices] = useState({ notices, importantNotices });
+  if (syncedNotices.notices !== notices || syncedNotices.importantNotices !== importantNotices) {
+    setSyncedNotices({ notices, importantNotices });
+    setVisibleNotices(notices);
+    setVisibleImportantNotices(importantNotices);
+  }
   const [visibleComments, setVisibleComments] = useState(comments);
   const loadedCommentNoticeIds = useRef(new Set(comments.map((comment) => comment.notice_id)));
   const [loadingCommentNoticeId, setLoadingCommentNoticeId] = useState<string | null>(null);
@@ -193,11 +199,11 @@ export function NoticeBoard({
   const [isDeleting, startDeleteTransition] = useTransition();
   const [saveState, saveAction, isNoticeSaving] = useActionState(
     async (previousState: Awaited<ReturnType<typeof saveNoticeAction>> | null, formData: FormData) => {
+      // 액션의 revalidatePath가 저장 응답에 새 목록 RSC를 실어 보내므로 router.refresh는 부르지 않는다.
       const result = await saveNoticeAction(previousState, formData);
       if (result.ok) {
         setWriteOpen(false);
         setEditingNotice(null);
-        router.refresh();
       }
       return result;
     },

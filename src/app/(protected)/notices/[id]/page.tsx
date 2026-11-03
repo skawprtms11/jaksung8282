@@ -33,13 +33,17 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
   if (!supabase) {
     notFound();
   }
-  await incrementNoticeView(id);
-  const { data } = await supabase
-    .from("notices")
-    .select("id,notice_type,title,content,is_pinned,publish_start_date,publish_end_date,is_active,view_count,created_at,updated_at,profiles(full_name)")
-    .eq("id", id)
-    .is("deleted_at", null)
-    .maybeSingle();
+  // 조회수 증가와 본문 조회를 함께 보내 왕복 1회를 줄인다. 응답 도착 순서에 따라 표시 조회수에 이번 조회가 빠질 수 있다.
+  // after() 는 서버리스 응답 종료 뒤 실행 보장을 배포 환경에서 확인하지 못해 쓰지 않는다.
+  const [, { data }] = await Promise.all([
+    incrementNoticeView(id),
+    supabase
+      .from("notices")
+      .select("id,notice_type,title,content,is_pinned,publish_start_date,publish_end_date,is_active,view_count,created_at,updated_at,profiles(full_name)")
+      .eq("id", id)
+      .is("deleted_at", null)
+      .maybeSingle()
+  ]);
   const notice = data as unknown as NoticeDetail | null;
   if (!notice) {
     notFound();

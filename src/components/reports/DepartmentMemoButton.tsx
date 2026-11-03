@@ -67,7 +67,8 @@ export function DepartmentMemoButton({
         content: draft
       });
       if (result.ok) {
-        setContent(draft);
+        // 재검증 응답을 기다리지 않고 저장된 값을 바로 로컬 상태로 반영한다.
+        setContent(result.content ?? draft);
         setIsOpen(false);
         setMessage(null);
       } else {

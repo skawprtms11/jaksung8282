@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import dynamic from "next/dynamic";
+import { LazyVolumeComparisonChart } from "@/components/charts/LazyVolumeComparisonChart";
 import { CheckCircle2, ClipboardList, Percent } from "lucide-react";
 import type { VolumeChartRow } from "@/components/charts/VolumeComparisonChart";
 import { TableShell } from "@/components/common/TableShell";
@@ -283,9 +284,6 @@ const MeetingFacilityConstructionBoard = dynamic(
   () => import("@/components/reports/MeetingFacilityConstructionBoard").then((mod) => mod.MeetingFacilityConstructionBoard),
   { loading: () => <PanelLoading label="시설공사 자료를 불러오는 중입니다." /> }
 );
-const VolumeComparisonChart = dynamic(() => import("@/components/charts/VolumeComparisonChart").then((mod) => mod.VolumeComparisonChart), {
-  loading: () => <PanelLoading label="물동량 그래프를 불러오는 중입니다." />
-});
 const MeetingDepartmentVolumeBoard = dynamic(
   () => import("@/components/reports/MeetingDepartmentVolumeBoard").then((mod) => mod.MeetingDepartmentVolumeBoard),
   { loading: () => <PanelLoading label="부서별 물동량 현황을 불러오는 중입니다." /> }
@@ -1408,7 +1406,7 @@ function VolumesView({
   return (
     <div className="space-y-4">
       <div className="grid gap-4 xl:grid-cols-[1fr_460px]">
-        <VolumeComparisonChart rows={chartRows} />
+        <LazyVolumeComparisonChart rows={chartRows} />
         <section className="sketch-panel p-4">
           <h2 className="section-doodle-title mb-3">물동량 요약</h2>
           <TableShell>

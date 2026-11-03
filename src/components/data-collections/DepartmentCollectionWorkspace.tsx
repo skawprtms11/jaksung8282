@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Plus, Save, Trash2 } from "lucide-react";
 import { saveCollectionEntryAction } from "@/actions/data-collections";
 import { ActionMessage } from "@/components/common/ActionMessage";
@@ -63,7 +62,6 @@ export function DepartmentCollectionWorkspace({
   initialEntries: Record<string, DepartmentCollectionEntry>;
   canEdit: boolean;
 }) {
-  const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(collections[0]?.id ?? null);
   const [drafts, setDrafts] = useState<Record<string, DepartmentCollectionEntry>>(() => {
     const next: Record<string, DepartmentCollectionEntry> = {};
@@ -80,7 +78,7 @@ export function DepartmentCollectionWorkspace({
   const [isSaving, startSaving] = useTransition();
   const tableRef = useRef<HTMLTableElement>(null);
 
-  // router.refresh 등으로 취합건 목록·컬럼 수가 바뀌면 드래프트를 보충·보정한다.
+  // 저장 액션의 재검증 응답 등으로 취합건 목록·컬럼 수가 바뀌면 드래프트를 보충·보정한다.
   // effect에서 setState를 부르면 커밋 후 렌더가 한 번 더 도는 데다 lint(set-state-in-effect)에도 걸리므로,
   // 이전 렌더의 입력을 기억해 렌더 중에 보정하는 패턴(react.dev의 storing-information-from-previous-renders)을 쓴다.
   const [syncedProps, setSyncedProps] = useState({ collections, initialEntries });
@@ -238,11 +236,9 @@ export function DepartmentCollectionWorkspace({
       formData.set("department_id", departmentId);
       formData.set("rows", JSON.stringify([]));
       formData.set("is_completed", String(written && delivered));
+      // 액션의 revalidatePath가 저장 응답에 새 RSC(확정 상태 포함)를 실어 보내므로 router.refresh는 부르지 않는다.
       const result = await saveCollectionEntryAction(null, formData);
       setMessage(result);
-      if (result.ok) {
-        router.refresh();
-      }
     });
   }
 
@@ -261,7 +257,6 @@ export function DepartmentCollectionWorkspace({
       setMessage(result);
       if (result.ok) {
         updateDraft(selected.id, { isCompleted: markCompleted });
-        router.refresh();
       }
     });
   }
