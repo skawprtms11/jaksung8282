@@ -59,6 +59,43 @@ describe("resolveClientIp (production)", () => {
   });
 });
 
+describe("resolveClientIp (Vercel)", () => {
+  it("uses x-real-ip set by the Vercel edge in production", () => {
+    const headers = headerReader({ "x-real-ip": "198.51.100.2", "x-forwarded-for": "6.6.6.6, 198.51.100.2" });
+    expect(resolveClientIp(headers, true, true)).toBe("198.51.100.2");
+  });
+
+  it("ignores a spoofed Netlify header on Vercel", () => {
+    const headers = headerReader({ "x-nf-client-connection-ip": "203.0.113.10", "x-real-ip": "198.51.100.2" });
+    expect(resolveClientIp(headers, true, true)).toBe("198.51.100.2");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect(resolveClientIp(headerReader({ "x-nf-client-connection-ip": "203.0.113.10" }), true, true)).toBe("");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("falls back to the unknown bucket when x-real-ip is missing", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect(resolveClientIp(headerReader({ "x-forwarded-for": "198.51.100.3" }), true, true)).toBe("");
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("does not trust x-real-ip outside Vercel in production", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect(resolveClientIp(headerReader({ "x-real-ip": "198.51.100.2" }), true, false)).toBe("");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
 describe("toRateLimitIpKey", () => {
   it("keeps IPv4 as is", () => {
     expect(toRateLimitIpKey("203.0.113.10")).toBe("203.0.113.10");
