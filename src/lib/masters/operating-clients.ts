@@ -147,3 +147,69 @@ export function buildClientRegistrationRows(
     })
     .sort((left, right) => left.clientName.localeCompare(right.clientName, "ko"));
 }
+
+// 현황 담당자: 현황관리(now) 인원상세 비중으로 가져온 화주별 참고 명단(department_client_staff).
+// 로그인 계정 배정(client_assignments)과 별개이며, 쓰기는 import_department_client_staff_from_now RPC 로만 한다.
+export type NowStaffRow = {
+  client_id: string;
+  staff_name: string;
+  position: string | null;
+  ratio: number | string;
+  base_month: string;
+  imported_at: string;
+};
+
+// 사번은 화면에 쓰지 않으므로 클라이언트로 보내는 모양에서 뺀다(RSC props·액션 응답).
+export type ClientNowStaff = { name: string; position: string | null; ratio: number };
+
+export type DepartmentNowStaff = {
+  baseMonth: string | null;
+  importedAt: string | null;
+  byClient: Record<string, ClientNowStaff[]>;
+};
+
+// 화주별로 묶어 비중 내림차순(같으면 이름순)으로 정렬하고, 가장 최근 가져온 시각·기준 월을 고른다.
+export function buildDepartmentNowStaff(rows: NowStaffRow[]): DepartmentNowStaff {
+  const byClient: Record<string, ClientNowStaff[]> = {};
+  let latest: NowStaffRow | null = null;
+  for (const row of rows) {
+    (byClient[row.client_id] ??= []).push({
+      name: row.staff_name.trim(),
+      position: row.position?.trim() || null,
+      ratio: Number(row.ratio)
+    });
+    if (!latest || row.imported_at > latest.imported_at) {
+      latest = row;
+    }
+  }
+  for (const staff of Object.values(byClient)) {
+    staff.sort((left, right) => right.ratio - left.ratio || left.name.localeCompare(right.name, "ko"));
+  }
+  return { baseMonth: latest?.base_month ?? null, importedAt: latest?.imported_at ?? null, byClient };
+}
+
+// 비중(%)은 소수 첫째 자리까지, 끝의 0 은 뺀다(2.5 → 2.5%, 33.333 → 33.3%, 100 → 100%).
+export function formatNowStaffRatio(ratio: number) {
+  return `${Number.isFinite(ratio) ? Math.round(ratio * 10) / 10 : 0}%`;
+}
+
+// 표시: 이름(직급·비중%), 직급이 없으면 이름(비중%)
+export function formatNowStaffLabel(staff: Pick<ClientNowStaff, "name" | "position" | "ratio">) {
+  const details = [staff.position, formatNowStaffRatio(staff.ratio)].filter(Boolean).join("·");
+  return `${staff.name}(${details})`;
+}
+
+// 한 부서의 현황 담당자 행(1,000건씩 끝까지). 조회 실패(마이그레이션 미적용 등)는 호출부가 error 로 판단한다.
+export async function loadDepartmentNowStaff(client: AnySupabaseClient, departmentId: string) {
+  return selectAllPages<NowStaffRow>(
+    (from, to) =>
+      client
+        .from("department_client_staff")
+        .select("client_id,staff_name,position,ratio,base_month,imported_at")
+        .eq("department_id", departmentId)
+        .order("client_id")
+        .order("id")
+        .range(from, to),
+    { label: "현황 담당자 조회" }
+  );
+}

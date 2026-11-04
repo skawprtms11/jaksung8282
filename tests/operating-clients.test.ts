@@ -4,6 +4,9 @@ import { selectAllPages } from "@/lib/supabase/paged-select";
 import { canManageDepartmentClients, canRegisterDepartmentClients } from "@/lib/auth/permissions";
 import {
   buildClientRegistrationRows,
+  buildDepartmentNowStaff,
+  formatNowStaffLabel,
+  formatNowStaffRatio,
   keepOperatingLinks,
   nextPrimaryUserId,
   operatingClientKey,
@@ -179,5 +182,47 @@ describe("selectAllPages", () => {
   it("오류가 나면 오류를 돌려준다", async () => {
     const result = await selectAllPages(() => Promise.resolve({ data: null, error: { code: "X", message: "실패" } }), { label: "시험" });
     expect(result.error?.code).toBe("X");
+  });
+});
+
+describe("현황 담당자 표시", () => {
+  const staffRow = (client_id: string, staff_name: string, ratio: number | string, imported_at = "2026-11-05T01:00:00Z") => ({
+    client_id,
+    staff_name,
+    position: "선임",
+    ratio,
+    base_month: "2026-08",
+    imported_at
+  });
+
+  it("화주별로 묶어 비중 내림차순, 같으면 이름순으로 정렬한다", () => {
+    const result = buildDepartmentNowStaff([
+      staffRow("c1", "나", 10),
+      staffRow("c1", "가", "10"),
+      staffRow("c1", "다", 55.5),
+      staffRow("c2", "나", 3)
+    ]);
+    expect(result.byClient.c1.map((staff) => staff.name)).toEqual(["다", "가", "나"]);
+    expect(result.byClient.c1[0]).not.toHaveProperty("empNo");
+    expect(result.byClient.c1[1].ratio).toBe(10);
+    expect(result.byClient.c2).toHaveLength(1);
+  });
+
+  it("가장 최근 가져온 시각과 그 기준 월을 고르고, 비어 있으면 null", () => {
+    const result = buildDepartmentNowStaff([
+      staffRow("c1", "가", 5, "2026-11-04T01:00:00Z"),
+      { ...staffRow("c1", "나", 5, "2026-11-05T02:00:00Z"), base_month: "2026-09" }
+    ]);
+    expect(result.importedAt).toBe("2026-11-05T02:00:00Z");
+    expect(result.baseMonth).toBe("2026-09");
+    expect(buildDepartmentNowStaff([])).toEqual({ baseMonth: null, importedAt: null, byClient: {} });
+  });
+
+  it("이름(직급·비중%) 형식, 비중은 소수 첫째 자리까지", () => {
+    expect(formatNowStaffRatio(2.5)).toBe("2.5%");
+    expect(formatNowStaffRatio(33.3333)).toBe("33.3%");
+    expect(formatNowStaffRatio(100)).toBe("100%");
+    expect(formatNowStaffLabel({ name: "가", position: "선임", ratio: 12.5 })).toBe("가(선임·12.5%)");
+    expect(formatNowStaffLabel({ name: "가", position: null, ratio: 1 })).toBe("가(1%)");
   });
 });

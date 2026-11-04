@@ -24,6 +24,7 @@
 - `src/components/masters/NowMasterViews.tsx`, `src/lib/masters/now-master.ts`: 화주마스터, 센터마스터, 부서마스터 문서를 모두 확인한다(현황관리 now 원본 조회).
 - `src/components/layout/Header.tsx`, `Sidebar.tsx`, `/api/header-filters`: 회의자료, 부서자료, 화주자료와 권한이 달라지는 모든 메뉴 문서를 확인한다.
 - `src/lib/masters/operating-clients.ts`, `department_operating_clients` 표·RPC: 부서별화주등록, 화주자료, 부서자료, 회의자료, 모바일 앱 문서를 모두 확인한다(운영 화주 = 운영 표 ∩ 활성 연결이 이 화면들의 작성·선택 화주 목록 기준).
+- `department_client_staff` 표·`import_department_client_staff_from_now` RPC(현황 담당자, now 인원상세 비중): 부서별화주등록 문서만 확인한다(다른 화면의 권한·작성 목록에 영향 없음).
 - 사이드바의 공지사항·회의자료·부서자료·화주자료는 배포 환경에서 전체 route payload를 백그라운드 프리페치한다. 마스터·보조 메뉴는 자동 부분 프리페치를 사용하며 모든 링크는 Next.js 기본 내비게이션을 유지한다.
 - `src/lib/auth/permissions.ts`, `src/types/enums.ts`, `src/types/database.ts`, Supabase RLS/RPC: 루트 `AGENTS.md`와 영향받는 모든 메뉴 문서를 확인한다.
 

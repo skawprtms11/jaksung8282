@@ -10,8 +10,11 @@ import { pickDefaultDepartmentId } from "@/lib/auth/default-scope";
 import { canManageDepartmentClients, canRegisterDepartmentClients, isAdmin } from "@/lib/auth/permissions";
 import {
   buildClientRegistrationRows,
+  buildDepartmentNowStaff,
+  loadDepartmentNowStaff,
   resolveRegistrationDepartmentId,
-  type ClientRegistrationRow
+  type ClientRegistrationRow,
+  type DepartmentNowStaff
 } from "@/lib/masters/operating-clients";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -37,6 +40,7 @@ export default async function ClientRegistrationsPage({
   let department: DepartmentOption | null = null;
   let rows: ClientRegistrationRow[] = [];
   let users: ClientRegistrationUser[] = [];
+  let nowStaff: DepartmentNowStaff = buildDepartmentNowStaff([]);
   let loadError: string | null = null;
 
   try {
@@ -65,7 +69,7 @@ export default async function ClientRegistrationsPage({
     }
 
     if (department) {
-      const [linkResult, operatingResult, userResult, assignmentResult] = await Promise.all([
+      const [linkResult, operatingResult, userResult, assignmentResult, nowStaffResult] = await Promise.all([
         admin
           .from("department_client_links")
           .select("client_id,clients(id,client_code,client_name,is_active)")
@@ -91,12 +95,19 @@ export default async function ClientRegistrationsPage({
           .select("client_id,user_id,is_primary")
           .eq("department_id", department.id)
           .eq("is_active", true)
-          .limit(LOOKUP_LIMIT)
+          .limit(LOOKUP_LIMIT),
+        loadDepartmentNowStaff(admin, department.id)
       ]);
       if (linkResult.error || operatingResult.error || userResult.error || assignmentResult.error) {
         loadError = operatingResult.error
           ? "운영 화주 정보를 불러오지 못했습니다. DB 마이그레이션 적용 여부를 확인하세요."
           : "화주·담당자 정보를 불러오지 못했습니다. 잠시 후 다시 열어 주세요.";
+      }
+      // 현황 담당자는 참고 명단이라 읽지 못해도 나머지 화면은 그대로 쓴다.
+      if (nowStaffResult.error) {
+        loadError ??= "현황 담당자를 불러오지 못했습니다. DB 마이그레이션 적용 여부를 확인하세요.";
+      } else {
+        nowStaff = buildDepartmentNowStaff(nowStaffResult.data);
       }
       users = (userResult.data ?? []) as ClientRegistrationUser[];
       const linkedClients = ((linkResult.data ?? []) as unknown as LinkRow[]).flatMap((link) =>
@@ -128,6 +139,7 @@ export default async function ClientRegistrationsPage({
           department={department}
           initialRows={rows}
           users={users}
+          initialNowStaff={nowStaff}
           canManage={canManageDepartmentClients(profile, department.id)}
         />
       ) : (

@@ -216,6 +216,7 @@ tests                          순수 로직과 권한 계약 단위 테스트
 - 관리자(전체 부서), 부서장·매니저(소속 부서)가 접근한다. 화주담당자는 메뉴 숨김·접근 차단.
 - 현황관리 활성 연결 화주 중 운영 화주를 `department_operating_clients`에 저장하고, 화주별 담당자(부서 소속 활성 사용자 여러 명, 대표 1명)를 `client_assignments`에 저장한다.
 - 쓰기는 `save_department_operating_clients`, `save_department_client_assignments` RPC(security definer, 내부 역할·부서 검사)로만 한다. 상세는 `docs/menus/client-registrations.md`.
+- `현황에서 가져오기`는 현황관리 인원상세 비중(화주명 기준 합산 1% 이상, 부서장 제외)으로 `department_client_staff`(현황 담당자 참고 명단, `client_assignments`와 별개)를 부서 단위 전체 교체한다. 쓰기는 `import_department_client_staff_from_now` RPC로만, 조회는 관리자 전체·부서장·매니저 소속 부서만(화주담당자 불가).
 
 ### `/admin/centers` - 센터마스터
 
@@ -291,7 +292,7 @@ submitted_to_division -> draft  (확정 후 3일 이내 확정취소)
 | 영역 | 기준 테이블 |
 | --- | --- |
 | 조직과 사용자 | `departments`, `profiles`, `user_registration_requests` |
-| 화주 관계 | `clients`, `department_client_links`, `department_operating_clients`, `client_assignments` |
+| 화주 관계 | `clients`, `department_client_links`, `department_operating_clients`, `client_assignments`, `department_client_staff` |
 | 업무 분류 | `work_categories` |
 | 화주 주간자료 | `weekly_client_reports`, `weekly_client_report_items`, `weekly_volumes` |
 | 부서 주간자료 | `department_weekly_submissions`, `department_weekly_contents` |

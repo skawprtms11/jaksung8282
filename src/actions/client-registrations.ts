@@ -5,9 +5,12 @@ import { z } from "zod";
 import { requireActiveProfile } from "@/lib/auth/current-user";
 import { canManageDepartmentClients } from "@/lib/auth/permissions";
 import {
+  buildDepartmentNowStaff,
   CLIENT_ASSIGNEE_LIMIT,
+  loadDepartmentNowStaff,
   OPERATING_CLIENT_SAVE_LIMIT,
-  resolveAssigneeSelection
+  resolveAssigneeSelection,
+  type DepartmentNowStaff
 } from "@/lib/masters/operating-clients";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { safeErrorMessage, type ActionResult } from "@/lib/utils/form";
@@ -29,6 +32,14 @@ const assignmentsInputSchema = z.object({
 
 export type OperatingClientsSaveResult = { clientIds: string[] };
 export type ClientAssignmentsSaveResult = { clientId: string; userIds: string[]; primaryUserId: string | null };
+export type NowStaffImportResult = { nowStaff: DepartmentNowStaff; replaced: boolean };
+
+type NowStaffImportSummary = {
+  base_month: string | null;
+  staff_count: number;
+  client_count: number;
+  row_count: number;
+};
 
 // 서버 액션에서도 활성 사용자·역할·부서를 다시 확인하고, RPC 는 사용자 세션으로 호출해 DB 가 auth.uid() 로 최종 판정하게 한다.
 async function requireDepartmentClientManager(departmentId: string) {
@@ -111,5 +122,45 @@ export async function saveDepartmentClientAssignmentsAction(input: {
     ok: true,
     message: "화주 담당자를 저장했습니다.",
     data: { clientId: parsed.data.client_id, userIds: selection.userIds, primaryUserId: selection.primaryUserId }
+  };
+}
+
+// 현황에서 가져오기: now 인원상세의 최신 비중 월 기준으로 이 부서의 현황 담당자 명단을 통째로 바꾼다.
+// 화면 상태를 바로 바꿀 수 있게 가져온 뒤의 명단을 다시 읽어 돌려준다.
+export async function importStaffFromNowAction(departmentId: string): Promise<ActionResult<NowStaffImportResult>> {
+  const parsed = idSchema.safeParse(departmentId);
+  if (!parsed.success) {
+    return { ok: false, message: "부서 정보를 확인하세요." };
+  }
+  const { error: authError, supabase } = await requireDepartmentClientManager(parsed.data);
+  if (authError || !supabase) {
+    return { ok: false, message: authError ?? "권한이 없습니다." };
+  }
+
+  const { data, error } = await supabase.rpc("import_department_client_staff_from_now", {
+    p_department_id: parsed.data
+  });
+  if (error) {
+    return { ok: false, message: safeErrorMessage(error.message, error.code) };
+  }
+  const summary = data as NowStaffImportSummary | null;
+
+  revalidatePath("/client-registrations");
+  const { data: staffRows, error: staffError } = await loadDepartmentNowStaff(supabase, parsed.data);
+  if (staffError) {
+    return { ok: false, message: "현황 담당자를 가져왔지만 명단을 다시 읽지 못했습니다. 화면을 새로고침하세요." };
+  }
+  const nowStaff = buildDepartmentNowStaff(staffRows);
+  if (!summary?.base_month) {
+    return {
+      ok: true,
+      message: "현황관리에 이 부서의 비중 자료가 없어 기존 현황 담당자를 그대로 두었습니다.",
+      data: { nowStaff, replaced: false }
+    };
+  }
+  return {
+    ok: true,
+    message: `현황 기준 ${summary.base_month} · 담당자 ${summary.staff_count}명 · 화주 ${summary.client_count}곳을 가져왔습니다.`,
+    data: { nowStaff, replaced: true }
   };
 }
