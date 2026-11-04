@@ -184,6 +184,30 @@ export type Tables = {
     };
     Update: Partial<Tables["department_operating_clients"]["Row"]>;
   };
+  // 부서별화주등록의 현황 담당자(now 인원상세 비중 기준 참고 명단). 쓰기는 import_department_client_staff_from_now RPC 로만 한다.
+  department_client_staff: {
+    Row: {
+      id: string;
+      department_id: string;
+      client_id: string;
+      emp_no: string;
+      staff_name: string;
+      position: string | null;
+      ratio: number;
+      base_month: string;
+      imported_at: string;
+      imported_by: string | null;
+    };
+    Insert: Partial<Tables["department_client_staff"]["Row"]> & {
+      department_id: string;
+      client_id: string;
+      emp_no: string;
+      staff_name: string;
+      ratio: number;
+      base_month: string;
+    };
+    Update: Partial<Tables["department_client_staff"]["Row"]>;
+  };
   user_registration_requests: {
     Row: {
       id: string;
@@ -646,6 +670,12 @@ export type Database = {
         Args: {
           p_department_id: string;
           p_client_ids: string[];
+        };
+        Returns: Json;
+      };
+      import_department_client_staff_from_now: {
+        Args: {
+          p_department_id: string;
         };
         Returns: Json;
       };

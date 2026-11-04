@@ -2,8 +2,9 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Save, Search, UserRoundCheck, X } from "lucide-react";
+import { CloudDownload, Loader2, Save, Search, UserRoundCheck, X } from "lucide-react";
 import {
+  importStaffFromNowAction,
   saveDepartmentClientAssignmentsAction,
   saveDepartmentOperatingClientsAction
 } from "@/actions/client-registrations";
@@ -11,8 +12,14 @@ import { ActionMessage } from "@/components/common/ActionMessage";
 import { EmptyState } from "@/components/common/EmptyState";
 import { roleLabel } from "@/lib/auth/permissions";
 import { matchesNowMasterSearch } from "@/lib/masters/now-master";
-import { nextPrimaryUserId, type ClientRegistrationRow } from "@/lib/masters/operating-clients";
+import {
+  formatNowStaffLabel,
+  nextPrimaryUserId,
+  type ClientRegistrationRow,
+  type DepartmentNowStaff
+} from "@/lib/masters/operating-clients";
 import type { ActionResult } from "@/lib/utils/form";
+import { formatDateTime } from "@/lib/utils/labels";
 import type { AppRole } from "@/types/enums";
 
 export type ClientRegistrationUser = { id: string; full_name: string; app_role: AppRole };
@@ -25,11 +32,13 @@ export function ClientRegistrationWorkspace({
   department,
   initialRows,
   users,
+  initialNowStaff,
   canManage
 }: {
   department: { id: string; department_name: string };
   initialRows: ClientRegistrationRow[];
   users: ClientRegistrationUser[];
+  initialNowStaff: DepartmentNowStaff;
   canManage: boolean;
 }) {
   const [rows, setRows] = useState(initialRows);
@@ -40,6 +49,8 @@ export function ClientRegistrationWorkspace({
   const [operatingOnly, setOperatingOnly] = useState(false);
   const [state, setState] = useState<ActionResult<unknown> | null>(null);
   const [isSaving, startSaving] = useTransition();
+  const [nowStaff, setNowStaff] = useState(initialNowStaff);
+  const [isImporting, startImporting] = useTransition();
   const [assignmentClientId, setAssignmentClientId] = useState<string | null>(null);
 
   const savedIds = useMemo(() => new Set(rows.filter((row) => row.isOperating).map((row) => row.clientId)), [rows]);
@@ -51,9 +62,13 @@ export function ClientRegistrationWorkspace({
       matchesNowMasterSearch(query, [
         row.clientCode,
         row.clientName,
-        ...row.assigneeIds.map((userId) => userNameById.get(userId))
+        ...row.assigneeIds.map((userId) => userNameById.get(userId)),
+        ...(nowStaff.byClient[row.clientId] ?? []).map((staff) => staff.name)
       ])
   );
+  // 현황 담당자가 있지만 이 부서 연결 목록에 없는 화주(화면 행이 없어 건수로만 안내)
+  const rowClientIds = new Set(rows.map((row) => row.clientId));
+  const unlistedStaffClientCount = Object.keys(nowStaff.byClient).filter((clientId) => !rowClientIds.has(clientId)).length;
   const assignmentRow = rows.find((row) => row.clientId === assignmentClientId) ?? null;
 
   function toggleOperating(clientId: string, checked: boolean) {
@@ -84,6 +99,19 @@ export function ClientRegistrationWorkspace({
       if (result.ok) {
         const saved = new Set(clientIds);
         setRows((current) => current.map((row) => ({ ...row, isOperating: saved.has(row.clientId) })));
+      }
+    });
+  }
+
+  function importFromNow() {
+    if (!window.confirm("기준 월 최신 자료로 이 부서의 현황 담당자를 모두 바꿉니다. 진행하시겠습니까?")) {
+      return;
+    }
+    startImporting(async () => {
+      const result = await importStaffFromNowAction(department.id);
+      setState(result);
+      if (result.ok && result.data) {
+        setNowStaff(result.data.nowStaff);
       }
     });
   }
@@ -122,17 +150,40 @@ export function ClientRegistrationWorkspace({
           운영 {checkedIds.size}/{rows.length}건 · 표시 {visibleRows.length}건
         </span>
         {canManage ? (
-          <button
-            type="button"
-            onClick={saveOperating}
-            disabled={!isDirty || isSaving}
-            className="tool-button tool-button-primary ml-auto disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}
-            운영 화주 저장
-          </button>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={importFromNow}
+              disabled={isImporting || isSaving}
+              className="tool-button disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isImporting ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <CloudDownload className="h-4 w-4" aria-hidden="true" />
+              )}
+              {isImporting ? "가져오는 중…" : "현황에서 가져오기"}
+            </button>
+            <button
+              type="button"
+              onClick={saveOperating}
+              disabled={!isDirty || isSaving || isImporting}
+              className="tool-button tool-button-primary disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}
+              운영 화주 저장
+            </button>
+          </div>
         ) : null}
       </div>
+
+      <p className="text-xs font-bold text-slate-500">
+        {nowStaff.baseMonth
+          ? `현황 담당자: 현황 기준 ${nowStaff.baseMonth} · 가져온 시각 ${formatDateTime(nowStaff.importedAt)}`
+          : "현황 담당자: 아직 가져오지 않았습니다."}
+        {" "}· 현황관리 인원상세에서 화주별 비중 1% 이상 담당자(부서장 제외)를 가져온 참고 명단이며, 로그인 담당자 지정과 별개입니다.
+        {unlistedStaffClientCount > 0 ? ` 이 부서 연결 목록에 없는 화주 ${unlistedStaffClientCount}곳은 표시하지 않습니다.` : ""}
+      </p>
 
       <ActionMessage state={state} />
 
@@ -142,7 +193,7 @@ export function ClientRegistrationWorkspace({
         <EmptyState title="조건에 맞는 화주가 없습니다." />
       ) : (
         <div className="overflow-hidden rounded-[1.25rem] border border-[#e4dac9] bg-white/88 shadow-[0_18px_42px_rgba(16,34,61,0.07)]">
-          <div className="hidden grid-cols-[4.5rem_9rem_minmax(0,1fr)_minmax(0,1.4fr)_3.5rem] items-center gap-3 border-b border-[#e4dac9] bg-[#fbf8f2] px-4 py-3 text-xs font-black text-slate-500 md:grid">
+          <div className="hidden grid-cols-[4.5rem_8rem_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.4fr)_3.5rem] items-center gap-3 border-b border-[#e4dac9] bg-[#fbf8f2] px-4 py-3 text-xs font-black text-slate-500 md:grid">
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -157,6 +208,7 @@ export function ClientRegistrationWorkspace({
             <span>화주코드</span>
             <span>화주명</span>
             <span>담당자</span>
+            <span>현황 담당자</span>
             <span className="text-right">지정</span>
           </div>
           <ul>
@@ -168,10 +220,11 @@ export function ClientRegistrationWorkspace({
                 name: userNameById.get(userId) ?? "-",
                 isPrimary: userId === row.primaryUserId
               }));
+              const clientNowStaff = nowStaff.byClient[row.clientId] ?? [];
               return (
                 <li
                   key={row.clientId}
-                  className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-t border-slate-100 px-4 py-3 text-sm first:border-t-0 md:grid-cols-[4.5rem_9rem_minmax(0,1fr)_minmax(0,1.4fr)_3.5rem]"
+                  className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-t border-slate-100 px-4 py-3 text-sm first:border-t-0 md:grid-cols-[4.5rem_8rem_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.4fr)_3.5rem]"
                 >
                   <label className="row-span-2 flex items-center gap-2 md:row-span-1">
                     <input
@@ -203,6 +256,21 @@ export function ClientRegistrationWorkspace({
                       ))
                     ) : (
                       <span className="text-xs text-slate-400">담당자 미지정</span>
+                    )}
+                  </span>
+                  <span className="col-span-3 flex min-w-0 flex-wrap items-center gap-1 md:col-span-1">
+                    <span className="text-[11px] font-black text-slate-400 md:hidden">현황</span>
+                    {clientNowStaff.length > 0 ? (
+                      clientNowStaff.map((staff, index) => (
+                        <span
+                          key={`${row.clientId}:${index}`}
+                          className="rounded-full border border-[#e4dac9] bg-[#fbf8f2] px-2 py-0.5 text-xs font-bold text-slate-600"
+                        >
+                          {formatNowStaffLabel(staff)}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs text-slate-400">-</span>
                     )}
                   </span>
                   <span className="col-start-3 row-span-2 row-start-1 flex justify-end md:col-start-auto md:row-span-1 md:row-start-auto">
